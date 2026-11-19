@@ -91,6 +91,8 @@ const params=new URLSearchParams(location.search);
 const store={get(k,d){try{const v=localStorage.getItem('nha_'+k);return v===null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem('nha_'+k,JSON.stringify(v));}catch(e){}}};
 const setStatus=m=>{$('status').textContent=m;};
 const inOBS=!!window.obsstudio;let obsWs=null,obsOk=false,rx=false,remoteSeen=false;
+const isControl=new URLSearchParams(location.search).get('control')==='1';
+const bc=('BroadcastChannel' in window)?new BroadcastChannel('neonArena'):null;
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
@@ -720,7 +722,7 @@ const autoOrder=['wide','stage','game','score','cam','game','orbit'];let autoIdx
 $('round').onclick=triggerRound;
 const testNames=['ChipLord','RooftopRassir','NeonFarmer','ByteBandit','PixelPuff'];
 $('testAlert').onclick=()=>{const k=['NEW SUB','RAID!','500 BITS','GIFT SUB'][Math.floor(Math.random()*4)],nm=testNames[Math.floor(Math.random()*testNames.length)],tx='This is a test alert from the arena panel.';pushAlert(k,nm,tx);remote('alert',{k,name:nm,text:tx});};
-function togglePanel(){$('panel').classList.toggle('hidden');document.body.classList.toggle('nocursor',$('panel').classList.contains('hidden'));}
+function togglePanel(){if(isControl)return;$('panel').classList.toggle('hidden');document.body.classList.toggle('nocursor',$('panel').classList.contains('hidden'));}
 addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'&&(e.target.type==='text'||e.target.type==='password'))return;
   const k=e.key.toLowerCase();
@@ -738,7 +740,7 @@ if(params.get('hideui')==='1')togglePanel();
 
 const curP=V(0,6.2,16),curT=V(0,6.4,-8),goalP=new THREE.Vector3(),goalT=new THREE.Vector3();
 if(SHOTS[shot].screen)frameScreen(screens[SHOTS[shot].screen],curP,curT);else if(SHOTS[shot].p){curP.copy(SHOTS[shot].p);curT.copy(SHOTS[shot].t);}
-const clock=new THREE.Clock();let lastDraw=0,lastSlow=0;
+let ctlFrame=0;const clock=new THREE.Clock();let lastDraw=0,lastSlow=0;
 function loop(){
   const dt=Math.min(clock.getDelta(),0.1);now+=dt;const t=now;
 
@@ -786,12 +788,12 @@ function loop(){
   }
   if(t-lastSlow>0.25){lastSlow=t;drawChat(screens.chat,t);drawBrand(screens.brand,t);drawScore(screens.score);drawInfo(screens.info,t);}
 
-  renderer.render(scene,camera);requestAnimationFrame(loop);
+  if(!isControl||(++ctlFrame%6===0))renderer.render(scene,camera);requestAnimationFrame(loop);
 }
 // ---------- Remote link: control the OBS copy from any browser tab ----------
 const setObs=m=>{$('obsStatus').textContent=m;};
 function snap(){return {fn:{p1:fn.p1,p2:fn.p2},records,history:history.slice(-200),opts:{fighters:opts.fighters,chatFight:opts.chatFight,auto:opts.auto},theme,shot,roundNum};}
-function remote(cmd,data){if(rx||!obsOk||!obsWs)return;try{obsWs.send(JSON.stringify({op:6,d:{requestType:'CallVendorRequest',requestId:'r'+Math.random().toString(36).slice(2),
+function remote(cmd,data){if(rx)return;if(bc&&(isControl||!inOBS)){try{bc.postMessage({cmd,data:data||{}});}catch(e){}}if(!obsOk||!obsWs)return;try{obsWs.send(JSON.stringify({op:6,d:{requestType:'CallVendorRequest',requestId:'r'+Math.random().toString(36).slice(2),
   requestData:{vendorName:'obs-browser',requestType:'emit_event',requestData:{event_name:'neonArena',event_data:{cmd,data:data||{}}}}}}));}catch(e){}}
 async function sha256b64(s){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return btoa(String.fromCharCode(...new Uint8Array(h)));}
 function linkObs(pw){
@@ -824,10 +826,12 @@ function applyRemote(cmd,d){
     refreshFighters();
   }
 }
-window.addEventListener('neonArena',e=>{let m=e.detail;if(typeof m==='string'){try{m=JSON.parse(m);}catch(x){return;}}if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}});
+if(bc)bc.onmessage=e=>{if(isControl)return;const m=e.data;if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
+window.addEventListener('neonArena',e=>{if(isControl)return;let m=e.detail;if(typeof m==='string'){try{m=JSON.parse(m);}catch(x){return;}}if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}});
 $('obsGo').onclick=()=>linkObs($('obspw').value);
 $('obspw').addEventListener('keydown',e=>{if(e.key==='Enter')linkObs($('obspw').value);});
-if(inOBS){$('remoteBox').style.display='none';}
+if(isControl){$('remoteBox').style.display='none';document.title='Arena Control';setStatus('Control dock ready - changes here show in the arena.');setTimeout(()=>remote('state',snap()),1200);}
+else if(inOBS){$('remoteBox').style.display='none';}
 else{const spw=store.get('obspw','');if(spw){$('obspw').value=spw;linkObs(spw);}}
 
 refreshDevices().then(async()=>{
