@@ -588,6 +588,7 @@ const THEMES={
   beach:{name:'Vice Beach',bg:0x2a0f3a,fog:0x5a2a5f,near:40,far:170,a1:'#ff4fd8',a2:'#3ff5ff',a3:'#ffe066',a4:'#ff8a3d',a5:'#b388ff',roof:0xd9b27a,edge:0xffe0a8,grid:null,glyph:'sun',sign1:'LUCID STATE CITY',sign2:'VICE BEACH',weather:'sparkle',sky:'neon',spot:0xffd0e8,tint:0xffb0d0,decor:'beach'},
   nightcity:{name:'Night City',bg:0x05050b,fog:0x0a0a14,near:20,far:90,a1:'#ff2e88',a2:'#00e5ff',a3:'#c6ff00',a4:'#ffb000',a5:'#9d4dff',roof:0x111116,edge:0x2a2a33,grid:null,glyph:'tag',sign1:'LUCID STATE CITY',sign2:'NIGHT CITY',weather:'rain',sky:'neon',spot:0xbfe8ff,tint:0xffffff,decor:'nightcity'},
   heroes:{name:'Hero Rift',bg:0x0c0820,fog:0x1a1040,near:30,far:150,a1:'#ff3b3b',a2:'#3fa8ff',a3:'#ffd23a',a4:'#ff8a1a',a5:'#b05aff',roof:0x14102a,edge:0x3a2a6a,grid:[0x3a2a8a,0x1a1440],glyph:'H',sign1:'LUCID STATE CITY',sign2:'HERO RIFT ARENA',weather:'sparkle',sky:'neon',spot:0xfff0c0,tint:0xb8a8ff,decor:'heroes'},
+  galaxy:{name:'Galactic Front',bg:0x0a0618,fog:0x3a1c2a,near:40,far:170,a1:'#ff6a2a',a2:'#3fd8ff',a3:'#ffe066',a4:'#ff3b3b',a5:'#9a7aff',roof:0x3a2418,edge:0x6a3a24,grid:null,glyph:'cross',sign1:'LUCID STATE CITY',sign2:'GALACTIC FRONT',weather:'ash',sky:'none',spot:0xffe0c0,tint:0xd8a888,decor:'galaxy'},
   shooter:{name:'Warzone',bg:0x0b0906,fog:0x16110b,near:14,far:70,a1:'#ff7a1a',a2:'#39ff88',a3:'#e8e14a',a4:'#ff3b3b',a5:'#9ad1ff',roof:0x18160f,edge:0x6b5a2a,grid:[0x3a3320,0x1d1a12],glyph:'cross',sign1:'LUCID STATE CITY',sign2:'WARZONE ARENA',weather:'embers',sky:'ruins',spot:0xffe2b0,tint:0x9a7050,decor:'shooter'}
 };
 const themeKeys=Object.keys(THEMES);
@@ -1370,22 +1371,102 @@ function buildHeroRing(){
   return g;
 }
 ringBuilders.heroes=buildHeroRing;padCols.heroes=0x141030;FULLSETS.push('heroes');
-const RSTYLES={auto:'Auto (matches world)',rooftop:'Rooftop Fight Club ring',helipad:'Helipad (classic)',bar:'Bar stage',horror:'Ritual circle',shooter:'Octagon cage',beach:'Tiki beach',nightcity:'Street',haunted:'Haunted house',warfield:'War field',island:'Beach island + water',lava:'Lava pit',space:'Space station',mansion:'Haunted mansion',armory:'Gun armory',harbor:'Harbor (boats + fish)',arcade:'Arcade',dojo:'Dojo',heroes:'Hero Rift platform'};
+// ---------- GALACTIC FRONT: space-war world (for Star Wars and other sci-fi war games) ----------
+function buildGalaxy(){
+  const g=new THREE.Group();const ships=[],bolts=[],lamps=[];let cap=null;
+  const skyT=canvasTex(1024,512,(x,w,h)=>{const gr=x.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#05031a');gr.addColorStop(0.5,'#2a1450');gr.addColorStop(0.78,'#a0402a');gr.addColorStop(1,'#ffa050');x.fillStyle=gr;x.fillRect(0,0,w,h);
+    for(let i=0;i<500;i++){const y=Math.random()*h*0.6;x.fillStyle='rgba(255,255,255,'+(0.3+Math.random()*0.7)*(1-y/(h*0.6))+')';x.fillRect(Math.random()*w,y,Math.random()<0.1?2:1,Math.random()<0.1?2:1);}
+    const neb=x.createRadialGradient(300,120,10,300,120,220);neb.addColorStop(0,'rgba(120,80,255,0.35)');neb.addColorStop(1,'rgba(120,80,255,0)');x.fillStyle=neb;x.fillRect(0,0,w,h);});
+  const sky=new THREE.Mesh(new THREE.PlaneGeometry(440,160),new THREE.MeshBasicMaterial({map:skyT,fog:false,depthWrite:false}));sky.position.set(0,48,-160);g.add(sky);
+  // ringed gas giant + moons
+  const planetT=canvasTex(512,256,(x,w,h)=>{for(let y=0;y<h;y+=4){const v=Math.sin(y*0.08)*0.5+0.5;x.fillStyle='rgb('+Math.round(200+v*40)+','+Math.round(120+v*60)+','+Math.round(90+v*40)+')';x.fillRect(0,y,w,4);}x.fillStyle='rgba(120,40,20,0.5)';x.beginPath();x.ellipse(330,150,40,18,0,0,7);x.fill();});
+  const planet=new THREE.Mesh(new THREE.SphereGeometry(16,40,24),new THREE.MeshBasicMaterial({map:planetT,fog:false}));planet.position.set(-55,44,-130);planet.rotation.z=0.3;g.add(planet);
+  const pring=new THREE.Mesh(new THREE.RingGeometry(20,30,64),new THREE.MeshBasicMaterial({color:0xe8c8a0,transparent:true,opacity:0.55,side:THREE.DoubleSide,fog:false}));pring.position.copy(planet.position);pring.rotation.set(1.25,0.2,0.3);g.add(pring);
+  [[40,52,-140,5,0xcfd8ff],[62,40,-135,2.6,0xffc0a0]].forEach(([x,y,z,r,c])=>{const m=new THREE.Mesh(new THREE.SphereGeometry(r,24,16),new THREE.MeshBasicMaterial({color:c,fog:false}));m.position.set(x,y,z);g.add(m);});
+  // alien canyon ground + mesas
+  const sandT=canvasTex(256,256,(x)=>{x.fillStyle='#7a3a22';x.fillRect(0,0,256,256);for(let i=0;i<900;i++){x.fillStyle=['#8a4a2a','#6a2e1a','#9a5a34'][i%3];x.fillRect(Math.random()*256,Math.random()*256,3,2);}});sandT.wrapS=sandT.wrapT=THREE.RepeatWrapping;sandT.repeat.set(30,30);
+  const ground=new THREE.Mesh(new THREE.CircleGeometry(150,48),new THREE.MeshBasicMaterial({map:sandT}));ground.rotation.x=-Math.PI/2;ground.position.y=-0.6;g.add(ground);
+  const mesaT=canvasTex(64,256,(x)=>{const cs=['#8a3a20','#a04a28','#6a2a18','#b85a30','#7a3420'];for(let y=0;y<256;y+=16){x.fillStyle=cs[(y/16)%5];x.fillRect(0,y,64,16);}});
+  [[-40,-60,12,22],[-22,-85,9,30],[30,-70,14,26],[55,-55,10,18],[-70,-45,16,16],[75,-90,18,34],[0,-110,20,24],[-95,-95,22,30]].forEach(([x,z,r,h])=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r*0.8,r,h,9),new THREE.MeshBasicMaterial({map:mesaT}));m.position.set(x,h/2-0.6,z);g.add(m);
+    const top=new THREE.Mesh(new THREE.CylinderGeometry(r*0.8,r*0.8,0.4,9),B(0xb86a3a));top.position.set(x,h-0.4,z);g.add(top);});
+  // capital ship drifting high in the sky (original design)
+  cap=new THREE.Group();const hullM=B(0x8a8e98),dkM=B(0x4a4e58);
+  const main=new THREE.Mesh(new THREE.BoxGeometry(46,3.5,9),hullM);cap.add(main);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(4.5,14,4),hullM);nose.rotation.z=-Math.PI/2;nose.rotation.x=Math.PI/4;nose.position.x=30;nose.scale.set(1,1,0.5);cap.add(nose);
+  const tower=new THREE.Mesh(new THREE.BoxGeometry(8,5,4),dkM);tower.position.set(-10,4,0);cap.add(tower);const bridge=new THREE.Mesh(new THREE.BoxGeometry(10,1.4,6),hullM);bridge.position.set(-10,7,0);cap.add(bridge);
+  for(let i=0;i<14;i++){const l=new THREE.Mesh(new THREE.PlaneGeometry(1.2,0.3),B(0xffe0a0));l.position.set(-20+i*3,0,4.55);cap.add(l);}
+  [-1,0,1].forEach(k=>{const e=flameSprite(0x5ac8ff,-24,k*2.2,0,6,6);cap.add(e);lamps.push(e);});
+  cap.position.set(-20,34,-75);cap.rotation.y=0.15;g.add(cap);
+  // starfighters flying past (original arrow design) + laser bolts
+  const mkFighter=(col)=>{const f=new THREE.Group();const body=new THREE.Mesh(new THREE.ConeGeometry(0.5,3,6),B(0xcfd2d8));body.rotation.z=-Math.PI/2;f.add(body);
+    const wing=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.1,3.4),B(col));wing.position.x=-0.5;f.add(wing);const fin=new THREE.Mesh(new THREE.BoxGeometry(0.8,1.0,0.08),B(col));fin.position.set(-0.9,0.5,0);f.add(fin);
+    const eng=flameSprite(0xff9a3a,-1.7,0,0,1.4,1.0);f.add(eng);return f;};
+  [[0xd8261a,0],[0xd8261a,1],[0x2a6ad8,2],[0x2a6ad8,3]].forEach(([c,i])=>{const f=mkFighter(c);f.userData={o:i*2.4,lane:i};g.add(f);ships.push(f);});
+  for(let i=0;i<10;i++){const b=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,2.4,6),B(i%2?0xff3b2a:0x3fb0ff,ADD));b.rotation.z=Math.PI/2;b.userData={o:i*0.9,lane:i%4};g.add(b);bolts.push(b);}
+  // distant ground battle flashes
+  const flashes=[];for(let i=0;i<6;i++){const f=flameSprite(0xffb050,(Math.random()-.5)*120,0.5,-60-Math.random()*40,6,6);f.userData={o:Math.random()*5};g.add(f);flashes.push(f);}
+  decorAnim.galaxy=(t)=>{cap.position.x=-20+Math.sin(t*0.03)*8;cap.position.y=34+Math.sin(t*0.2)*0.6;lamps.forEach((l,i)=>{const k=0.85+0.15*Math.sin(t*9+i);l.scale.set(6*k,6*k,1);});
+    ships.forEach(f=>{const u=f.userData,cyc=9,ph=((t+u.o)%cyc)/cyc;const dir=u.lane<2?1:-1;f.position.set(dir*(-60+ph*120)+(u.lane%2)*4,14+u.lane*2.5+Math.sin(ph*12)*1.2,-38-u.lane*6);f.rotation.set(Math.sin(ph*12)*0.4,dir>0?0:Math.PI,0);});
+    bolts.forEach(b=>{const s=ships[b.userData.lane];const ph=((t*2.2+b.userData.o)%1);const dir=b.userData.lane<2?1:-1;b.position.set(s.position.x+dir*(3+ph*30),s.position.y,s.position.z);b.visible=ph<0.8;});
+    flashes.forEach(f=>{const ph=(t*0.7+f.userData.o)%3;f.material.opacity=ph<0.3?1-ph/0.3:0;f.scale.set(6+ph*10,6+ph*10,1);});};
+  return g;
+}
+decorBuilders.galaxy=buildGalaxy;
+function buildGalaxyRing(){
+  const g=new THREE.Group();const blink=[],holo=[],fields=[];
+  // mesa top + metal landing pad
+  const mesa=new THREE.Mesh(new THREE.CylinderGeometry(6.8,7.4,1.2,10),B(0x8a4024));mesa.position.y=-0.9;g.add(mesa);
+  const padT=canvasTex(512,512,(x)=>{x.fillStyle='#5a5e66';x.fillRect(0,0,512,512);x.strokeStyle='#3e4248';x.lineWidth=3;for(let r=40;r<256;r+=44){x.beginPath();x.arc(256,256,r,0,7);x.stroke();}
+    for(let k=0;k<16;k++){const a=k/16*Math.PI*2;x.beginPath();x.moveTo(256+Math.cos(a)*40,256+Math.sin(a)*40);x.lineTo(256+Math.cos(a)*250,256+Math.sin(a)*250);x.stroke();}
+    x.lineWidth=16;for(let k=0;k<24;k++){x.strokeStyle=k%2?'#e8c21a':'#1a1a1a';x.beginPath();x.arc(256,256,238,k/24*Math.PI*2,(k+1)/24*Math.PI*2);x.stroke();}
+    x.fillStyle='rgba(255,255,255,0.75)';x.font='bold 46px "Courier New",monospace';x.textAlign='center';x.fillText('PAD 7',256,272);});
+  const pad=new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.4,0.35,40),[new THREE.MeshBasicMaterial({color:0x3a3e46}),new THREE.MeshBasicMaterial({map:padT}),new THREE.MeshBasicMaterial({color:0x2a2e36})]);pad.position.y=-0.17;g.add(pad);
+  for(let i=0;i<12;i++){const a=i/12*Math.PI*2;const l=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.1,0.25,8),B(0xff5a2a));l.position.set(Math.cos(a)*5.0,0.1,Math.sin(a)*5.0);g.add(l);blink.push(l);}
+  // parked dropship behind the fighters (original design)
+  const ds=new THREE.Group();ds.position.set(0,0,-4.4);ds.rotation.y=0.08;g.add(ds);const hm=B(0xc8ccd4),dm=B(0x5a6070),acc=B(0xb8261a);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(6,1.6,2.4),hm);body.position.y=1.5;ds.add(body);
+  const cock=new THREE.Mesh(new THREE.SphereGeometry(1.1,16,10),B(0x2a4a6a));cock.scale.set(1.4,0.8,1);cock.position.set(3.4,1.7,0);ds.add(cock);
+  const wing=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.18,8),hm);wing.position.set(-0.6,2.1,0);ds.add(wing);
+  [-1,1].forEach(s=>{const eng=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.55,1.6,12),dm);eng.rotation.z=Math.PI/2;eng.position.set(-1.0,2.1,s*3.5);ds.add(eng);const gl=flameSprite(0x5ac8ff,-1.9,2.1,s*3.5,1.4,1.4);ds.add(gl);holo.push(gl);
+    const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.9,6),dm);leg.position.set(0,0.45,s*0.9);ds.add(leg);});
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(6.05,0.25,2.45),acc);stripe.position.y=1.1;ds.add(stripe);
+  const ramp=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.08,1.8),dm);ramp.position.set(-0.2,0.35,1.7);ramp.rotation.x=0.45;ds.add(ramp);
+  // holo-table with rotating planet
+  const tbl=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.7,0.8,12),B(0x3a3e48));tbl.position.set(-4.0,0.4,1.6);g.add(tbl);
+  const hp=new THREE.Mesh(new THREE.SphereGeometry(0.45,16,12),new THREE.MeshBasicMaterial({color:0x5ad8ff,wireframe:true,transparent:true,opacity:0.8}));hp.position.set(-4.0,1.5,1.6);g.add(hp);holo.push(hp);
+  const hcone=new THREE.Mesh(new THREE.ConeGeometry(0.6,0.7,16,1,true),B(0x5ad8ff,Object.assign({opacity:.15,side:THREE.DoubleSide},ADD)));hcone.position.set(-4.0,1.15,1.6);hcone.rotation.x=Math.PI;g.add(hcone);
+  // supply crates
+  const crT=canvasTex(128,128,(x)=>{x.fillStyle='#4a5260';x.fillRect(0,0,128,128);x.fillStyle='#e8c21a';x.fillRect(0,0,128,14);x.fillRect(0,114,128,14);x.fillStyle='#cfd2d8';x.font='bold 22px monospace';x.textAlign='center';x.fillText('SUPPLY',64,72);});
+  [[4.0,1.8,0.3,0],[4.4,0.9,-0.2,0],[4.1,1.4,0.1,0.62]].forEach(([x,z,r,y])=>{const c=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.6,0.6),new THREE.MeshBasicMaterial({map:crT}));c.position.set(x,0.3+y,z);c.rotation.y=r;g.add(c);});
+  // force-field fences at the sides
+  [[-5.2,0xff6a3a],[5.2,0x5ac8ff]].forEach(([x,c])=>{[-1,1].forEach(s=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,1.6,8),B(0x3a3e48));p.position.set(x,0.8,s*1.6);g.add(p);
+      const tip=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,6),B(c));tip.position.set(x,1.65,s*1.6);g.add(tip);blink.push(tip);});
+    const f=new THREE.Mesh(new THREE.PlaneGeometry(3.2,1.4,8,4),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:0.22,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));f.position.set(x,0.85,0);f.rotation.y=Math.PI/2;g.add(f);fields.push(f);});
+  // comms dish
+  const dish=new THREE.Mesh(new THREE.SphereGeometry(0.8,16,8,0,Math.PI*2,0,Math.PI/3),B(0xb8bcc4,{side:THREE.DoubleSide}));dish.position.set(4.6,2.6,-2.2);dish.rotation.x=-1.1;g.add(dish);
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,2.6,6),B(0x5a6070));mast.position.set(4.6,1.3,-2.2);g.add(mast);
+  g.userData.anim=(t)=>{blink.forEach((b,i)=>b.visible=Math.floor(t*2.5+i*0.5)%2===0);hp.rotation.y=t*0.8;hp.material.opacity=0.6+0.3*Math.sin(t*5);
+    holo.forEach((h,i)=>{if(h.isSprite){const k=0.85+0.15*Math.sin(t*10+i);h.scale.set(1.4*k,1.4*k,1);}});
+    fields.forEach((f,i)=>{f.material.opacity=0.16+0.1*Math.abs(Math.sin(t*3+i));});dish.rotation.z=Math.sin(t*0.4)*0.5;};
+  return g;
+}
+ringBuilders.galaxy=buildGalaxyRing;padCols.galaxy=0x4a4e56;FULLSETS.push('galaxy');
+const RSTYLES={auto:'Auto (matches world)',rooftop:'Rooftop Fight Club ring',helipad:'Helipad (classic)',bar:'Bar stage',horror:'Ritual circle',shooter:'Octagon cage',beach:'Tiki beach',nightcity:'Street',haunted:'Haunted house',warfield:'War field',island:'Beach island + water',lava:'Lava pit',space:'Space station',mansion:'Haunted mansion',armory:'Gun armory',harbor:'Harbor (boats + fish)',arcade:'Arcade',dojo:'Dojo',heroes:'Hero Rift platform',galaxy:'Galactic landing pad'};
 let ringStyle=store.get('ringStyle','auto');if(!RSTYLES[ringStyle])ringStyle='auto';
 function ringFor(w){return ringStyle==='auto'?w:ringStyle;}
 function applyRing(name){
   if(!padCols[name])name='rooftop';
   ringDefault.forEach(o=>o.visible=(name==='helipad'));
   for(const k in ringBuilders){if(k===name&&!rings[k]){rings[k]=ringBuilders[k]();stage.add(rings[k]);}if(rings[k])rings[k].visible=(k===name);}
-  pad.material.color.set(padCols[name]||0x1a0f30);pad.visible=!FULLSETS.includes(name);logo.visible=!['heroes','rooftop','nightcity','lava','space','warfield','mansion','armory','harbor','arcade','dojo'].includes(name);padRing.visible=!['heroes','rooftop','shooter','nightcity','warfield','island','lava','haunted','mansion','harbor','dojo','arcade','armory'].includes(name);
+  pad.material.color.set(padCols[name]||0x1a0f30);pad.visible=!FULLSETS.includes(name);logo.visible=!['galaxy','heroes','rooftop','nightcity','lava','space','warfield','mansion','armory','harbor','arcade','dojo'].includes(name);padRing.visible=!['galaxy','heroes','rooftop','shooter','nightcity','warfield','island','lava','haunted','mansion','harbor','dojo','arcade','armory'].includes(name);
   ringAnim=(rings[name]&&rings[name].userData.anim)||{bar:rings.barAnim,horror:rings.horrorAnim,shooter:rings.warAnim,beach:rings.beachAnim,nightcity:rings.streetAnim}[name]||null;
   if($('ringStyle'))$('ringStyle').value=ringStyle;
 }
 function setRingStyle(v,quiet){if(!RSTYLES[v])v='auto';ringStyle=v;store.set('ringStyle',v);applyRing(ringFor(theme));applyFighterStyle();if(!quiet){setStatus('Arena: '+RSTYLES[v]);remote('state',snap());}}
 
 // ---------- Fighter looks ----------
-const FSTYLES={classic:'Classic blocks',robot:'Robot',boxer:'Boxer',ninja:'Ninja',zombie:'Zombie',skeleton:'Skeleton',soldier:'Soldier',surfer:'Surfer',street:'Street fighter',luchador:'Luchador',ghost:'Ghost',vampire:'Vampire',pirate:'Pirate',gamer:'Gamer',hero:'Superhero',villain:'Supervillain'};
-const FAUTO={heroes:['hero','villain'],rooftop:['boxer','street'],helipad:['robot','robot'],bar:['boxer','boxer'],horror:['zombie','skeleton'],shooter:['soldier','soldier'],beach:['surfer','surfer'],nightcity:['street','street'],haunted:['zombie','skeleton'],mansion:['ghost','vampire'],warfield:['soldier','soldier'],armory:['soldier','soldier'],island:['surfer','surfer'],harbor:['pirate','pirate'],lava:['skeleton','robot'],space:['robot','robot'],arcade:['gamer','robot'],dojo:['ninja','ninja']};
+const FSTYLES={classic:'Classic blocks',robot:'Robot',boxer:'Boxer',ninja:'Ninja',zombie:'Zombie',skeleton:'Skeleton',soldier:'Soldier',surfer:'Surfer',street:'Street fighter',luchador:'Luchador',ghost:'Ghost',vampire:'Vampire',pirate:'Pirate',gamer:'Gamer',hero:'Superhero',villain:'Supervillain',knight:'Space knight',darkknight:'Dark knight'};
+const FAUTO={galaxy:['knight','darkknight'],heroes:['hero','villain'],rooftop:['boxer','street'],helipad:['robot','robot'],bar:['boxer','boxer'],horror:['zombie','skeleton'],shooter:['soldier','soldier'],beach:['surfer','surfer'],nightcity:['street','street'],haunted:['zombie','skeleton'],mansion:['ghost','vampire'],warfield:['soldier','soldier'],armory:['soldier','soldier'],island:['surfer','surfer'],harbor:['pirate','pirate'],lava:['skeleton','robot'],space:['robot','robot'],arcade:['gamer','robot'],dojo:['ninja','ninja']};
 function buildFigure(style,col){
   const g=new THREE.Group();let fist=null,fb=0.38;
   const M=c=>B(c);
@@ -1465,6 +1546,18 @@ function buildFigure(style,col){
     [-1,1].forEach(z=>{const h=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.24,6),M(0x8a8a9a));h.position.set(0,1.56,z*0.11);h.rotation.x=z*0.35;g.add(h);});
     const cape=new THREE.Mesh(new THREE.PlaneGeometry(0.6,1.05),new THREE.MeshBasicMaterial({color:0x4a0a5a,side:THREE.DoubleSide}));cape.position.set(-0.2,0.72,0);cape.rotation.y=Math.PI/2;g.add(cape);
     fist=box(0.15,0.15,0.15,0x3a3048,0.4,0.93,0.17);fb=0.4;
+  }else if(style==='knight'||style==='darkknight'){
+    const dark=style==='darkknight';const robe=dark?0x141218:0x7a5a3a,inner=dark?0x2a2630:0xe8dcc0,blade=dark?0xff2a2a:0x3fb8ff;
+    legs(dark?0x1a1a1e:0x5a4028,0x1a1008);const body=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.3,0.7,10),M(robe));body.position.set(0,0.78,0);g.add(body);
+    box(0.06,0.5,0.24,inner,0.17,0.86,0);box(0.43,0.06,0.3,dark?0x5a0a0a:0x3a2a1a,0,0.68,0);
+    sph(0.15,dark?0x2a2a30:SKIN,0,1.24,0);const hood=new THREE.Mesh(new THREE.SphereGeometry(0.2,14,8,Math.PI/2,Math.PI,0,Math.PI*0.75),M(robe));hood.position.set(0,1.24,0);g.add(hood);
+    if(dark){box(0.03,0.04,0.2,0xff2a2a,0.16,1.26,0);const cape=new THREE.Mesh(new THREE.PlaneGeometry(0.6,1.0),new THREE.MeshBasicMaterial({color:0x0a0a0c,side:THREE.DoubleSide}));cape.position.set(-0.2,0.75,0);cape.rotation.y=Math.PI/2;g.add(cape);}
+    else{box(0.03,0.04,0.06,0x111111,0.15,1.27,0.06);box(0.03,0.04,0.06,0x111111,0.15,1.27,-0.06);}
+    fist=sph(0.07,dark?0x2a2a30:SKIN,0.38,0.95,0.16);fb=0.38;
+    const hilt=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.2,8),M(0x8a8e98));hilt.position.set(0,0.12,0);fist.add(hilt);
+    const bl=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.95,8),M(0xffffff));bl.position.set(0,0.68,0);fist.add(bl);
+    const glow=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,1.0,8),new THREE.MeshBasicMaterial({color:blade,transparent:true,opacity:0.55,blending:THREE.AdditiveBlending,depthWrite:false}));glow.position.copy(bl.position);fist.add(glow);
+    fist.rotation.z=-0.5;
   }else if(style==='luchador'){
     legs(col,0xffffff);box(0.4,0.26,0.28,col,0,0.58,0);box(0.42,0.08,0.3,0xffd700,0,0.72,0);box(0.4,0.42,0.26,SKIN,0,0.95,0);
     sph(0.17,col,0,1.3,0);box(0.04,0.05,0.08,0xffffff,0.16,1.33,0.07);box(0.04,0.05,0.08,0xffffff,0.16,1.33,-0.07);box(0.04,0.18,0.03,0xffd700,0.16,1.38,0);
@@ -1504,7 +1597,7 @@ function applyTheme(name){
   bigFaces.forEach(f=>f.material.color.set(T.tint));
   rainLines.visible=T.weather==='rain';particles.visible=T.weather!=='rain'&&T.weather!=='none';
   ppMat.color.set({sparkle:0xffd59a,ash:0x9a9aa0,embers:0xff8a2a}[T.weather]||0xffffff);ppMat.size=T.weather==='ash'?0.07:0.09;
-  antenna.visible=beacon.visible=!['horror','beach','nightcity'].includes(T.decor);
+  antenna.visible=beacon.visible=!['horror','beach','nightcity','galaxy','heroes'].includes(T.decor);
   for(const k in decorBuilders){if(k===T.decor&&!decor[k]){decor[k]=decorBuilders[k]();scene.add(decor[k]);}if(decor[k])decor[k].visible=(k===T.decor);}
   applyRing(ringFor(name));
   [...$('themes').children].forEach(b=>b.classList.toggle('on',b.dataset.k===name));
@@ -1523,7 +1616,7 @@ function themeTick(t,dt){
   if(ringAnim)ringAnim(t);
 }
 themeKeys.forEach(k=>{const b=document.createElement('button');b.textContent=THEMES[k].name;b.dataset.k=k;b.onclick=()=>switchTheme(k);$('themes').appendChild(b);});
-const themeAlias={heroes:'heroes',hero:'heroes',marvel:'heroes',rivals:'heroes',superhero:'heroes',rift:'heroes',beach:'beach',vice:'beach',gta:'beach',island:'beach',sunset:'beach',city:'nightcity',nightcity:'nightcity',street:'nightcity',cyberpunk:'nightcity',night:'nightcity',rooftop:'rooftop',roof:'rooftop',neon:'rooftop',bar:'bar',lounge:'bar',horror:'horror',scary:'horror',haunted:'horror',spooky:'horror',shooter:'shooter',war:'shooter',warzone:'shooter',fps:'shooter'};
+const themeAlias={galaxy:'galaxy',space:'galaxy',starwars:'galaxy','star wars':'galaxy',clone:'galaxy',galactic:'galaxy',scifi:'galaxy',heroes:'heroes',hero:'heroes',marvel:'heroes',rivals:'heroes',superhero:'heroes',rift:'heroes',beach:'beach',vice:'beach',gta:'beach',island:'beach',sunset:'beach',city:'nightcity',nightcity:'nightcity',street:'nightcity',cyberpunk:'nightcity',night:'nightcity',rooftop:'rooftop',roof:'rooftop',neon:'rooftop',bar:'bar',lounge:'bar',horror:'horror',scary:'horror',haunted:'horror',spooky:'horror',shooter:'shooter',war:'shooter',warzone:'shooter',fps:'shooter'};
 applyTheme(themeAlias[(params.get('theme')||'').toLowerCase()]||store.get('theme','rooftop'));
 
 // ---------- !clip and raid welcome ----------
@@ -2171,6 +2264,7 @@ async function twInit(){
 }
 // ---------- Auto world from Twitch category ----------
 const AUTO_RULES=[
+  ['galaxy',/star wars|clone wars|battlefront|jedi|old republic|squadrons|outlaws|bad batch|starfield|no man's sky|elite dangerous|star citizen|everspace|space engineers|mass effect|stellaris|eve online/],
   ['heroes',/marvel rivals|overwatch|paladins|deadlock|concord|supervive|hero shooter|super ?heroes?|marvel|dc universe|injustice|avengers|spider-man|batman|x-men/],
   ['horror',/horror|resident evil|dead by daylight|phasmophobia|outlast|silent hill|five nights|\bfnaf\b|lethal company|walking dead|amnesia|until dawn|evil within|dead space|content warning|poppy playtime|visage|the forest|sons of the forest|little nightmares|alien: isolation|alan wake|the quarry|dark pictures|man of medan|little hope|house of ashes|devour|the mortuary|fears to fathom|mouthwashing|dredge|layers of fear|the outlast trials|kinda funny|\bscp\b|backrooms|granny|bendy|darkwood|the callisto protocol|signalis|pacify|demonologist|ghost watchers|ghost exile|dead island|dying light|7 days to die|state of decay|the texas chain saw|evil dead|friday the 13th|killer klowns|cry of fear|r\.e\.p\.o|\brepo\b|haunted|zombie/],
   ['shooter',/call of duty|warzone|fortnite|apex legends|valorant|counter-strike|cs2|csgo|overwatch|rainbow six|battlefield|\bhalo\b|destiny|pubg|battlegrounds|escape from tarkov|tarkov|insurgency|the finals|marvel rivals|delta force|hunt: showdown|\barma\b|\bsquad\b|hell let loose|ready or not|\brust\b|gray zone|arena breakout|xdefiant|splitgate|team fortress|borderlands|\bdoom\b|helldivers|far cry|ghost recon|division|payday|left 4 dead|deadlock|shooter|\bfps\b|sniper|counter strike|black ops|modern warfare|bodycam|unrecord/],
