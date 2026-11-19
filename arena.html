@@ -557,7 +557,7 @@ function buildBar(){
       const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:softTex,color:bm.color,transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false}));gl.scale.set(0.7,0.7,1);gl.position.copy(b.position);g.add(gl);b.userData.glow=gl;}
     const pts=[];for(let i=0;i<=30;i++){const k=i/30;pts.push(new THREE.Vector3(p0[0]+(p1[0]-p0[0])*k,p0[1]+(p1[1]-p0[1])*k-sag*4*k*(1-k),p0[2]+(p1[2]-p0[2])*k));}
     g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x332211})));}
-  strand([-12.5,8.4,8.5],[-12.5,6.4,-12],1.0,18);strand([12.8,8.4,8.5],[12.8,6.4,-12],1.0,18);strand([-12.5,8.4,8.5],[12.8,8.4,8.5],0.7,22);
+  strand([-12.5,8.4,8.5],[-12.5,6.4,-12],1.0,18);strand([12.8,8.4,8.5],[12.8,6.4,-12],1.0,18);
   [[-12.5,8.5,8.4],[-12.5,-12,6.4],[12.8,8.5,8.4],[12.8,-12,6.4]].forEach(([x,z,h])=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,h,6),dark);p.position.set(x,h/2,z);g.add(p);});
   const candles=[];
   [[-6,6.5],[-3,8.2],[5.6,7.6],[-8.6,3.5]].forEach(([x,z])=>{const t=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.06,20),wood);t.position.set(x,1,z);g.add(t);
