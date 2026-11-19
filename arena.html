@@ -13,7 +13,7 @@
   .hd span{font-size:11px;color:#a49ccc;font-weight:normal}
   #panel label.t{display:block;margin:12px 0 5px;color:#ff8be9;font-size:12px}
   .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
-  input[type=text],select{flex:1;min-width:0;width:100%;box-sizing:border-box;background:#141028;color:#fff;border:1px solid #3d2f6e;border-radius:6px;padding:7px;font-family:inherit;font-size:13px}
+  input[type=text],input[type=password],select{flex:1;min-width:0;width:100%;box-sizing:border-box;background:#141028;color:#fff;border:1px solid #3d2f6e;border-radius:6px;padding:7px;font-family:inherit;font-size:13px}
   button{background:#1b1435;color:#fff;border:1px solid #22e6ff;border-radius:6px;padding:7px 9px;font-family:inherit;font-size:12px;cursor:pointer}
   button:hover{background:#2a1f55}
   button.on{background:#22e6ff;color:#07060d}
@@ -29,6 +29,12 @@
 <div id="fade"></div>
 <div id="panel">
   <div class="hd">ROOFTOP ARENA <span>H = hide</span></div>
+
+  <div id="remoteBox" style="border:1px solid #22e6ff;border-radius:8px;padding:8px;margin-bottom:6px">
+    <label class="t" style="margin-top:0">Control OBS from this tab</label>
+    <div class="row" style="margin-top:0"><input type="password" id="obspw" placeholder="OBS WebSocket password"><button id="obsGo">Link</button></div>
+    <div id="obsStatus" class="hint" style="margin-top:6px">Not linked. Changes here only show in this tab.</div>
+  </div>
 
   <label class="t">Twitch channel (live chat + alerts)</label>
   <div class="row"><input type="text" id="chan" placeholder="yourchannel"><button id="chanGo">Connect</button></div>
@@ -84,6 +90,7 @@ const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
 const store={get(k,d){try{const v=localStorage.getItem('nha_'+k);return v===null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem('nha_'+k,JSON.stringify(v));}catch(e){}}};
 const setStatus=m=>{$('status').textContent=m;};
+const inOBS=!!window.obsstudio;let obsWs=null,obsOk=false,rx=false,remoteSeen=false;
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
@@ -228,7 +235,7 @@ function drawRoundText(txt,col){
   rtex.needsUpdate=true;
 }
 let now=0;
-function triggerRound(){roundNum++;roundStart=now;roundPhase='';setStatus('Round '+roundNum+'!');}
+function triggerRound(){roundNum++;roundStart=now;roundPhase='';setStatus('Round '+roundNum+'!');remote('round',{n:roundNum});}
 
 const alertQueue=[];let curAlert=null,alertStart=0;
 function pushAlert(kind,name,text){alertQueue.push({kind,name,text:text||''});}
@@ -380,7 +387,7 @@ $('allow').onclick=async()=>{
   try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());await refreshDevices();setStatus('Cameras found. Pick one from the lists above (capture cards and OBS Virtual Camera show up too).');}
   catch(e){setStatus('Camera access was blocked: '+(e.message||e.name));}
 };
-async function cycleSource(id){
+async function cycleSource(id){remote('cycle',{id});
   const sel=$(id==='game'?'srcGame':'srcCam');
   if([...sel.options].every(o=>o.value==='demo'||o.value==='share'||/^dev\d+$/.test(o.value))){try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());}catch(e){}await refreshDevices();}
   const opts2=[...sel.options].filter(o=>o.value!=='share');if(!opts2.length)return;
@@ -398,7 +405,7 @@ $('srcCam').onchange=e=>setSource('cam',e.target.value);
 const opts={mirror:store.get('mirror',true),fighters:store.get('fighters',true),chatFight:store.get('chatFight',true),auto:store.get('auto',false)};
 ['mirror','fighters','chatFight','auto'].forEach(k=>{
   $(k).checked=opts[k];
-  $(k).onchange=e=>{opts[k]=e.target.checked;store.set(k,opts[k]);if(k==='mirror'&&screens.cam.video)fitVideo(screens.cam);};
+  $(k).onchange=e=>{opts[k]=e.target.checked;store.set(k,opts[k]);if(k==='mirror'&&screens.cam.video)fitVideo(screens.cam);if(k!=='mirror')remote('state',snap());};
 });
 
 let ws=null,chanName='',lastChatFight=-99,reconnectTimer=null;
@@ -488,15 +495,15 @@ function declareWin(i){const a=fighterName(i),b=fighterName(1-i);
   records[kb]=Object.assign(rec(b),{name:b});records[kb].l++;
   history.push({w:ka,l:kb});saveRec();
   winText=a.toUpperCase()+' WINS!';winCol=i?CYAN:PINK;winT=now;roundPhase='';
-  setStatus(a+' wins! Now '+records[ka].w+'W - '+records[ka].l+'L.');refreshFighters();}
+  setStatus(a+' wins! Now '+records[ka].w+'W - '+records[ka].l+'L.');refreshFighters();remote('state',snap());remote('win',{i,text:winText});}
 $('p1').value=fn.p1;$('p2').value=fn.p2;
-['p1','p2'].forEach(id=>$(id).addEventListener('input',e=>{fn[id]=e.target.value;store.set(id,fn[id]);refreshFighters();}));
+['p1','p2'].forEach(id=>$(id).addEventListener('input',e=>{fn[id]=e.target.value;store.set(id,fn[id]);refreshFighters();remote('state',snap());}));
 $('w1').onclick=()=>declareWin(0);$('w2').onclick=()=>declareWin(1);
-$('swap').onclick=()=>{[fn.p1,fn.p2]=[fn.p2,fn.p1];$('p1').value=fn.p1;$('p2').value=fn.p2;store.set('p1',fn.p1);store.set('p2',fn.p2);refreshFighters();};
+$('swap').onclick=()=>{[fn.p1,fn.p2]=[fn.p2,fn.p1];$('p1').value=fn.p1;$('p2').value=fn.p2;store.set('p1',fn.p1);store.set('p2',fn.p2);refreshFighters();remote('state',snap());};
 $('undo').onclick=()=>{const h=history.pop();if(!h){setStatus('Nothing to undo.');return;}
   if(records[h.w])records[h.w].w=Math.max(0,records[h.w].w-1);if(records[h.l])records[h.l].l=Math.max(0,records[h.l].l-1);
-  saveRec();setStatus('Last result undone.');refreshFighters();};
-$('resetRec').onclick=()=>{if(!confirm('Reset every win/loss record? This cannot be undone.'))return;records={};history.length=0;saveRec();setStatus('Records reset.');refreshFighters();};
+  saveRec();setStatus('Last result undone.');refreshFighters();remote('state',snap());};
+$('resetRec').onclick=()=>{if(!confirm('Reset every win/loss record? This cannot be undone.'))return;records={};history.length=0;saveRec();setStatus('Records reset.');refreshFighters();remote('state',snap());};
 refreshFighters();
 
 // ---------- World themes ----------
@@ -668,7 +675,7 @@ function applyTheme(name){
   [...$('themes').children].forEach(b=>b.classList.toggle('on',b.dataset.k===name));
   roundPhase='';refreshFighters();setStatus('World: '+T.name);
 }
-function switchTheme(name){const f=$('fade');f.style.opacity=1;setTimeout(()=>{applyTheme(name);f.style.opacity=0;},380);}
+function switchTheme(name){remote('theme',{name});const f=$('fade');f.style.opacity=1;setTimeout(()=>{applyTheme(name);f.style.opacity=0;},380);}
 function themeTick(t,dt){
   if(particles.visible){const p=ppGeo.attributes.position.array;const w=T.weather;
     for(let i=0;i<PPN;i++){const sd=ppSeed[i];
@@ -706,16 +713,16 @@ const shotKeys=Object.keys(SHOTS);
 let shot=SHOTS[params.get('shot')]?params.get('shot'):store.get('shot','wide');
 if(!SHOTS[shot])shot='wide';
 shotKeys.forEach((k,i)=>{const b=document.createElement('button');b.textContent=(i+1)+' '+SHOTS[k].name;b.dataset.k=k;b.onclick=()=>setShot(k);$('shots').appendChild(b);});
-function setShot(k){shot=k;store.set('shot',k);[...$('shots').children].forEach(b=>b.classList.toggle('on',b.dataset.k===k));}
+function setShot(k){shot=k;store.set('shot',k);remote('shot',{k});[...$('shots').children].forEach(b=>b.classList.toggle('on',b.dataset.k===k));}
 setShot(shot);
 const autoOrder=['wide','stage','game','score','cam','game','orbit'];let autoIdx=0,lastAuto=0;
 
 $('round').onclick=triggerRound;
 const testNames=['ChipLord','RooftopRassir','NeonFarmer','ByteBandit','PixelPuff'];
-$('testAlert').onclick=()=>{const k=['NEW SUB','RAID!','500 BITS','GIFT SUB'][Math.floor(Math.random()*4)];pushAlert(k,testNames[Math.floor(Math.random()*testNames.length)],'This is a test alert from the arena panel.');};
+$('testAlert').onclick=()=>{const k=['NEW SUB','RAID!','500 BITS','GIFT SUB'][Math.floor(Math.random()*4)],nm=testNames[Math.floor(Math.random()*testNames.length)],tx='This is a test alert from the arena panel.';pushAlert(k,nm,tx);remote('alert',{k,name:nm,text:tx});};
 function togglePanel(){$('panel').classList.toggle('hidden');document.body.classList.toggle('nocursor',$('panel').classList.contains('hidden'));}
 addEventListener('keydown',e=>{
-  if(e.target.tagName==='INPUT'&&e.target.type==='text')return;
+  if(e.target.tagName==='INPUT'&&(e.target.type==='text'||e.target.type==='password'))return;
   const k=e.key.toLowerCase();
   if(k==='h')togglePanel();
   else if(k==='f')triggerRound();
@@ -735,7 +742,7 @@ const clock=new THREE.Clock();let lastDraw=0,lastSlow=0;
 function loop(){
   const dt=Math.min(clock.getDelta(),0.1);now+=dt;const t=now;
 
-  if(opts.auto&&t-lastAuto>20){lastAuto=t;autoIdx=(autoIdx+1)%autoOrder.length;setShot(autoOrder[autoIdx]);}
+  if(opts.auto&&!(inOBS&&remoteSeen)&&t-lastAuto>20){lastAuto=t;autoIdx=(autoIdx+1)%autoOrder.length;setShot(autoOrder[autoIdx]);}
   const S=SHOTS[shot];if(S.screen)frameScreen(screens[S.screen],goalP,goalT);else{goalP.copy(S.p);goalT.copy(S.t);}
   if(shot==='orbit'){goalP.set(Math.sin(t*0.1)*13,6+Math.sin(t*0.2)*1.5,-2+Math.cos(t*0.1)*14);}
   const k=1-Math.exp(-dt*(S.screen?3:2.2));curP.lerp(goalP,k);curT.lerp(goalT,k);
@@ -781,6 +788,48 @@ function loop(){
 
   renderer.render(scene,camera);requestAnimationFrame(loop);
 }
+// ---------- Remote link: control the OBS copy from any browser tab ----------
+const setObs=m=>{$('obsStatus').textContent=m;};
+function snap(){return {fn:{p1:fn.p1,p2:fn.p2},records,history:history.slice(-200),opts:{fighters:opts.fighters,chatFight:opts.chatFight,auto:opts.auto},theme,shot,roundNum};}
+function remote(cmd,data){if(rx||!obsOk||!obsWs)return;try{obsWs.send(JSON.stringify({op:6,d:{requestType:'CallVendorRequest',requestId:'r'+Math.random().toString(36).slice(2),
+  requestData:{vendorName:'obs-browser',requestType:'emit_event',requestData:{event_name:'neonArena',event_data:{cmd,data:data||{}}}}}}));}catch(e){}}
+async function sha256b64(s){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return btoa(String.fromCharCode(...new Uint8Array(h)));}
+function linkObs(pw){
+  try{if(obsWs){obsWs.onclose=null;obsWs.close();}}catch(e){}
+  obsOk=false;setObs('Linking to OBS...');
+  let s;try{s=new WebSocket('ws://127.0.0.1:4455');}catch(e){setObs('Could not open the link: '+e.message);return;}
+  obsWs=s;
+  s.onmessage=async ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
+    if(m.op===0){const d={rpcVersion:1};if(m.d&&m.d.authentication){const a=m.d.authentication;d.authentication=await sha256b64((await sha256b64(pw+a.salt))+a.challenge);}s.send(JSON.stringify({op:1,d}));}
+    else if(m.op===2){obsOk=true;store.set('obspw',pw);setObs('LINKED - everything you do here now happens in OBS.');$('obsGo').textContent='Relink';remote('state',snap());}
+    else if(m.op===7&&m.d&&m.d.requestStatus&&!m.d.requestStatus.result){setObs('OBS: '+(m.d.requestStatus.comment||'request failed'));}};
+  s.onclose=ev=>{if(obsWs!==s)return;const was=obsOk;obsOk=false;$('obsGo').textContent='Link';
+    setObs(ev.code===4009?'Wrong OBS WebSocket password.':(was?'Link to OBS lost. Click Link to reconnect.':'Could not reach OBS. In OBS: Tools > WebSocket Server Settings > Enable.'));};
+}
+function applyRemote(cmd,d){
+  remoteSeen=true;
+  if(cmd==='shot')setShot(d.k);
+  else if(cmd==='theme')switchTheme(d.name);
+  else if(cmd==='round'){roundNum=(d.n||roundNum+1)-1;triggerRound();}
+  else if(cmd==='win'){winText=d.text||'';winCol=d.i?CYAN:PINK;winT=now;roundPhase='';}
+  else if(cmd==='alert')pushAlert(d.k,d.name,d.text);
+  else if(cmd==='cycle')cycleSource(d.id);
+  else if(cmd==='state'){
+    if(d.fn){fn.p1=d.fn.p1||'';fn.p2=d.fn.p2||'';$('p1').value=fn.p1;$('p2').value=fn.p2;store.set('p1',fn.p1);store.set('p2',fn.p2);}
+    if(d.records){records=d.records;history.length=0;(d.history||[]).forEach(h=>history.push(h));saveRec();}
+    if(d.opts)['fighters','chatFight','auto'].forEach(k=>{if(k in d.opts){opts[k]=d.opts[k];$(k).checked=opts[k];store.set(k,opts[k]);}});
+    if(d.theme&&d.theme!==theme)applyTheme(d.theme);
+    if(d.shot&&SHOTS[d.shot])setShot(d.shot);
+    if(typeof d.roundNum==='number')roundNum=d.roundNum;
+    refreshFighters();
+  }
+}
+window.addEventListener('neonArena',e=>{let m=e.detail;if(typeof m==='string'){try{m=JSON.parse(m);}catch(x){return;}}if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}});
+$('obsGo').onclick=()=>linkObs($('obspw').value);
+$('obspw').addEventListener('keydown',e=>{if(e.key==='Enter')linkObs($('obspw').value);});
+if(inOBS){$('remoteBox').style.display='none';}
+else{const spw=store.get('obspw','');if(spw){$('obspw').value=spw;linkObs(spw);}}
+
 refreshDevices().then(async()=>{
   for(const id of ['game','cam']){const saved=store.get('src_'+id,'demo');const sel=$(id==='game'?'srcGame':'srcCam');
     if(saved!=='demo'&&[...sel.options].some(o=>o.value===saved)){sel.value=saved;setSource(id,saved);}}
