@@ -883,7 +883,7 @@ async function startEventSub(url){
   s.onmessage=async e=>{let m;try{m=JSON.parse(e.data);}catch(x){return;}const t=m.metadata&&m.metadata.message_type;
     if(t==='session_welcome'){if(url){setTw('Twitch linked as '+u.login+' (reconnected).');return;}
       const sid=m.payload.session.id,id=u.user_id,errs=[];
-      for(const [ty,v,c] of [['channel.follow','2',{broadcaster_user_id:id,moderator_user_id:id}],['channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:id}],['channel.hype_train.begin','1',{broadcaster_user_id:id}],['channel.hype_train.end','1',{broadcaster_user_id:id}]]){
+      for(const [ty,v,c] of [['channel.follow','2',{broadcaster_user_id:id,moderator_user_id:id}],['channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:id}],['channel.hype_train.begin','2',{broadcaster_user_id:id}],['channel.hype_train.end','2',{broadcaster_user_id:id}]]){
         try{const er=await helixSub(ty,v,c,sid);if(er)errs.push(er);}catch(x){errs.push(ty+': '+x.message);}}
       setTw(errs.length?('Twitch linked as '+u.login+', but some alerts failed: '+errs.join(', ')):('Twitch linked as '+u.login+' - follows, channel points and hype trains are live.'));}
     else if(t==='notification')onTwitchEvent(m.payload.subscription.type,m.payload.event);
