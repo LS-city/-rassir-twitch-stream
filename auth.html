@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Twitch login - NEON HARVEST Arena</title>
+<style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#07060d;color:#e9e6ff;font-family:"Courier New",monospace;text-align:center}b{color:#22e6ff}</style></head>
+<body><div id="m">Finishing Twitch login...</div>
+<script>
+(function(){
+  const get=k=>{try{const v=localStorage.getItem('nha_'+k);return v===null?null:JSON.parse(v);}catch(e){return null;}};
+  const set=(k,v)=>{try{localStorage.setItem('nha_'+k,JSON.stringify(v));}catch(e){}};
+  const h=new URLSearchParams(location.hash.slice(1)),q=new URLSearchParams(location.search);
+  const m=document.getElementById('m');
+  if(q.get('error')){m.textContent='Twitch login was cancelled: '+(q.get('error_description')||q.get('error'));return;}
+  const tok=h.get('access_token'),st=h.get('state');
+  if(!tok){m.textContent='No Twitch token came back. Try logging in again from the arena.';return;}
+  if(get('twstate')&&st!==get('twstate')){m.textContent='Login check failed (state mismatch). Try again.';return;}
+  set('twtoken',tok);set('twstate','');
+  const back=get('twreturn');
+  m.innerHTML='<b>Twitch connected!</b><br><br>Going back to the arena...';
+  setTimeout(()=>{if(back)location.replace(back);else m.innerHTML='<b>Twitch connected!</b><br><br>You can close this window.';},900);
+})();
+</script></body></html>

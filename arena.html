@@ -39,6 +39,13 @@
   <label class="t">Twitch channel (live chat + alerts)</label>
   <div class="row"><input type="text" id="chan" placeholder="yourchannel"><button id="chanGo">Connect</button></div>
 
+  <div style="border:1px solid #a46bff;border-radius:8px;padding:8px;margin-top:10px">
+    <label class="t" style="margin-top:0">Twitch account (follows, channel points, hype train)</label>
+    <input type="text" id="twcid" placeholder="Twitch Client ID">
+    <div class="row"><button id="twLogin">Log in with Twitch</button><button id="twLogout">Log out</button></div>
+    <div id="twStatus" class="hint" style="margin-top:6px">Not logged in.</div>
+  </div>
+
   <label class="t">Gameplay screen (big)</label>
   <select id="srcGame"></select>
   <label class="t">Live cam screen</label>
@@ -816,6 +823,7 @@ function applyRemote(cmd,d){
   else if(cmd==='win'){winText=d.text||'';winCol=d.i?CYAN:PINK;winT=now;roundPhase='';}
   else if(cmd==='alert')pushAlert(d.k,d.name,d.text);
   else if(cmd==='cycle')cycleSource(d.id);
+  else if(cmd==='twtoken'){twTok=d.token||'';twCid=d.cid||twCid;store.set('twtoken',twTok);store.set('twcid',twCid);twUser=null;if(twTok)startEventSub();else{try{if(esWs)esWs.close();}catch(e){}}}
   else if(cmd==='state'){
     if(d.fn){fn.p1=d.fn.p1||'';fn.p2=d.fn.p2||'';$('p1').value=fn.p1;$('p2').value=fn.p2;store.set('p1',fn.p1);store.set('p2',fn.p2);}
     if(d.records){records=d.records;history.length=0;(d.history||[]).forEach(h=>history.push(h));saveRec();}
@@ -826,13 +834,73 @@ function applyRemote(cmd,d){
     refreshFighters();
   }
 }
-if(bc)bc.onmessage=e=>{if(isControl)return;const m=e.data;if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
+if(bc)bc.onmessage=e=>{const m=e.data;if(!m||!m.cmd)return;if(isControl){if(m.cmd==='twstatus')$('twStatus').textContent=m.data.msg;else if(m.cmd==='needtoken'&&twTok)remote('twtoken',{token:twTok,cid:twCid});return;}if(m.cmd==='needtoken'||m.cmd==='twstatus')return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
 window.addEventListener('neonArena',e=>{if(isControl)return;let m=e.detail;if(typeof m==='string'){try{m=JSON.parse(m);}catch(x){return;}}if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}});
 $('obsGo').onclick=()=>linkObs($('obspw').value);
 $('obspw').addEventListener('keydown',e=>{if(e.key==='Enter')linkObs($('obspw').value);});
 if(isControl){$('remoteBox').style.display='none';document.title='Arena Control';setStatus('Control dock ready - changes here show in the arena.');setTimeout(()=>remote('state',snap()),1200);}
 else if(inOBS){$('remoteBox').style.display='none';}
 else{const spw=store.get('obspw','');if(spw){$('obspw').value=spw;linkObs(spw);}}
+
+// ---------- Twitch account (EventSub: follows, channel points, hype train) ----------
+const TW_REDIRECT='https://raw.githack.com/LS-city/-rassir-twitch-stream/main/auth.html';
+const TW_SCOPES='moderator:read:followers channel:read:redemptions channel:read:hype_train';
+let twTok=store.get('twtoken',''),twCid=store.get('twcid',''),twUser=null,esWs=null,esStarted=false;
+const setTw=m=>{$('twStatus').textContent=m;if(inOBS&&!isControl&&bc){try{bc.postMessage({cmd:'twstatus',data:{msg:m}});}catch(e){}}};
+async function twValidate(){
+  if(!twTok){setTw('Not logged in.');return null;}
+  try{const r=await fetch('https://id.twitch.tv/oauth2/validate',{headers:{Authorization:'OAuth '+twTok}});
+    if(r.status===401){setTw('Twitch login expired. Click Log in with Twitch again.');return null;}
+    const j=await r.json();twUser=j;return j;}catch(e){setTw('Could not reach Twitch: '+e.message);return null;}
+}
+function twLogin(){
+  const cid=$('twcid').value.trim();if(!cid){setTw('Paste your Twitch Client ID first.');return;}
+  twCid=cid;store.set('twcid',cid);const st=Math.random().toString(36).slice(2);store.set('twstate',st);store.set('twreturn',location.href);
+  location.href='https://id.twitch.tv/oauth2/authorize?response_type=token&client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(TW_REDIRECT)+'&scope='+encodeURIComponent(TW_SCOPES)+'&state='+st+'&force_verify=true';
+}
+function twLogout(){twTok='';store.set('twtoken','');twUser=null;try{if(esWs)esWs.close();}catch(e){}esStarted=false;setTw('Logged out.');$('twLogin').textContent='Log in with Twitch';remote('twtoken',{token:'',cid:twCid});}
+async function helixSub(type,version,condition,session){
+  const r=await fetch('https://api.twitch.tv/helix/eventsub/subscriptions',{method:'POST',headers:{'Client-Id':twCid,Authorization:'Bearer '+twTok,'Content-Type':'application/json'},
+    body:JSON.stringify({type,version,condition,transport:{method:'websocket',session_id:session}})});
+  return r.ok?null:(type+': '+r.status);
+}
+function onTwitchEvent(type,ev){
+  if(type==='channel.follow')pushAlert('NEW FOLLOW',ev.user_name||'Someone','Thanks for the follow!');
+  else if(type==='channel.channel_points_custom_reward_redemption.add'){
+    const title=(ev.reward&&ev.reward.title)||'Reward';pushAlert('REDEEMED',ev.user_name||'Someone',title+(ev.user_input?(': '+ev.user_input):''));
+    const tl=title.toLowerCase();
+    if(/fight|round/.test(tl))triggerRound();
+    for(const w in themeAlias){if(tl.includes(w)){switchTheme(themeAlias[w]);break;}}
+  }
+  else if(type==='channel.hype_train.begin')pushAlert('HYPE TRAIN!',ev.broadcaster_user_name||'',"Level "+(ev.level||1)+" - let's go!");
+  else if(type==='channel.hype_train.end')pushAlert('HYPE TRAIN DONE',ev.broadcaster_user_name||'','Reached level '+(ev.level||'?'));
+}
+async function startEventSub(url){
+  if(!twTok||!twCid)return;
+  const u=twUser||await twValidate();if(!u)return;
+  try{if(esWs){esWs.onclose=null;esWs.close();}}catch(e){}
+  const s=new WebSocket(url||'wss://eventsub.wss.twitch.tv/ws');esWs=s;esStarted=true;
+  s.onmessage=async e=>{let m;try{m=JSON.parse(e.data);}catch(x){return;}const t=m.metadata&&m.metadata.message_type;
+    if(t==='session_welcome'){if(url){setTw('Twitch linked as '+u.login+' (reconnected).');return;}
+      const sid=m.payload.session.id,id=u.user_id,errs=[];
+      for(const [ty,v,c] of [['channel.follow','2',{broadcaster_user_id:id,moderator_user_id:id}],['channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:id}],['channel.hype_train.begin','1',{broadcaster_user_id:id}],['channel.hype_train.end','1',{broadcaster_user_id:id}]]){
+        try{const er=await helixSub(ty,v,c,sid);if(er)errs.push(er);}catch(x){errs.push(ty+': '+x.message);}}
+      setTw(errs.length?('Twitch linked as '+u.login+', but some alerts failed: '+errs.join(', ')):('Twitch linked as '+u.login+' - follows, channel points and hype trains are live.'));}
+    else if(t==='notification')onTwitchEvent(m.payload.subscription.type,m.payload.event);
+    else if(t==='session_reconnect')startEventSub(m.payload.session.reconnect_url);
+    else if(t==='revocation')setTw('Twitch removed an alert permission. Log in again.');};
+  s.onclose=()=>{if(esWs!==s)return;esStarted=false;setTimeout(()=>{if(!esStarted&&twTok)startEventSub();},5000);};
+}
+async function twInit(){
+  $('twcid').value=twCid;
+  if(!twTok){setTw('Not logged in.');return;}
+  const u=await twValidate();if(!u)return;$('twLogin').textContent='Log in again';
+  if(isControl||!inOBS){setTw('Logged in as '+u.login+'.');remote('twtoken',{token:twTok,cid:twCid});}
+  if(!isControl)startEventSub();
+}
+$('twLogin').onclick=twLogin;$('twLogout').onclick=twLogout;
+twInit();
+if(inOBS&&!isControl&&bc&&!twTok){try{bc.postMessage({cmd:'needtoken',data:{}});}catch(e){}}
 
 refreshDevices().then(async()=>{
   for(const id of ['game','cam']){const saved=store.get('src_'+id,'demo');const sel=$(id==='game'?'srcGame':'srcCam');
@@ -841,7 +909,7 @@ refreshDevices().then(async()=>{
   if(params.get('cam'))await pickByName('cam',params.get('cam'));
 });
 const startChan=params.get('channel')||store.get('chan','');
-if(startChan)connectChat(startChan);
+if(startChan&&!isControl)connectChat(startChan);
 requestAnimationFrame(loop);
 })();
 </script>
