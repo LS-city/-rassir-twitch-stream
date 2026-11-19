@@ -589,6 +589,7 @@ const THEMES={
   nightcity:{name:'Night City',bg:0x05050b,fog:0x0a0a14,near:20,far:90,a1:'#ff2e88',a2:'#00e5ff',a3:'#c6ff00',a4:'#ffb000',a5:'#9d4dff',roof:0x111116,edge:0x2a2a33,grid:null,glyph:'tag',sign1:'LUCID STATE CITY',sign2:'NIGHT CITY',weather:'rain',sky:'neon',spot:0xbfe8ff,tint:0xffffff,decor:'nightcity'},
   heroes:{name:'Hero Rift',bg:0x0c0820,fog:0x1a1040,near:30,far:150,a1:'#ff3b3b',a2:'#3fa8ff',a3:'#ffd23a',a4:'#ff8a1a',a5:'#b05aff',roof:0x14102a,edge:0x3a2a6a,grid:[0x3a2a8a,0x1a1440],glyph:'H',sign1:'LUCID STATE CITY',sign2:'HERO RIFT ARENA',weather:'sparkle',sky:'neon',spot:0xfff0c0,tint:0xb8a8ff,decor:'heroes'},
   galaxy:{name:'Galactic Front',bg:0x0a0618,fog:0x3a1c2a,near:40,far:170,a1:'#ff6a2a',a2:'#3fd8ff',a3:'#ffe066',a4:'#ff3b3b',a5:'#9a7aff',roof:0x3a2418,edge:0x6a3a24,grid:null,glyph:'cross',sign1:'LUCID STATE CITY',sign2:'GALACTIC FRONT',weather:'ash',sky:'none',spot:0xffe0c0,tint:0xd8a888,decor:'galaxy'},
+  tourney:{name:'Grand Tournament',bg:0x07050c,fog:0x1a0a10,near:40,far:150,a1:'#ff3b2a',a2:'#ffd23a',a3:'#ff8a1a',a4:'#ff3b3b',a5:'#c77dff',roof:0x14121a,edge:0x4a2a1a,grid:null,glyph:'cross',sign1:'LUCID STATE CITY',sign2:'GRAND TOURNAMENT',weather:'embers',sky:'none',spot:0xffe0b0,tint:0x8a7070,decor:'tourney'},
   shooter:{name:'Warzone',bg:0x0b0906,fog:0x16110b,near:14,far:70,a1:'#ff7a1a',a2:'#39ff88',a3:'#e8e14a',a4:'#ff3b3b',a5:'#9ad1ff',roof:0x18160f,edge:0x6b5a2a,grid:[0x3a3320,0x1d1a12],glyph:'cross',sign1:'LUCID STATE CITY',sign2:'WARZONE ARENA',weather:'embers',sky:'ruins',spot:0xffe2b0,tint:0x9a7050,decor:'shooter'}
 };
 const themeKeys=Object.keys(THEMES);
@@ -1451,22 +1452,92 @@ function buildGalaxyRing(){
   return g;
 }
 ringBuilders.galaxy=buildGalaxyRing;padCols.galaxy=0x4a4e56;FULLSETS.push('galaxy');
-const RSTYLES={auto:'Auto (matches world)',rooftop:'Rooftop Fight Club ring',helipad:'Helipad (classic)',bar:'Bar stage',horror:'Ritual circle',shooter:'Octagon cage',beach:'Tiki beach',nightcity:'Street',haunted:'Haunted house',warfield:'War field',island:'Beach island + water',lava:'Lava pit',space:'Space station',mansion:'Haunted mansion',armory:'Gun armory',harbor:'Harbor (boats + fish)',arcade:'Arcade',dojo:'Dojo',heroes:'Hero Rift platform',galaxy:'Galactic landing pad'};
+// ---------- GRAND TOURNAMENT: 3D fighting-game world (for Tekken and other fighters) ----------
+function buildTourney(){
+  const g=new THREE.Group();const flashes=[],flags=[],beams=[];
+  const skyT=canvasTex(1024,512,(x,w,h)=>{const gr=x.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#05040c');gr.addColorStop(0.6,'#1a0a18');gr.addColorStop(1,'#4a1010');x.fillStyle=gr;x.fillRect(0,0,w,h);
+    for(let i=0;i<14;i++){x.strokeStyle='rgba(255,'+(80+i*8)+',40,0.05)';x.lineWidth=40;x.beginPath();x.moveTo(Math.random()*w,h);x.lineTo(Math.random()*w,0);x.stroke();}});
+  const sky=new THREE.Mesh(new THREE.PlaneGeometry(440,160),new THREE.MeshBasicMaterial({map:skyT,fog:false,depthWrite:false}));sky.position.set(0,45,-150);g.add(sky);
+  // stadium stands on both sides + back
+  const standM=B(0x1c1a24),stepM=B(0x2a2634);const seats=[];
+  const mkStand=(cx,cz,ry,wid,rows)=>{const st=new THREE.Group();st.position.set(cx,0,cz);st.rotation.y=ry;g.add(st);
+    for(let r=0;r<rows;r++){const s=new THREE.Mesh(new THREE.BoxGeometry(wid,0.9,1.4),r%2?standM:stepM);s.position.set(0,0.45+r*0.9,-r*1.4);st.add(s);
+      for(let k=0;k<Math.floor(wid/0.9);k++)seats.push({st,x:-wid/2+0.45+k*0.9,y:0.9+r*0.9,z:-r*1.4,o:Math.random()*6});}
+    const rail=new THREE.Mesh(new THREE.BoxGeometry(wid,0.08,0.08),B(0xd8a83a));rail.position.set(0,1.4,0.7);st.add(rail);return st;};
+  mkStand(-22,-10,Math.PI/2.6,26,9);mkStand(22,-10,-Math.PI/2.6,26,9);mkStand(-30,-34,Math.PI/5,22,10);mkStand(30,-34,-Math.PI/5,22,10);
+  // crowd as one instanced mesh
+  const crowdGeo=new THREE.BoxGeometry(0.42,0.75,0.3);const crowdMat=new THREE.MeshBasicMaterial({color:0xffffff});
+  const inst=new THREE.InstancedMesh(crowdGeo,crowdMat,seats.length);const dummy=new THREE.Object3D();const cols=[0xff3b3b,0x3fa8ff,0xffd23a,0xffffff,0x9dff3a,0xff8a1a,0xc77dff,0x2a2a34];
+  seats.forEach((s,i)=>{inst.setColorAt(i,new THREE.Color(cols[i%cols.length]).multiplyScalar(0.55+Math.random()*0.3));});g.add(inst);
+  const placeCrowd=(t)=>{const v=new THREE.Vector3();seats.forEach((s,i)=>{v.set(s.x,s.y+0.37+Math.max(0,Math.sin(t*6+s.o*3))*0.25*(0.5+0.5*Math.sin(t*0.7+s.o)),s.z);s.st.localToWorld(v);g.worldToLocal(v);dummy.position.copy(v);dummy.rotation.set(0,s.st.rotation.y,Math.sin(t*4+s.o)*0.15);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);});inst.instanceMatrix.needsUpdate=true;};
+  g.updateMatrixWorld(true);placeCrowd(0);if(inst.instanceColor)inst.instanceColor.needsUpdate=true;
+  // camera flashes in the stands
+  for(let i=0;i<26;i++){const f=flameSprite(0xffffff,0,0,0,0.9,0.9);f.userData={s:seats[Math.floor(Math.random()*seats.length)],o:Math.random()*5};g.add(f);flashes.push(f);}
+  // tournament banners hanging from stadium posts (original GT emblem)
+  const banT=(c)=>canvasTex(128,384,(x)=>{x.fillStyle=c;x.fillRect(0,0,128,384);x.fillStyle='#111';x.fillRect(0,0,128,18);x.fillStyle='#ffd23a';x.beginPath();x.moveTo(64,70);for(let k=0;k<10;k++){const a=-Math.PI/2+k*Math.PI/5,r=k%2?18:44;x.lineTo(64+Math.cos(a)*r,110+Math.sin(a)*r);}x.fill();
+    x.fillStyle='#fff';x.font='bold 44px Impact, "Arial Black", sans-serif';x.textAlign='center';x.fillText('GRAND',64,210);x.fillText('TOUR',64,262);x.fillText('NEY',64,312);x.beginPath();x.moveTo(0,384);x.lineTo(64,340);x.lineTo(128,384);x.fillStyle=c;});
+  [[-13,-20,'#b8161a'],[13,-20,'#1a3ab8'],[-30,-28,'#1a3ab8'],[30,-28,'#b8161a']].forEach(([x,z,c])=>{const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,14,8),B(0x2a2a30));pole.position.set(x,7,z);g.add(pole);
+    const fl=new THREE.Mesh(new THREE.PlaneGeometry(2.4,7.2,1,10),new THREE.MeshBasicMaterial({map:banT(c),side:THREE.DoubleSide}));fl.position.set(x,9.4,z+0.2);fl.lookAt(0,9.4,10);g.add(fl);flags.push(fl);});
+  // big sweeping spotlights from the stadium roof
+  [[-24,22,-20],[24,22,-20],[0,26,-40]].forEach(([x,y,z],i)=>{const b=new THREE.Mesh(new THREE.ConeGeometry(4,34,20,1,true),B(i===2?0xffd23a:0xffffff,Object.assign({opacity:.07,side:THREE.DoubleSide},ADD)));b.geometry.translate(0,-17,0);b.position.set(x,y,z);g.add(b);beams.push(b);});
+  decorAnim.tourney=(t)=>{placeCrowd(t);
+    flashes.forEach(f=>{const u=f.userData;const ph=(t*1.3+u.o)%2.2;if(ph<0.08){if(!f.visible||f.userData.p===undefined){}const v=new THREE.Vector3(u.s.x,u.s.y+0.8,u.s.z);u.s.st.localToWorld(v);g.worldToLocal(v);f.position.copy(v);f.visible=true;}else if(ph>0.12)f.visible=false;
+      if(ph>0.12&&ph<0.2)u.s=seats[Math.floor(Math.random()*seats.length)];});
+    flags.forEach((fl,i)=>{const p=fl.geometry.attributes.position;for(let k=0;k<p.count;k++){const y=p.getY(k);p.setZ(k,Math.sin(t*2+y*0.8+i)*0.25*((3.6-y)/7.2));}p.needsUpdate=true;});
+    beams.forEach((b,i)=>{b.rotation.z=Math.sin(t*0.5+i*2)*0.5;b.rotation.x=0.35+Math.cos(t*0.4+i)*0.25;});};
+  return g;
+}
+decorBuilders.tourney=buildTourney;
+function buildTourneyRing(){
+  const g=new THREE.Group();const tiles=[],pyros=[],cracks=[];
+  // stone octagon stage with glowing trim
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(5.6,6.0,0.9,8,1,true),B(0x2a2630,{side:THREE.DoubleSide}));base.position.y=-0.75;base.rotation.y=Math.PI/8;g.add(base);
+  const trim=new THREE.Mesh(new THREE.TorusGeometry(5.65,0.06,6,8),B(0xff5a2a));trim.rotation.x=Math.PI/2;trim.rotation.z=Math.PI/8;trim.position.y=-0.3;g.add(trim);
+  // breakable floor: 7x7 stone tiles
+  const tileT=canvasTex(128,128,(x)=>{x.fillStyle='#4a4450';x.fillRect(0,0,128,128);for(let i=0;i<60;i++){x.fillStyle='rgba(0,0,0,'+Math.random()*0.18+')';x.fillRect(Math.random()*128,Math.random()*128,6,3);}x.strokeStyle='#2a2630';x.lineWidth=6;x.strokeRect(0,0,128,128);});
+  const N=7,TS=1.3;for(let i=0;i<N;i++)for(let j=0;j<N;j++){const cx=(i-(N-1)/2)*TS,cz=(j-(N-1)/2)*TS;if(Math.hypot(cx,cz)>5.3)continue;
+    const tl=new THREE.Mesh(new THREE.BoxGeometry(TS-0.04,0.3,TS-0.04),new THREE.MeshBasicMaterial({map:tileT}));tl.position.set(cx,-0.15,cz);tl.userData={x:cx,z:cz,vy:0,rx:(Math.random()-.5)*4,rz:(Math.random()-.5)*4,d:Math.hypot(cx,cz)};g.add(tl);tiles.push(tl);}
+  // glowing cracks decal (shows when the floor breaks)
+  const crT=canvasTex(512,512,(x)=>{x.strokeStyle='#ffb020';x.lineWidth=7;x.shadowColor='#ff5a00';x.shadowBlur=18;for(let k=0;k<10;k++){let px=256,py=256,a=k/10*Math.PI*2;x.beginPath();x.moveTo(px,py);for(let s=0;s<9;s++){a+=(Math.random()-.5)*0.9;px+=Math.cos(a)*28;py+=Math.sin(a)*28;x.lineTo(px,py);}x.stroke();}});
+  const crack=new THREE.Mesh(new THREE.PlaneGeometry(10,10),new THREE.MeshBasicMaterial({map:crT,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));crack.rotation.x=-Math.PI/2;crack.position.y=0.02;g.add(crack);
+  const lava=new THREE.Mesh(new THREE.CircleGeometry(5.3,8),B(0xff5a1a));lava.rotation.x=-Math.PI/2;lava.rotation.z=Math.PI/8;lava.position.y=-0.9;g.add(lava);const lavaGlow=flameSprite(0xff7a1a,0,-0.4,0,9,3);g.add(lavaGlow);
+  // stone corner pillars with braziers + pyro cannons
+  for(let i=0;i<8;i++){const a=i/8*Math.PI*2+Math.PI/8;const x=Math.cos(a)*5.9,z=Math.sin(a)*5.9;if(z>3)continue;
+    const p=new THREE.Mesh(new THREE.BoxGeometry(0.5,1.6,0.5),B(0x3a3440));p.position.set(x,0.5,z);g.add(p);
+    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.2,0.25,10),B(0x6a5a3a));bowl.position.set(x,1.42,z);g.add(bowl);
+    const fl=flameSprite(0xff7a1a,x,1.9,z,0.9,1.4);g.add(fl);pyros.push({fl,x,z,base:true});}
+  [[-5.2,2.6],[5.2,2.6],[-4.2,-4.2],[4.2,-4.2]].forEach(([x,z])=>{const cn=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.32,0.5,10),B(0x1a1a1e));cn.position.set(x,-0.05,z);g.add(cn);
+    const jet=[];for(let k=0;k<5;k++){const f=flameSprite(k%2?0xffd23a:0xff4a1a,x,0.4+k*0.7,z,1.2,1.4);f.visible=false;g.add(f);jet.push(f);}pyros.push({jet,x,z});});
+  // embers
+  const embers=[];for(let i=0;i<30;i++){const e=flameSprite(0xffa020,0,0,0,0.12,0.12);e.userData={a:Math.random()*7,r:Math.random()*5,o:Math.random()};g.add(e);embers.push(e);}
+  g.userData.anim=(t)=>{
+    const wa=now-winT,ra=now-roundStart;const breaking=wa>=0&&wa<4.2;
+    tiles.forEach(tl=>{const u=tl.userData;if(breaking&&wa>0.5+u.d*0.05){const k=wa-0.5-u.d*0.05;if(wa<2.6){tl.position.set(u.x,-0.15-k*k*3.5,u.z);tl.rotation.set(u.rx*k,0,u.rz*k);}else{const r=Math.min(1,(wa-2.6)/1.4);tl.position.set(u.x,-0.15-(1-r)*12,u.z);tl.rotation.set(u.rx*(1-r)*2,0,u.rz*(1-r)*2);}}
+      else{tl.position.set(u.x,-0.15,u.z);tl.rotation.set(0,0,0);}});
+    crack.material.opacity=breaking?Math.max(0,1-Math.abs(wa-0.4)*1.5):0;lava.visible=lavaGlow.visible=breaking;if(breaking)lava.material.color.setHSL(0.05+0.03*Math.sin(t*6),1,0.55);
+    const fire=(ra>=0&&ra<1.8)||(wa>=0&&wa<2)||((t%14)<1.2);
+    pyros.forEach((p,i)=>{if(p.base){const k=0.85+0.15*Math.sin(t*12+i);p.fl.scale.set(0.9*k,1.4*k,1);return;}
+      p.jet.forEach((f,k)=>{f.visible=fire;if(fire){const s=1+Math.sin(t*30+k+i)*0.25;f.scale.set(1.2*s+k*0.15,1.4*s+k*0.2,1);f.position.y=0.4+k*0.75+Math.sin(t*20+k)*0.08;}});});
+    embers.forEach(e=>{const u=e.userData,ph=(t*0.3+u.o)%1;e.position.set(Math.cos(u.a)*u.r,ph*6,Math.sin(u.a)*u.r);e.material.opacity=1-ph;});};
+  return g;
+}
+ringBuilders.tourney=buildTourneyRing;padCols.tourney=0x2a2630;FULLSETS.push('tourney');
+const RSTYLES={auto:'Auto (matches world)',rooftop:'Rooftop Fight Club ring',helipad:'Helipad (classic)',bar:'Bar stage',horror:'Ritual circle',shooter:'Octagon cage',beach:'Tiki beach',nightcity:'Street',haunted:'Haunted house',warfield:'War field',island:'Beach island + water',lava:'Lava pit',space:'Space station',mansion:'Haunted mansion',armory:'Gun armory',harbor:'Harbor (boats + fish)',arcade:'Arcade',dojo:'Dojo',heroes:'Hero Rift platform',galaxy:'Galactic landing pad',tourney:'Tournament stage (breakable floor)'};
 let ringStyle=store.get('ringStyle','auto');if(!RSTYLES[ringStyle])ringStyle='auto';
 function ringFor(w){return ringStyle==='auto'?w:ringStyle;}
 function applyRing(name){
   if(!padCols[name])name='rooftop';
   ringDefault.forEach(o=>o.visible=(name==='helipad'));
   for(const k in ringBuilders){if(k===name&&!rings[k]){rings[k]=ringBuilders[k]();stage.add(rings[k]);}if(rings[k])rings[k].visible=(k===name);}
-  pad.material.color.set(padCols[name]||0x1a0f30);pad.visible=!FULLSETS.includes(name);logo.visible=!['galaxy','heroes','rooftop','nightcity','lava','space','warfield','mansion','armory','harbor','arcade','dojo'].includes(name);padRing.visible=!['galaxy','heroes','rooftop','shooter','nightcity','warfield','island','lava','haunted','mansion','harbor','dojo','arcade','armory'].includes(name);
+  pad.material.color.set(padCols[name]||0x1a0f30);pad.visible=!FULLSETS.includes(name);logo.visible=!['tourney','galaxy','heroes','rooftop','nightcity','lava','space','warfield','mansion','armory','harbor','arcade','dojo'].includes(name);padRing.visible=!['tourney','galaxy','heroes','rooftop','shooter','nightcity','warfield','island','lava','haunted','mansion','harbor','dojo','arcade','armory'].includes(name);
   ringAnim=(rings[name]&&rings[name].userData.anim)||{bar:rings.barAnim,horror:rings.horrorAnim,shooter:rings.warAnim,beach:rings.beachAnim,nightcity:rings.streetAnim}[name]||null;
   if($('ringStyle'))$('ringStyle').value=ringStyle;
 }
 function setRingStyle(v,quiet){if(!RSTYLES[v])v='auto';ringStyle=v;store.set('ringStyle',v);applyRing(ringFor(theme));applyFighterStyle();if(!quiet){setStatus('Arena: '+RSTYLES[v]);remote('state',snap());}}
 
 // ---------- Fighter looks ----------
-const FSTYLES={classic:'Classic blocks',robot:'Robot',boxer:'Boxer',ninja:'Ninja',zombie:'Zombie',skeleton:'Skeleton',soldier:'Soldier',surfer:'Surfer',street:'Street fighter',luchador:'Luchador',ghost:'Ghost',vampire:'Vampire',pirate:'Pirate',gamer:'Gamer',hero:'Superhero',villain:'Supervillain',knight:'Space knight',darkknight:'Dark knight'};
-const FAUTO={galaxy:['knight','darkknight'],heroes:['hero','villain'],rooftop:['boxer','street'],helipad:['robot','robot'],bar:['boxer','boxer'],horror:['zombie','skeleton'],shooter:['soldier','soldier'],beach:['surfer','surfer'],nightcity:['street','street'],haunted:['zombie','skeleton'],mansion:['ghost','vampire'],warfield:['soldier','soldier'],armory:['soldier','soldier'],island:['surfer','surfer'],harbor:['pirate','pirate'],lava:['skeleton','robot'],space:['robot','robot'],arcade:['gamer','robot'],dojo:['ninja','ninja']};
+const FSTYLES={classic:'Classic blocks',robot:'Robot',boxer:'Boxer',ninja:'Ninja',zombie:'Zombie',skeleton:'Skeleton',soldier:'Soldier',surfer:'Surfer',street:'Street fighter',luchador:'Luchador',ghost:'Ghost',vampire:'Vampire',pirate:'Pirate',gamer:'Gamer',hero:'Superhero',villain:'Supervillain',knight:'Space knight',darkknight:'Dark knight',karate:'Karate master'};
+const FAUTO={tourney:['karate','luchador'],galaxy:['knight','darkknight'],heroes:['hero','villain'],rooftop:['boxer','street'],helipad:['robot','robot'],bar:['boxer','boxer'],horror:['zombie','skeleton'],shooter:['soldier','soldier'],beach:['surfer','surfer'],nightcity:['street','street'],haunted:['zombie','skeleton'],mansion:['ghost','vampire'],warfield:['soldier','soldier'],armory:['soldier','soldier'],island:['surfer','surfer'],harbor:['pirate','pirate'],lava:['skeleton','robot'],space:['robot','robot'],arcade:['gamer','robot'],dojo:['ninja','ninja']};
 function buildFigure(style,col){
   const g=new THREE.Group();let fist=null,fb=0.38;
   const M=c=>B(c);
@@ -1558,6 +1629,11 @@ function buildFigure(style,col){
     const bl=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.95,8),M(0xffffff));bl.position.set(0,0.68,0);fist.add(bl);
     const glow=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,1.0,8),new THREE.MeshBasicMaterial({color:blade,transparent:true,opacity:0.55,blending:THREE.AdditiveBlending,depthWrite:false}));glow.position.copy(bl.position);fist.add(glow);
     fist.rotation.z=-0.5;
+  }else if(style==='karate'){
+    const W=0xf2f0ea;legs(W,SKIN);box(0.42,0.52,0.28,W,0,0.82,0);box(0.43,0.07,0.29,0x111111,0,0.62,0);box(0.04,0.22,0.05,0x111111,0.05,0.5,0.1);
+    box(0.06,0.3,0.06,SKIN,0.15,0.92,0);sph(0.16,SKIN,0,1.25,0);box(0.3,0.06,0.34,col,0,1.33,0);box(0.2,0.04,0.04,col,-0.22,1.3,0.08);box(0.18,0.04,0.04,col,-0.2,1.27,-0.04);
+    box(0.24,0.08,0.32,0x1a1008,-0.02,1.39,0);box(0.03,0.03,0.07,0x111111,0.15,1.27,0.06);box(0.03,0.03,0.07,0x111111,0.15,1.27,-0.06);
+    box(0.12,0.12,0.12,W,0.1,0.92,-0.24);fist=box(0.13,0.13,0.13,SKIN,0.4,0.95,0.16);fb=0.4;
   }else if(style==='luchador'){
     legs(col,0xffffff);box(0.4,0.26,0.28,col,0,0.58,0);box(0.42,0.08,0.3,0xffd700,0,0.72,0);box(0.4,0.42,0.26,SKIN,0,0.95,0);
     sph(0.17,col,0,1.3,0);box(0.04,0.05,0.08,0xffffff,0.16,1.33,0.07);box(0.04,0.05,0.08,0xffffff,0.16,1.33,-0.07);box(0.04,0.18,0.03,0xffd700,0.16,1.38,0);
@@ -1597,7 +1673,7 @@ function applyTheme(name){
   bigFaces.forEach(f=>f.material.color.set(T.tint));
   rainLines.visible=T.weather==='rain';particles.visible=T.weather!=='rain'&&T.weather!=='none';
   ppMat.color.set({sparkle:0xffd59a,ash:0x9a9aa0,embers:0xff8a2a}[T.weather]||0xffffff);ppMat.size=T.weather==='ash'?0.07:0.09;
-  antenna.visible=beacon.visible=!['horror','beach','nightcity','galaxy','heroes'].includes(T.decor);
+  antenna.visible=beacon.visible=!['horror','beach','nightcity','galaxy','heroes','tourney'].includes(T.decor);
   for(const k in decorBuilders){if(k===T.decor&&!decor[k]){decor[k]=decorBuilders[k]();scene.add(decor[k]);}if(decor[k])decor[k].visible=(k===T.decor);}
   applyRing(ringFor(name));
   [...$('themes').children].forEach(b=>b.classList.toggle('on',b.dataset.k===name));
@@ -1616,7 +1692,7 @@ function themeTick(t,dt){
   if(ringAnim)ringAnim(t);
 }
 themeKeys.forEach(k=>{const b=document.createElement('button');b.textContent=THEMES[k].name;b.dataset.k=k;b.onclick=()=>switchTheme(k);$('themes').appendChild(b);});
-const themeAlias={galaxy:'galaxy',space:'galaxy',starwars:'galaxy','star wars':'galaxy',clone:'galaxy',galactic:'galaxy',scifi:'galaxy',heroes:'heroes',hero:'heroes',marvel:'heroes',rivals:'heroes',superhero:'heroes',rift:'heroes',beach:'beach',vice:'beach',gta:'beach',island:'beach',sunset:'beach',city:'nightcity',nightcity:'nightcity',street:'nightcity',cyberpunk:'nightcity',night:'nightcity',rooftop:'rooftop',roof:'rooftop',neon:'rooftop',bar:'bar',lounge:'bar',horror:'horror',scary:'horror',haunted:'horror',spooky:'horror',shooter:'shooter',war:'shooter',warzone:'shooter',fps:'shooter'};
+const themeAlias={tourney:'tourney',tekken:'tourney',tournament:'tourney',fighting:'tourney',fighter:'tourney',dojo2:'tourney',galaxy:'galaxy',space:'galaxy',starwars:'galaxy','star wars':'galaxy',clone:'galaxy',galactic:'galaxy',scifi:'galaxy',heroes:'heroes',hero:'heroes',marvel:'heroes',rivals:'heroes',superhero:'heroes',rift:'heroes',beach:'beach',vice:'beach',gta:'beach',island:'beach',sunset:'beach',city:'nightcity',nightcity:'nightcity',street:'nightcity',cyberpunk:'nightcity',night:'nightcity',rooftop:'rooftop',roof:'rooftop',neon:'rooftop',bar:'bar',lounge:'bar',horror:'horror',scary:'horror',haunted:'horror',spooky:'horror',shooter:'shooter',war:'shooter',warzone:'shooter',fps:'shooter'};
 applyTheme(themeAlias[(params.get('theme')||'').toLowerCase()]||store.get('theme','rooftop'));
 
 // ---------- !clip and raid welcome ----------
@@ -2264,6 +2340,7 @@ async function twInit(){
 }
 // ---------- Auto world from Twitch category ----------
 const AUTO_RULES=[
+  ['tourney',/tekken|soulcalibur|soul calibur|virtua fighter|dead or alive|guilty gear|blazblue|king of fighters|fatal fury|2xko|granblue fantasy versus|under night|melty blood|mortal kombat|street fighter|dragon ball fighterz|sparking|naruto|jump force|bloody roar|fighting games/],
   ['galaxy',/star wars|clone wars|battlefront|jedi|old republic|squadrons|outlaws|bad batch|starfield|no man's sky|elite dangerous|star citizen|everspace|space engineers|mass effect|stellaris|eve online/],
   ['heroes',/marvel rivals|overwatch|paladins|deadlock|concord|supervive|hero shooter|super ?heroes?|marvel|dc universe|injustice|avengers|spider-man|batman|x-men/],
   ['horror',/horror|resident evil|dead by daylight|phasmophobia|outlast|silent hill|five nights|\bfnaf\b|lethal company|walking dead|amnesia|until dawn|evil within|dead space|content warning|poppy playtime|visage|the forest|sons of the forest|little nightmares|alien: isolation|alan wake|the quarry|dark pictures|man of medan|little hope|house of ashes|devour|the mortuary|fears to fathom|mouthwashing|dredge|layers of fear|the outlast trials|kinda funny|\bscp\b|backrooms|granny|bendy|darkwood|the callisto protocol|signalis|pacify|demonologist|ghost watchers|ghost exile|dead island|dying light|7 days to die|state of decay|the texas chain saw|evil dead|friday the 13th|killer klowns|cry of fear|r\.e\.p\.o|\brepo\b|haunted|zombie/],
