@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Lucid State City</title>
+<style>html,body{margin:0;background:transparent;color:#fff;font:16px monospace}</style></head>
+<body>
+<script>
+// Always opens the newest version of the arena, so OBS never needs a new link.
+(async()=>{
+  const q=location.search;
+  const go=sha=>location.replace('https://raw.githack.com/LS-city/-rassir-twitch-stream/'+sha+'/arena.html'+q);
+  try{
+    const r=await fetch('https://api.github.com/repos/LS-city/-rassir-twitch-stream/commits/main',{cache:'no-store'});
+    const j=await r.json();
+    if(j&&j.sha){try{localStorage.setItem('nha_lastsha',j.sha);}catch(e){}go(j.sha);return;}
+  }catch(e){}
+  let last=null;try{last=localStorage.getItem('nha_lastsha');}catch(e){}
+  go(last||'main');
+})();
+</script>
+</body></html>
