@@ -72,7 +72,7 @@
   <label class="t">Screen names</label>
   <div id="labelBox" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
   <div class="row" style="margin-top:4px"><button id="labelReset">Reset names</button></div>
-  <label class="t">Camera shot (keys 1-8)</label>
+  <label class="t">Camera shot (keys 1-9)</label>
   <div class="shots" id="shots"></div>
   <div class="row"><label class="ck"><input type="checkbox" id="auto"> Auto-switch shots every 20s</label></div>
 
@@ -255,6 +255,7 @@ makeScreen('alerts',{label:'ALERTS',role:'a4',col:AMBER,pos:[9.2,3.8,0],look:[0,
 makeScreen('info',{label:'STREAM INFO',role:'a2',col:CYAN,pos:[-22.3,12,-14.45],look:[-22.3,12,10],w:4.2,h:2.3625,cw:640});
 makeScreen('brand',{label:'LUCID STATE CITY',role:'a1',col:PINK,pos:[-17.7,12,-14.45],look:[-17.7,12,10],w:4.2,h:2.3625,cw:640});
 makeScreen('score',{label:'SCOREBOARD',role:'a1',col:PINK,pos:[0,5.6,-14.9],look:[0,4,10],w:8,h:2.6,cw:1024});
+makeScreen('help',{label:'INTERACTIVE WORLD',role:'a3',col:LIME,pos:[-21.4,7.95,-14.45],look:[-21.4,7.95,10],w:6.2,h:4.0,cw:768});
 makeScreen('viz',{label:'VISUALIZER',role:'a5',col:VIOLET,pos:[19,11.4,-9.4],look:[19,11.4,10],w:6,h:3.375,cw:640});
 
 const rc=document.createElement('canvas');rc.width=1024;rc.height=256;const rctx=rc.getContext('2d');
@@ -345,6 +346,21 @@ function drawBrand(s,t){
   for(let i=0;i<12;i++){const on=Math.sin(t*2+i*1.3)>0.3;ctx.fillStyle=on?(i%2?CYAN:PINK):'#1e1438';ctx.fillRect(40+(i%6)*96,h-110+Math.floor(i/6)*44,70,30);}
   ctx.textAlign='center';ctx.font='bold 66px "Courier New",monospace';ctx.shadowColor=PINK;ctx.shadowBlur=20+10*Math.sin(t*3);ctx.fillStyle=PINK;ctx.fillText('LUCID STATE',w/2,100,w-30);
   ctx.shadowColor=CYAN;ctx.fillStyle=CYAN;ctx.fillText('CITY',w/2,170);ctx.shadowBlur=0;ctx.textAlign='left';
+  s.ctex.needsUpdate=true;
+}
+function drawHelp(s,t){
+  const {ctx,c}=s,w=c.width,h=c.height;ctx.fillStyle='#0a0814';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;for(let y=0;y<h;y+=4){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  ctx.textAlign='center';ctx.font='bold 34px "Courier New",monospace';ctx.fillStyle=LIME;ctx.shadowColor=LIME;ctx.shadowBlur=12;ctx.fillText('TYPE IN CHAT:',w/2,46);ctx.shadowBlur=0;
+  const rows=[['!join','get in line to fight'],['!leave','leave the fight line'],['!cheer','confetti + you jump'],['!boo','throw a tomato'],['!me','camera on you'],['Cheer bits','fireworks']];
+  if(opts.chatFight)rows.splice(2,0,['!fight','start the round']);
+  const hi=Math.floor(t/2.2)%rows.length,top=78,rh=(h-top-46)/rows.length;
+  ctx.textAlign='left';
+  rows.forEach(([cmd,what],i)=>{const y=top+i*rh;const on=i===hi;
+    if(on){ctx.fillStyle='rgba(255,255,255,0.08)';ctx.fillRect(14,y,w-28,rh-6);ctx.fillStyle=PINK;ctx.fillRect(14,y,6,rh-6);}
+    ctx.font='bold '+Math.floor(rh*0.5)+'px "Courier New",monospace';ctx.fillStyle=on?'#ffffff':CYAN;ctx.fillText(cmd,34,y+rh*0.62);
+    ctx.font=Math.floor(rh*0.38)+'px "Courier New",monospace';ctx.fillStyle=on?AMBER:'#b8b0d8';ctx.fillText(what,250,y+rh*0.6,w-264);});
+  ctx.textAlign='center';ctx.font='20px "Courier New",monospace';ctx.fillStyle='#8a80b0';ctx.fillText('Say anything to join the crowd',w/2,h-16);ctx.textAlign='left';
   s.ctex.needsUpdate=true;
 }
 const startTime=Date.now();
@@ -1208,6 +1224,7 @@ const SHOTS={
   chat:{name:'Chat',screen:'chat'},
   alerts:{name:'Alerts',screen:'alerts'},
   score:{name:'Score',screen:'score'},
+  help:{name:'Commands',screen:'help'},
   orbit:{name:'Orbit',p:V(0,6,14),t:V(0,5,-6)}
 };
 const shotKeys=Object.keys(SHOTS);
@@ -1215,7 +1232,7 @@ let shot=SHOTS[params.get('shot')]?params.get('shot'):store.get('shot','wide');
 if(!SHOTS[shot])shot='wide';
 shotKeys.forEach((k,i)=>{const b=document.createElement('button');b.textContent=(i+1)+' '+SHOTS[k].name;b.dataset.k=k;b.onclick=()=>setShot(k);$('shots').appendChild(b);});
 {const el=$('ringStyle');for(const k in RSTYLES){const o=document.createElement('option');o.value=k;o.textContent=RSTYLES[k];el.appendChild(o);}el.value=ringStyle;el.onchange=()=>setRingStyle(el.value);}
-const LABEL_IDS=['game','cam','chat','alerts','score','viz','info','brand'];
+const LABEL_IDS=['game','cam','help','chat','alerts','score','viz','info','brand'];
 const defLabels={};LABEL_IDS.forEach(id=>defLabels[id]=screens[id].label);
 let labels=store.get('labels',{})||{};
 function applyLabels(L,quiet){labels=L||{};store.set('labels',labels);LABEL_IDS.forEach(id=>{const s=screens[id];const v=(labels[id]||'').trim();s.label=v||defLabels[id];drawTag(s);const inp=$('lbl_'+id);if(inp&&document.activeElement!==inp)inp.value=labels[id]||'';});
@@ -1244,7 +1261,7 @@ addEventListener('keydown',e=>{
   else if(k==='c')cycleSource('cam');
   else if(k==='g')cycleSource('game');
   else if(k==='v')switchTheme(themeKeys[(themeKeys.indexOf(theme)+1)%themeKeys.length]);
-  else if(k>='1'&&k<='8')setShot(shotKeys[+k-1]);
+  else if(k>='1'&&k<='9'&&shotKeys[+k-1])setShot(shotKeys[+k-1]);
 });
 if(params.get('hideui')==='1')togglePanel();
 
@@ -1297,7 +1314,7 @@ function loop(){
     if(!screens.cam.video)drawCamDemo(screens.cam,t);
     drawViz(screens.viz,t);drawAlerts(screens.alerts,t);
   }
-  if(t-lastSlow>0.25){lastSlow=t;drawChat(screens.chat,t);drawBrand(screens.brand,t);drawScore(screens.score);drawInfo(screens.info,t);}
+  if(t-lastSlow>0.25){lastSlow=t;drawChat(screens.chat,t);drawBrand(screens.brand,t);drawScore(screens.score);drawInfo(screens.info,t);drawHelp(screens.help,t);}
 
   if(!isControl||(++ctlFrame%6===0))renderer.render(scene,camera);requestAnimationFrame(loop);
 }
