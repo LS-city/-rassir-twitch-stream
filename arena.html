@@ -387,7 +387,7 @@ async function refreshDevices(){
   ['srcGame','srcCam'].forEach(sel=>{
     const el=$(sel),cur=el.value||'demo';el.innerHTML='';
     const add=(v,t)=>{const o=document.createElement('option');o.value=v;o.textContent=t;el.appendChild(o);};
-    add('demo','Demo animation');add('share','Share a screen or window...');
+    add('demo','Demo animation');if(!isControl&&!inOBS)add('share','Share a screen or window...');
     devs.forEach((d,i)=>add(d.deviceId||('dev'+i),d.label||('Camera '+(i+1)+' (click Find cameras)')));
     el.value=[...el.options].some(o=>o.value===cur)?cur:'demo';
   });
@@ -396,7 +396,7 @@ $('allow').onclick=async()=>{
   try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());await refreshDevices();setStatus('Cameras found. Pick one from the lists above (capture cards and OBS Virtual Camera show up too).');}
   catch(e){setStatus('Camera access was blocked: '+(e.message||e.name));}
 };
-async function cycleSource(id){remote('cycle',{id});
+async function cycleSource(id){remote('cycle',{id});if(isControl){setStatus('Switched '+(id==='game'?'gameplay':'cam')+' source in OBS.');return;}
   const sel=$(id==='game'?'srcGame':'srcCam');
   if([...sel.options].every(o=>o.value==='demo'||o.value==='share'||/^dev\d+$/.test(o.value))){try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());}catch(e){}await refreshDevices();}
   const opts2=[...sel.options].filter(o=>o.value!=='share');if(!opts2.length)return;
@@ -408,8 +408,8 @@ async function pickByName(id,q){
   const sel=$(id==='game'?'srcGame':'srcCam');const o=[...sel.options].find(o=>o.textContent.toLowerCase().includes(q.toLowerCase()));
   if(o){sel.value=o.value;await setSource(id,o.value);}else setStatus('No camera matching "'+q+'"');
 }
-$('srcGame').onchange=e=>setSource('game',e.target.value);
-$('srcCam').onchange=e=>setSource('cam',e.target.value);
+$('srcGame').onchange=e=>{if(isControl){remote('src',{id:'game',label:e.target.selectedOptions[0].textContent,value:e.target.value});setStatus('Gameplay screen in OBS: '+e.target.selectedOptions[0].textContent);return;}setSource('game',e.target.value);};
+$('srcCam').onchange=e=>{if(isControl){remote('src',{id:'cam',label:e.target.selectedOptions[0].textContent,value:e.target.value});setStatus('Live cam in OBS: '+e.target.selectedOptions[0].textContent);return;}setSource('cam',e.target.value);};
 
 const opts={mirror:store.get('mirror',true),fighters:store.get('fighters',true),chatFight:store.get('chatFight',true),auto:store.get('auto',false)};
 ['mirror','fighters','chatFight','auto'].forEach(k=>{
@@ -823,6 +823,10 @@ function applyRemote(cmd,d){
   else if(cmd==='win'){winText=d.text||'';winCol=d.i?CYAN:PINK;winT=now;roundPhase='';}
   else if(cmd==='alert')pushAlert(d.k,d.name,d.text);
   else if(cmd==='cycle')cycleSource(d.id);
+  else if(cmd==='src'){const sel=$(d.id==='game'?'srcGame':'srcCam');
+    if(d.value==='demo'){sel.value='demo';setSource(d.id,'demo');}
+    else if(d.value==='share'){setStatus('Screen share is not available inside OBS - use the Game Feed scene instead.');}
+    else pickByName(d.id,(d.label||'').replace(/ \(click Find cameras\)$/,''));}
   else if(cmd==='twtoken'){twTok=d.token||'';twCid=d.cid||twCid;store.set('twtoken',twTok);store.set('twcid',twCid);twUser=null;if(twTok)startEventSub();else{try{if(esWs)esWs.close();}catch(e){}}}
   else if(cmd==='state'){
     if(d.fn){fn.p1=d.fn.p1||'';fn.p2=d.fn.p2||'';$('p1').value=fn.p1;$('p2').value=fn.p2;store.set('p1',fn.p1);store.set('p2',fn.p2);}
