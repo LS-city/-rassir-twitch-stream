@@ -45,10 +45,11 @@
 
   <label class="t">Twitch channel (live chat + alerts)</label>
   <div class="row"><input type="text" id="chan" placeholder="yourchannel"><button id="chanGo">Connect</button></div>
+  <div id="chanStatus" class="hint" style="margin-top:4px">Chat connects to your Twitch account automatically.</div>
 
   <div style="border:1px solid #a46bff;border-radius:8px;padding:8px;margin-top:10px">
     <label class="t" style="margin-top:0">Twitch account (follows, channel points, hype train)</label>
-    <input type="text" id="twcid" placeholder="Twitch Client ID">
+    <input type="hidden" id="twcid">
     <div class="row"><button id="twLogin">Log in with Twitch</button><button id="twLogout">Log out</button></div>
     <div id="twStatus" class="hint" style="margin-top:6px">Not logged in.</div>
   </div>
@@ -429,7 +430,7 @@ const opts={mirror:store.get('mirror',true),fighters:store.get('fighters',true),
   $(k).onchange=e=>{opts[k]=e.target.checked;store.set(k,opts[k]);if(k==='mirror'&&screens.cam.video)fitVideo(screens.cam);if(k!=='mirror')remote('state',snap());};
 });
 
-let ws=null,chanName='',lastChatFight=-99,reconnectTimer=null;
+let ws=null,chanName='',lastChatFight=-99,reconnectTimer=null,chatJoined=false;
 const unesc=v=>(v||'').replace(/\\s/g,' ').replace(/\\:/g,';').replace(/\\\\/g,'\\').replace(/\\r|\\n/g,'');
 function parseIRC(line){
   let tags={},rest=line;
@@ -441,7 +442,7 @@ function parseIRC(line){
 function handleLine(line){
   if(!line)return;const m=parseIRC(line);
   if(m.command==='PING'){ws.send('PONG :'+m.trailing);return;}
-  if(m.command==='JOIN'){setStatus('Live chat connected: #'+chanName);return;}
+  if(m.command==='JOIN'){chatJoined=true;setStatus('Live chat connected: #'+chanName);if(bc&&inOBS&&!isControl){try{bc.postMessage({cmd:'chanstatus',data:{name:chanName}});}catch(e){}}return;}
   if(m.command==='PRIVMSG'){
     const name=unesc(m.tags['display-name'])||m.prefix.split('!')[0];
     let msg=m.trailing;if(msg.startsWith('\u0001ACTION ')){msg=msg.slice(8).replace(/\u0001$/,'');}
@@ -471,14 +472,14 @@ function connectChat(name){
   if(ws){ws.onclose=null;try{ws.close();}catch(e){}ws=null;}
   chat.length=0;
   if(!chanName){setStatus('Chat disconnected.');return;}
-  setStatus('Connecting to #'+chanName+'...');
+  chatJoined=false;setStatus('Connecting to #'+chanName+'...');
   ws=new WebSocket('wss://irc-ws.chat.twitch.tv:443');
   const me=ws;
   ws.onopen=()=>{me.send('CAP REQ :twitch.tv/tags twitch.tv/commands');me.send('PASS SCHMOOPIIE');me.send('NICK justinfan'+Math.floor(10000+Math.random()*80000));me.send('JOIN #'+chanName);};
   ws.onmessage=e=>String(e.data).split('\r\n').forEach(handleLine);
   ws.onclose=()=>{if(ws!==me)return;setStatus('Chat disconnected. Retrying...');reconnectTimer=setTimeout(()=>connectChat(chanName),4000);};
 }
-$('chanGo').onclick=()=>connectChat($('chan').value);
+$('chanGo').onclick=()=>{if(isControl){remote('chan',{name:$('chan').value});setStatus('Chat screen now showing #'+$('chan').value.trim().toLowerCase());return;}connectChat($('chan').value);};
 $('chan').addEventListener('keydown',e=>{if(e.key==='Enter')connectChat($('chan').value);});
 
 let records=store.get('records',{});const history=store.get('history',[]);
@@ -911,7 +912,8 @@ function applyRemote(cmd,d){
     if(d.value==='demo'){sel.value='demo';setSource(d.id,'demo');}
     else if(d.value==='share'){setStatus('Screen share is not available inside OBS - use the Game Feed scene instead.');}
     else pickByName(d.id,(d.label||'').replace(/ \(click Find cameras\)$/,''));}
-  else if(cmd==='twtoken'){twTok=d.token||'';twCid=d.cid||twCid;store.set('twtoken',twTok);store.set('twcid',twCid);twUser=null;if(twTok)startEventSub();else{try{if(esWs)esWs.close();}catch(e){}}}
+  else if(cmd==='chan'){connectChat(d.name);}
+  else if(cmd==='twtoken'){twTok=d.token||'';twCid=okCid(d.cid)?d.cid:DEFAULT_CID;store.set('twtoken',twTok);store.set('twcid',twCid);twUser=null;if(twTok)startEventSub();else{try{if(esWs)esWs.close();}catch(e){}}}
   else if(cmd==='state'){
     if(d.fn){fn.p1=d.fn.p1||'';fn.p2=d.fn.p2||'';$('p1').value=fn.p1;$('p2').value=fn.p2;store.set('p1',fn.p1);store.set('p2',fn.p2);}
     if(d.records){records=d.records;history.length=0;(d.history||[]).forEach(h=>history.push(h));saveRec();}
@@ -923,27 +925,28 @@ function applyRemote(cmd,d){
     refreshFighters();
   }
 }
-if(bc)bc.onmessage=e=>{const m=e.data;if(!m||!m.cmd)return;if(isControl){if(m.cmd==='catstatus'){setStatus(m.data.msg);if(m.data.cat)$('npGame').value=m.data.cat;if(m.data.theme&&m.data.theme!==theme){rx=true;try{applyTheme(m.data.theme);}finally{rx=false;}}}else if(m.cmd==='twstatus')$('twStatus').textContent=m.data.msg;else if(m.cmd==='needtoken'&&twTok)remote('twtoken',{token:twTok,cid:twCid});return;}if(m.cmd==='needtoken'||m.cmd==='twstatus'||m.cmd==='catstatus')return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
+if(bc)bc.onmessage=e=>{const m=e.data;if(!m||!m.cmd)return;if(isControl){if(m.cmd==='chanstatus'){$('chan').value=m.data.name;$('chanStatus').textContent='Chat screen connected to #'+m.data.name+' - messages appear on the CHAT hologram.';return;}if(m.cmd==='catstatus'){setStatus(m.data.msg);if(m.data.cat)$('npGame').value=m.data.cat;if(m.data.theme&&m.data.theme!==theme){rx=true;try{applyTheme(m.data.theme);}finally{rx=false;}}}else if(m.cmd==='twstatus')$('twStatus').textContent=m.data.msg;else if(m.cmd==='needtoken'&&twTok)remote('twtoken',{token:twTok,cid:twCid});return;}if(m.cmd==='needchan'){if(chatJoined&&bc)try{bc.postMessage({cmd:'chanstatus',data:{name:chanName}});}catch(e){}return;}if(m.cmd==='needtoken'||m.cmd==='twstatus'||m.cmd==='catstatus'||m.cmd==='chanstatus')return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
 window.addEventListener('neonArena',e=>{if(isControl)return;let m=e.detail;if(typeof m==='string'){try{m=JSON.parse(m);}catch(x){return;}}if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}});
 $('obsGo').onclick=()=>linkObs($('obspw').value);
 $('obspw').addEventListener('keydown',e=>{if(e.key==='Enter')linkObs($('obspw').value);});
-if(isControl){$('remoteBox').style.display='none';document.title='Arena Control';setStatus('Control dock ready - changes here show in the arena.');setTimeout(()=>remote('state',snap()),1200);}
+if(isControl){$('remoteBox').style.display='none';setTimeout(()=>{try{bc&&bc.postMessage({cmd:'needchan',data:{}});}catch(e){}},1500);document.title='Arena Control';setStatus('Control dock ready - changes here show in the arena.');setTimeout(()=>remote('state',snap()),1200);}
 else if(inOBS){$('remoteBox').style.display='none';}
 else{const spw=store.get('obspw','');if(spw){$('obspw').value=spw;linkObs(spw);}}
 
 // ---------- Twitch account (EventSub: follows, channel points, hype train) ----------
 const TW_REDIRECT='https://raw.githack.com/LS-city/-rassir-twitch-stream/main/auth.html';
 const TW_SCOPES='moderator:read:followers channel:read:redemptions channel:read:hype_train channel:manage:broadcast';
-let twTok=store.get('twtoken',''),twCid=store.get('twcid',''),twUser=null,esWs=null,esStarted=false;
+const DEFAULT_CID='tydew0sk04o28ypn5y2kqlpmu7j5bv';const okCid=c=>/^[a-z0-9]{25,40}$/.test(c||'');
+let twTok=store.get('twtoken',''),twCid=okCid(store.get('twcid',''))?store.get('twcid',''):DEFAULT_CID,twUser=null,esWs=null,esStarted=false;
 const setTw=m=>{$('twStatus').textContent=m;if(inOBS&&!isControl&&bc){try{bc.postMessage({cmd:'twstatus',data:{msg:m}});}catch(e){}}};
 async function twValidate(){
   if(!twTok){setTw('Not logged in.');return null;}
   try{const r=await fetch('https://id.twitch.tv/oauth2/validate',{headers:{Authorization:'OAuth '+twTok}});
     if(r.status===401){setTw('Twitch login expired. Click Log in with Twitch again.');return null;}
-    const j=await r.json();twUser=j;return j;}catch(e){setTw('Could not reach Twitch: '+e.message);return null;}
+    const j=await r.json();twUser=j;if(!isControl&&j.login&&chanName!==j.login)connectChat(j.login);return j;}catch(e){setTw('Could not reach Twitch: '+e.message);return null;}
 }
 function twLogin(){
-  const cid=$('twcid').value.trim();if(!cid){setTw('Paste your Twitch Client ID first.');return;}
+  let cid=$('twcid').value.trim();if(!okCid(cid))cid=DEFAULT_CID;$('twcid').value=cid;
   twCid=cid;store.set('twcid',cid);const st=Math.random().toString(36).slice(2);store.set('twstate',st);store.set('twreturn',location.href);
   location.href='https://id.twitch.tv/oauth2/authorize?response_type=token&client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(TW_REDIRECT)+'&scope='+encodeURIComponent(TW_SCOPES)+'&state='+st+'&force_verify=true';
 }
