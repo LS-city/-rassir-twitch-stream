@@ -57,6 +57,7 @@
 
   <div class="hint" style="margin-top:6px">Keys: C = next cam source, G = next gameplay source</div>
   <label class="t">World theme (V = next)</label>
+  <div class="row" style="margin:0 0 6px"><label class="ck"><input type="checkbox" id="autoTheme"> Auto world from my Twitch category</label></div>
   <div class="shots" id="themes" style="grid-template-columns:1fr 1fr"></div>
   <label class="t">Camera shot (keys 1-8)</label>
   <div class="shots" id="shots"></div>
@@ -85,6 +86,10 @@
     <button id="resetRec">Reset records</button>
   </div>
   <div id="board" class="hint"></div>
+
+  <label class="t">Custom game worlds (one per line)</label>
+  <textarea id="thememap" rows="3" placeholder="minecraft = bar&#10;the darkside detective = horror" style="width:100%;box-sizing:border-box;background:#141028;color:#fff;border:1px solid #3d2f6e;border-radius:6px;padding:7px;font-family:inherit;font-size:12px"></textarea>
+  <div class="hint" style="margin-top:4px">Worlds: rooftop, bar, horror, shooter. Built in: horror games, shooters, and Just Chatting/Music/Art (bar) are detected automatically.</div>
 
   <div id="status">Ready.</div>
   <div class="hint">Gameplay tip: pick "Share a screen or window" and choose your game window. Then press H to hide this panel and capture this window in OBS.</div>
@@ -411,7 +416,7 @@ async function pickByName(id,q){
 $('srcGame').onchange=e=>{if(isControl){remote('src',{id:'game',label:e.target.selectedOptions[0].textContent,value:e.target.value});setStatus('Gameplay screen in OBS: '+e.target.selectedOptions[0].textContent);return;}setSource('game',e.target.value);};
 $('srcCam').onchange=e=>{if(isControl){remote('src',{id:'cam',label:e.target.selectedOptions[0].textContent,value:e.target.value});setStatus('Live cam in OBS: '+e.target.selectedOptions[0].textContent);return;}setSource('cam',e.target.value);};
 
-const opts={mirror:store.get('mirror',true),fighters:store.get('fighters',true),chatFight:store.get('chatFight',true),auto:store.get('auto',false)};
+const opts={mirror:store.get('mirror',true),fighters:store.get('fighters',true),chatFight:store.get('chatFight',true),auto:store.get('auto',false),autoTheme:store.get('autoTheme',true)};
 ['mirror','fighters','chatFight','auto'].forEach(k=>{
   $(k).checked=opts[k];
   $(k).onchange=e=>{opts[k]=e.target.checked;store.set(k,opts[k]);if(k==='mirror'&&screens.cam.video)fitVideo(screens.cam);if(k!=='mirror')remote('state',snap());};
@@ -731,7 +736,7 @@ const testNames=['ChipLord','RooftopRassir','NeonFarmer','ByteBandit','PixelPuff
 $('testAlert').onclick=()=>{const k=['NEW SUB','RAID!','500 BITS','GIFT SUB'][Math.floor(Math.random()*4)],nm=testNames[Math.floor(Math.random()*testNames.length)],tx='This is a test alert from the arena panel.';pushAlert(k,nm,tx);remote('alert',{k,name:nm,text:tx});};
 function togglePanel(){if(isControl)return;$('panel').classList.toggle('hidden');document.body.classList.toggle('nocursor',$('panel').classList.contains('hidden'));}
 addEventListener('keydown',e=>{
-  if(e.target.tagName==='INPUT'&&(e.target.type==='text'||e.target.type==='password'))return;
+  if(e.target.tagName==='TEXTAREA'||(e.target.tagName==='INPUT'&&(e.target.type==='text'||e.target.type==='password')))return;
   const k=e.key.toLowerCase();
   if(k==='h')togglePanel();
   else if(k==='f')triggerRound();
@@ -799,7 +804,7 @@ function loop(){
 }
 // ---------- Remote link: control the OBS copy from any browser tab ----------
 const setObs=m=>{$('obsStatus').textContent=m;};
-function snap(){return {fn:{p1:fn.p1,p2:fn.p2},records,history:history.slice(-200),opts:{fighters:opts.fighters,chatFight:opts.chatFight,auto:opts.auto},theme,shot,roundNum};}
+function snap(){return {fn:{p1:fn.p1,p2:fn.p2},records,history:history.slice(-200),opts:{fighters:opts.fighters,chatFight:opts.chatFight,auto:opts.auto,autoTheme:opts.autoTheme},thememap:store.get('thememap',''),theme,shot,roundNum};}
 function remote(cmd,data){if(rx)return;if(bc&&(isControl||!inOBS)){try{bc.postMessage({cmd,data:data||{}});}catch(e){}}if(!obsOk||!obsWs)return;try{obsWs.send(JSON.stringify({op:6,d:{requestType:'CallVendorRequest',requestId:'r'+Math.random().toString(36).slice(2),
   requestData:{vendorName:'obs-browser',requestType:'emit_event',requestData:{event_name:'neonArena',event_data:{cmd,data:data||{}}}}}}));}catch(e){}}
 async function sha256b64(s){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return btoa(String.fromCharCode(...new Uint8Array(h)));}
@@ -831,14 +836,15 @@ function applyRemote(cmd,d){
   else if(cmd==='state'){
     if(d.fn){fn.p1=d.fn.p1||'';fn.p2=d.fn.p2||'';$('p1').value=fn.p1;$('p2').value=fn.p2;store.set('p1',fn.p1);store.set('p2',fn.p2);}
     if(d.records){records=d.records;history.length=0;(d.history||[]).forEach(h=>history.push(h));saveRec();}
-    if(d.opts)['fighters','chatFight','auto'].forEach(k=>{if(k in d.opts){opts[k]=d.opts[k];$(k).checked=opts[k];store.set(k,opts[k]);}});
+    if(d.opts)['fighters','chatFight','auto','autoTheme'].forEach(k=>{if(k in d.opts){opts[k]=d.opts[k];$(k).checked=opts[k];store.set(k,opts[k]);}});
+    if(typeof d.thememap==='string'){store.set('thememap',d.thememap);$('thememap').value=d.thememap;}
     if(d.theme&&d.theme!==theme)applyTheme(d.theme);
     if(d.shot&&SHOTS[d.shot])setShot(d.shot);
     if(typeof d.roundNum==='number')roundNum=d.roundNum;
     refreshFighters();
   }
 }
-if(bc)bc.onmessage=e=>{const m=e.data;if(!m||!m.cmd)return;if(isControl){if(m.cmd==='twstatus')$('twStatus').textContent=m.data.msg;else if(m.cmd==='needtoken'&&twTok)remote('twtoken',{token:twTok,cid:twCid});return;}if(m.cmd==='needtoken'||m.cmd==='twstatus')return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
+if(bc)bc.onmessage=e=>{const m=e.data;if(!m||!m.cmd)return;if(isControl){if(m.cmd==='catstatus'){setStatus(m.data.msg);if(m.data.theme&&m.data.theme!==theme){rx=true;try{applyTheme(m.data.theme);}finally{rx=false;}}}else if(m.cmd==='twstatus')$('twStatus').textContent=m.data.msg;else if(m.cmd==='needtoken'&&twTok)remote('twtoken',{token:twTok,cid:twCid});return;}if(m.cmd==='needtoken'||m.cmd==='twstatus'||m.cmd==='catstatus')return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
 window.addEventListener('neonArena',e=>{if(isControl)return;let m=e.detail;if(typeof m==='string'){try{m=JSON.parse(m);}catch(x){return;}}if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}});
 $('obsGo').onclick=()=>linkObs($('obspw').value);
 $('obspw').addEventListener('keydown',e=>{if(e.key==='Enter')linkObs($('obspw').value);});
@@ -877,6 +883,7 @@ function onTwitchEvent(type,ev){
     for(const w in themeAlias){if(tl.includes(w)){switchTheme(themeAlias[w]);break;}}
   }
   else if(type==='channel.hype_train.begin')pushAlert('HYPE TRAIN!',ev.broadcaster_user_name||'',"Level "+(ev.level||1)+" - let's go!");
+  else if(type==='channel.update'){onCategory(ev.category_name);}
   else if(type==='channel.hype_train.end')pushAlert('HYPE TRAIN DONE',ev.broadcaster_user_name||'','Reached level '+(ev.level||'?'));
 }
 async function startEventSub(url){
@@ -887,8 +894,9 @@ async function startEventSub(url){
   s.onmessage=async e=>{let m;try{m=JSON.parse(e.data);}catch(x){return;}const t=m.metadata&&m.metadata.message_type;
     if(t==='session_welcome'){if(url){setTw('Twitch linked as '+u.login+' (reconnected).');return;}
       const sid=m.payload.session.id,id=u.user_id,errs=[];
-      for(const [ty,v,c] of [['channel.follow','2',{broadcaster_user_id:id,moderator_user_id:id}],['channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:id}],['channel.hype_train.begin','2',{broadcaster_user_id:id}],['channel.hype_train.end','2',{broadcaster_user_id:id}]]){
+      for(const [ty,v,c] of [['channel.follow','2',{broadcaster_user_id:id,moderator_user_id:id}],['channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:id}],['channel.hype_train.begin','2',{broadcaster_user_id:id}],['channel.hype_train.end','2',{broadcaster_user_id:id}],['channel.update','2',{broadcaster_user_id:id}]]){
         try{const er=await helixSub(ty,v,c,sid);if(er)errs.push(er);}catch(x){errs.push(ty+': '+x.message);}}
+      fetchCategory();
       setTw(errs.length?('Twitch linked as '+u.login+', but some alerts failed: '+errs.join(', ')):('Twitch linked as '+u.login+' - follows, channel points and hype trains are live.'));}
     else if(t==='notification')onTwitchEvent(m.payload.subscription.type,m.payload.event);
     else if(t==='session_reconnect')startEventSub(m.payload.session.reconnect_url);
@@ -902,8 +910,39 @@ async function twInit(){
   if(isControl||!inOBS){setTw('Logged in as '+u.login+'.');remote('twtoken',{token:twTok,cid:twCid});}
   if(!isControl)startEventSub();
 }
+// ---------- Auto world from Twitch category ----------
+const AUTO_RULES=[
+  ['horror',/horror|resident evil|dead by daylight|phasmophobia|outlast|silent hill|five nights|fnaf|lethal company|walking dead|amnesia|until dawn|evil within|dead space|content warning|poppy playtime|visage|the forest|sons of the forest|little nightmares|alien: isolation|alan wake|the quarry|dark pictures|man of medan|little hope|house of ashes|devour|the mortuary|fears to fathom|mouthwashing|dredge|layers of fear|the outlast trials|kinda funny|scp|backrooms|granny|bendy|darkwood|the callisto protocol|signalis|pacify|demonologist|ghost watchers|ghost exile|dead island|dying light|7 days to die|state of decay|the texas chain saw|evil dead|friday the 13th|killer klowns|cry of fear|r\.e\.p\.o|repo|haunted|zombie/],
+  ['shooter',/call of duty|warzone|fortnite|apex legends|valorant|counter-strike|cs2|csgo|overwatch|rainbow six|battlefield|halo|destiny|pubg|battlegrounds|escape from tarkov|tarkov|insurgency|the finals|marvel rivals|delta force|hunt: showdown|arma|squad|hell let loose|ready or not|rust|gray zone|arena breakout|xdefiant|splitgate|team fortress|borderlands|doom|helldivers|far cry|ghost recon|division|payday|left 4 dead|deadlock|shooter|fps|sniper|counter strike|black ops|modern warfare|bodycam|unrecord/],
+  ['bar',/just chatting|music|art|talk shows|podcasts|asmr|pools, hot tubs|software and game development|makers|crafting|food & drink|travel|i'm only sleeping|special events|chess|poker|slots|sports|ufc|wwe|dj|singing|beauty|science|vrchat|irl|animals|retro|games \+ demos|virtual casino/]
+];
+function themeForCategory(name){
+  const n=(name||'').toLowerCase();if(!n)return null;
+  const custom=(store.get('thememap','')||'').split('\n');
+  for(const line of custom){const m=line.split('=');if(m.length<2)continue;const k=m[0].trim().toLowerCase(),w=themeAlias[m[1].trim().toLowerCase()];if(k&&w&&n.includes(k))return w;}
+  for(const [w,re] of AUTO_RULES)if(re.test(n))return w;
+  return 'rooftop';
+}
+let lastCategory='';
+function onCategory(name){
+  if(!name)return;lastCategory=name;const w=themeForCategory(name);
+  const msg='Twitch category: '+name+(opts.autoTheme?(' -> '+THEMES[w].name+' world'):' (auto world is off)');
+  setStatus(msg);if(bc&&inOBS&&!isControl){try{bc.postMessage({cmd:'catstatus',data:{msg,theme:opts.autoTheme?w:null}});}catch(e){}}
+  if(opts.autoTheme&&w&&w!==theme){rx=true;try{switchTheme(w);}finally{rx=false;}}
+}
+async function fetchCategory(){
+  if(!twTok||!twCid)return;const u=twUser||await twValidate();if(!u)return;
+  try{const r=await fetch('https://api.twitch.tv/helix/channels?broadcaster_id='+u.user_id,{headers:{'Client-Id':twCid,Authorization:'Bearer '+twTok}});
+    if(!r.ok)return;const j=await r.json();if(j.data&&j.data[0])onCategory(j.data[0].game_name);}catch(e){}
+}
+$('autoTheme').checked=opts.autoTheme;
+$('autoTheme').onchange=e=>{opts.autoTheme=e.target.checked;store.set('autoTheme',opts.autoTheme);remote('state',snap());if(opts.autoTheme&&lastCategory)onCategory(lastCategory);};
+$('thememap').value=store.get('thememap','');
+$('thememap').addEventListener('input',e=>{store.set('thememap',e.target.value);remote('state',snap());});
+
 $('twLogin').onclick=twLogin;$('twLogout').onclick=twLogout;
 twInit();
+if(!isControl)setInterval(()=>{if(twTok)fetchCategory();},120000);
 if(inOBS&&!isControl&&bc&&!twTok){try{bc.postMessage({cmd:'needtoken',data:{}});}catch(e){}}
 
 (async()=>{if(!isControl&&(store.get('src_game','demo')!=='demo'||store.get('src_cam','demo')!=='demo'||inOBS)){try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());}catch(e){}}return refreshDevices();})().then(async()=>{
