@@ -26,7 +26,7 @@
 </style>
 </head>
 <body>
-<div id="fade"></div>
+<div id="fade"></div><div id="flash" style="position:fixed;inset:0;background:#fff;opacity:0;transition:opacity .5s;pointer-events:none;z-index:4"></div>
 <div id="panel">
   <div class="hd">ROOFTOP ARENA <span>H = hide</span></div>
 
@@ -58,6 +58,9 @@
   <select id="srcGame"></select>
   <label class="t">Live cam screen</label>
   <select id="srcCam"></select>
+  <div id="avBox"><label class="t">Avatar mic (mouth moves when you talk)</label>
+  <select id="avMic"></select>
+  <div class="row" style="margin-top:4px"><span class="hint" style="margin:0">Mouth sensitivity</span><input type="range" id="avSens" min="1" max="12" step="1" style="flex:1"><span id="avMeter" style="display:inline-block;width:40px;height:10px;background:#222;position:relative"><span id="avMeterFill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:#9dff3a"></span></span></div></div>
   <div class="row">
     <button id="allow">Find cameras</button>
     <label class="ck"><input type="checkbox" id="mirror"> Mirror cam</label>
@@ -80,6 +83,10 @@
   <div class="row">
     <button id="round">Round start (F)</button>
     <button id="testAlert">Test alert (T)</button>
+  </div>
+  <div class="row">
+    <button id="clipBtn">Clip it (K)</button>
+    <button id="raidTest">Test raid welcome</button>
   </div>
   <div class="row">
     <label class="ck"><input type="checkbox" id="fighters" checked> Fighters in ring</label>
@@ -105,7 +112,7 @@
   <label class="t">Viewer fight queue (chat: !join / !leave)</label>
   <div id="queueList" class="hint" style="margin-top:0">(empty)</div>
   <div class="row"><button id="qNext">Next fight from queue</button><button id="qClear">Clear queue</button></div>
-  <div class="hint">Chat commands: !join, !leave, !cheer, !boo, !me (camera on you), !fight. Winner stays on, next in line takes the loser's spot.</div>
+  <div class="hint">Chat commands: !join, !leave, !cheer, !boo, !me (camera on you), !clip, !fight. Winner stays on, next in line takes the loser's spot.</div>
 
   <label class="t">Custom game worlds (one per line)</label>
   <textarea id="thememap" rows="3" placeholder="minecraft = bar&#10;the darkside detective = horror" style="width:100%;box-sizing:border-box;background:#141028;color:#fff;border:1px solid #3d2f6e;border-radius:6px;padding:7px;font-family:inherit;font-size:12px"></textarea>
@@ -126,7 +133,8 @@ const inOBS=!!window.obsstudio;let obsWs=null,obsOk=false,rx=false,remoteSeen=fa
 const isControl=new URLSearchParams(location.search).get('control')==='1';
 const bc=('BroadcastChannel' in window)?new BroadcastChannel('neonArena'):null;
 
-const renderer=new THREE.WebGLRenderer({antialias:true});
+const avatarOnly=new URLSearchParams(location.search).get('avatar')==='1';
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:avatarOnly});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 renderer.setSize(innerWidth,innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -134,6 +142,7 @@ const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x04030a);
 scene.fog=new THREE.Fog(0x05040a,22,85);
 const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,200);
+const vertical=new URLSearchParams(location.search).get('vertical')==='1';if(vertical)camera.fov=60;camera.updateProjectionMatrix();
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();});
 
 const B=(c,o)=>new THREE.MeshBasicMaterial(Object.assign({color:c},o||{}));
@@ -353,7 +362,7 @@ function drawHelp(s,t){
   ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;for(let y=0;y<h;y+=4){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
   ctx.textAlign='center';ctx.font='bold 34px "Courier New",monospace';ctx.fillStyle=LIME;ctx.shadowColor=LIME;ctx.shadowBlur=12;ctx.fillText('TYPE IN CHAT:',w/2,46);ctx.shadowBlur=0;
   const rows=[['!join','get in line to fight'],['!leave','leave the fight line'],['!cheer','confetti + you jump'],['!boo','throw a tomato'],['!me','camera on you'],['Cheer bits','fireworks']];
-  if(opts.chatFight)rows.splice(2,0,['!fight','start the round']);
+  rows.splice(5,0,['!clip','save a clip']);if(opts.chatFight)rows.splice(2,0,['!fight','start the round']);
   const hi=Math.floor(t/2.2)%rows.length,top=78,rh=(h-top-46)/rows.length;
   ctx.textAlign='left';
   rows.forEach(([cmd,what],i)=>{const y=top+i*rh;const on=i===hi;
@@ -402,12 +411,13 @@ function fitVideo(s){
 }
 function stopSource(s){
   if(s.stream)s.stream.getTracks().forEach(tr=>tr.stop());
-  s.stream=null;if(s.vtex){s.vtex.dispose();s.vtex=null;}s.video=null;s.fitted=false;
+  s.stream=null;s.avatar=false;if(s.vtex){s.vtex.dispose();s.vtex=null;}s.video=null;s.fitted=false;
   s.mat.map=s.ctex;s.mat.needsUpdate=true;
 }
 async function setSource(id,value){
   const s=screens[id];stopSource(s);
   if(value==='demo'){store.set('src_'+id,'demo');return;}
+  if(value==='avatar'){store.set('src_'+id,'avatar');s.avatar=true;s.mat.map=AV.rt.texture;s.mat.needsUpdate=true;if(!isControl&&!avAn)startAvatarMic(avMicLabel);return;}
   try{
     let stream;
     if(value==='share'){stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:60},audio:false});}
@@ -428,13 +438,13 @@ async function refreshDevices(){
   ['srcGame','srcCam'].forEach(sel=>{
     const el=$(sel),cur=el.value||'demo';el.innerHTML='';
     const add=(v,t)=>{const o=document.createElement('option');o.value=v;o.textContent=t;el.appendChild(o);};
-    add('demo','Demo animation');if(!isControl&&!inOBS)add('share','Share a screen or window...');
+    add('demo','Demo animation');if(sel==='srcCam')add('avatar','3D Avatar (talks with your mic)');if(!isControl&&!inOBS)add('share','Share a screen or window...');
     devs.forEach((d,i)=>add(d.deviceId||('dev'+i),d.label||('Camera '+(i+1)+' (click Find cameras)')));
     el.value=[...el.options].some(o=>o.value===cur)?cur:'demo';
   });
 }
 $('allow').onclick=async()=>{
-  try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());await refreshDevices();setStatus('Cameras found. Pick one from the lists above (capture cards and OBS Virtual Camera show up too).');}
+  try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());try{const sa=await navigator.mediaDevices.getUserMedia({audio:true});sa.getTracks().forEach(t=>t.stop());}catch(e){}await refreshDevices();refreshMics();setStatus('Cameras found. Pick one from the lists above (capture cards and OBS Virtual Camera show up too).');}
   catch(e){setStatus('Camera access was blocked: '+(e.message||e.name));}
 };
 async function cycleSource(id){remote('cycle',{id});if(isControl){setStatus('Switched '+(id==='game'?'gameplay':'cam')+' source in OBS.');return;}
@@ -1129,6 +1139,35 @@ themeKeys.forEach(k=>{const b=document.createElement('button');b.textContent=THE
 const themeAlias={beach:'beach',vice:'beach',gta:'beach',island:'beach',sunset:'beach',city:'nightcity',nightcity:'nightcity',street:'nightcity',cyberpunk:'nightcity',night:'nightcity',rooftop:'rooftop',roof:'rooftop',neon:'rooftop',bar:'bar',lounge:'bar',horror:'horror',scary:'horror',haunted:'horror',spooky:'horror',shooter:'shooter',war:'shooter',warzone:'shooter',fps:'shooter'};
 applyTheme(themeAlias[(params.get('theme')||'').toLowerCase()]||store.get('theme','rooftop'));
 
+// ---------- !clip and raid welcome ----------
+let lastClip=-99;
+function camFlash(){const f=$('flash');f.style.transition='none';f.style.opacity=0.85;requestAnimationFrame(()=>{f.style.transition='opacity .6s';f.style.opacity=0;});}
+async function makeClip(by){
+  if(isControl){remote('clip',{by:by||''});setStatus('Clip requested in OBS.');return;}
+  if(vertical)return;
+  if(now-lastClip<30){return;}lastClip=now;
+  if(!twTok){pushAlert('CLIP','','Log in with Twitch in the panel to turn on clips');return;}
+  const u=twUser||await twValidate();if(!u)return;
+  if(!(u.scopes||[]).includes('clips:edit')){setTw('Click "Log in again" to turn on !clip.');pushAlert('CLIP',by||'','Streamer: log in again to turn on clips');return;}
+  camFlash();
+  try{const r=await fetch('https://api.twitch.tv/helix/clips?broadcaster_id='+u.user_id,{method:'POST',headers:{'Client-Id':twCid,Authorization:'Bearer '+twTok}});
+    if(r.ok){const j=await r.json();const id=j.data&&j.data[0]&&j.data[0].id;pushAlert('CLIPPED!',by||'',id?('clips.twitch.tv/'+id):'Clip saved');setStatus('Clip made'+(id?': https://clips.twitch.tv/'+id:''));
+      burst(0,9,-8,60,5,['#ffffff','#3ff5ff','#ff4fd8'],false);}
+    else if(r.status===404)pushAlert('CLIP',by||'','Clips only work while live');
+    else pushAlert('CLIP',by||'','Clip failed ('+r.status+')');
+  }catch(e){pushAlert('CLIP','','Could not reach Twitch');}
+}
+function raidWelcome(name,n){
+  if(isControl){remote('raid',{name,n});return;}
+  pushAlert('RAID!',name,(n?n+' raiders':'Raiders')+' incoming - welcome in!');
+  winText='RAID FROM '+String(name).toUpperCase();winCol=AMBER;winT=now;roundPhase='';
+  for(let k=0;k<10;k++)setTimeout(()=>burst((Math.random()-.5)*16,9+Math.random()*5,-6-Math.random()*6,90,6,['#ffd166','#ff4fd8','#3ff5ff','#9dff3a','#ffffff'],false),k*350);
+  const lead=addViewer(name,'#ffe066');lead.jump=now;
+  const cnt=Math.min(10,Math.max(3,Math.floor((n||3)/2)));for(let i=1;i<=cnt;i++){const v=addViewer('RAIDER #'+i,['#ffd166','#ff4fd8','#3ff5ff','#9dff3a'][i%4]);v.last=now-600;v.jump=now+i*0.15;}
+  setTimeout(()=>startMe(name),2600);
+}
+$('clipBtn').onclick=()=>makeClip('');
+$('raidTest').onclick=()=>raidWelcome('TestRaider',24);
 // ---------- Viewer interaction: crowd, !join queue, !cheer/!boo, !me cam ----------
 const crowd=new Map();const CROWD_MAX=28;const crowdGroup=new THREE.Group();scene.add(crowdGroup);
 let fightQueue=store.get('queue',[]);let meShot=null;const meQueue=[];const cool={};
@@ -1199,6 +1238,7 @@ function viewerChat(name,col,msg,isMod,bits){
   else if(m==='!leave'){fightQueue=fightQueue.filter(n=>n.toLowerCase()!==k);postQ();}
   else if(m==='!cheer'&&ok('c',8)){v.jump=now;burst(0,4.2,-3,70,4,['#ff4fd8','#3ff5ff','#ffe066','#9dff3a','#ffffff'],true);}
   else if(m==='!boo'&&ok('b',8)){throwTomato(v);}
+  else if(m==='!clip'&&ok('k',60))makeClip(name);
   else if((m==='!me'||m==='!cam')&&ok('m',45)){if(!meShot)startMe(name);else if(meQueue.length<6&&!meQueue.includes(name))meQueue.push(name);}
   else v.jump=now;
   if(bits){for(let n=0;n<Math.min(6,1+Math.floor(bits/100));n++)setTimeout(()=>burst((Math.random()-.5)*14,9+Math.random()*4,-6-Math.random()*6,90,6,['#ffd166','#ff4fd8','#3ff5ff','#ffffff'],false),n*450);}
@@ -1256,6 +1296,7 @@ addEventListener('keydown',e=>{
   if(k==='h')togglePanel();
   else if(k==='f')triggerRound();
   else if(k==='t')$('testAlert').onclick();
+  else if(k==='k')makeClip('');
   else if(k==='q')declareWin(0);
   else if(k==='e')declareWin(1);
   else if(k==='c')cycleSource('cam');
@@ -1268,12 +1309,14 @@ if(params.get('hideui')==='1')togglePanel();
 const curP=V(0,6.2,16),curT=V(0,6.4,-8),goalP=new THREE.Vector3(),goalT=new THREE.Vector3();
 if(SHOTS[shot].screen)frameScreen(screens[SHOTS[shot].screen],curP,curT);else if(SHOTS[shot].p){curP.copy(SHOTS[shot].p);curT.copy(SHOTS[shot].t);}
 let ctlFrame=0;const clock=new THREE.Clock();let lastDraw=0,lastSlow=0;
+let lastAvR=0,lastMeter=0;
 function loop(){
   const dt=Math.min(clock.getDelta(),0.1);now+=dt;const t=now;
 
   if(opts.auto&&!(inOBS&&remoteSeen)&&t-lastAuto>20){lastAuto=t;autoIdx=(autoIdx+1)%autoOrder.length;setShot(autoOrder[autoIdx]);}
   const S=SHOTS[shot];if(S.screen)frameScreen(screens[S.screen],goalP,goalT);else{goalP.copy(S.p);goalT.copy(S.t);}
   if(shot==='orbit'){const oa=Math.sin(t*0.11)*0.75,od=18+Math.sin(t*0.07)*2;goalP.set(Math.sin(oa)*od,6.5+Math.sin(t*0.17)*1.4,-4+Math.cos(oa)*od);goalT.set(-Math.sin(oa)*2.5,5.6+Math.sin(t*0.13)*0.5,-8);}
+  if(vertical&&!S.screen)goalP.sub(goalT).multiplyScalar(shot==='stage'?1.25:1.32).add(goalT);
   if(meShot){goalP.copy(meShot.p);goalT.copy(meShot.t);}
   const k=1-Math.exp(-dt*(S.screen?3:2.2));curP.lerp(goalP,k);curT.lerp(goalT,k);
   const bob=S.screen?0:1;
@@ -1311,12 +1354,148 @@ function loop(){
   ['game','cam'].forEach(id=>{const s=screens[id];if(s.video&&!s.fitted)s.fitted=fitVideo(s);});
   if(t-lastDraw>1/30){lastDraw=t;
     if(!screens.game.video)drawGameDemo(screens.game,t);
-    if(!screens.cam.video)drawCamDemo(screens.cam,t);
+    if(!screens.cam.video&&!screens.cam.avatar)drawCamDemo(screens.cam,t);
     drawViz(screens.viz,t);drawAlerts(screens.alerts,t);
   }
   if(t-lastSlow>0.25){lastSlow=t;drawChat(screens.chat,t);drawBrand(screens.brand,t);drawScore(screens.score);drawInfo(screens.info,t);drawHelp(screens.help,t);}
 
+  if((screens.cam.avatar||avatarOnly)&&!isControl){avatarTick(t,dt);if(avatarOnly){AV.cam.aspect=innerWidth/innerHeight;AV.cam.updateProjectionMatrix();renderer.render(AV.scene,AV.cam);requestAnimationFrame(loop);return;}
+    if(t-lastAvR>1/40){lastAvR=t;renderer.setRenderTarget(AV.rt);renderer.render(AV.scene,AV.cam);renderer.setRenderTarget(null);}}
+  if(!isControl&&t-lastMeter>0.1){lastMeter=t;$('avMeterFill').style.width=Math.round(AV.lvl*100)+'%';}
   if(!isControl||(++ctlFrame%6===0))renderer.render(scene,camera);requestAnimationFrame(loop);
+}
+// ---------- 3D chibi avatar for the live cam (mouth follows your mic) ----------
+const AV={};
+(function(){
+  const sc=new THREE.Scene();AV.scene=sc;
+  const cam=new THREE.PerspectiveCamera(36,16/9,0.1,60);cam.position.set(0,1.2,5.1);cam.lookAt(0,1.3,0);AV.cam=cam;
+  AV.rt=new THREE.WebGLRenderTarget(1280,720,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
+  sc.add(new THREE.AmbientLight(0xffffff,0.5));
+  const key=new THREE.DirectionalLight(0xffffff,0.55);key.position.set(2.5,4,5);sc.add(key);
+  const rim=new THREE.DirectionalLight(0xff8ad8,0.35);rim.position.set(-4,2,-3);sc.add(rim);AV.rim=rim;
+  const gc=document.createElement('canvas');gc.width=4;gc.height=1;const gx=gc.getContext('2d');['#6a6a6a','#b4b4b4','#ffffff','#ffffff'].forEach((c,i)=>{gx.fillStyle=c;gx.fillRect(i,0,1,1);});
+  const grad=new THREE.CanvasTexture(gc);grad.minFilter=grad.magFilter=THREE.NearestFilter;
+  const toon=(c)=>new THREE.MeshToonMaterial({color:c,gradientMap:grad});
+  const outlineM=new THREE.MeshBasicMaterial({color:0x111015,side:THREE.BackSide});
+  const add=(parent,geo,mat,pos,scl,ol)=>{const m=new THREE.Mesh(geo,mat);if(pos)m.position.set(...pos);if(scl)m.scale.set(...scl);parent.add(m);
+    if(ol!==false){const o=new THREE.Mesh(geo,outlineM);o.scale.setScalar(1+(ol||0.045));m.add(o);}return m;};
+  const SKIN=0xe6b48e,HAIR=0x1e1c20,HAIRHI=0x7c7578,NAVY=0x29323d,RED=0xd2492b;
+  // backdrop
+  const bdC=document.createElement('canvas');bdC.width=512;bdC.height=288;const bdT=new THREE.CanvasTexture(bdC);
+  const bd=new THREE.Mesh(new THREE.PlaneGeometry(16,9),new THREE.MeshBasicMaterial({map:bdT}));bd.position.set(0,1.2,-4);sc.add(bd);AV.bd=bd;
+  AV.drawBackdrop=(a,b,bg)=>{const x=bdC.getContext('2d');const g=x.createLinearGradient(0,0,0,288);g.addColorStop(0,bg);g.addColorStop(1,'#000');x.fillStyle=g;x.fillRect(0,0,512,288);
+    const rg=x.createRadialGradient(256,150,10,256,150,230);rg.addColorStop(0,a+'88');rg.addColorStop(1,a+'00');x.fillStyle=rg;x.fillRect(0,0,512,288);
+    x.strokeStyle=b+'55';x.lineWidth=1;for(let i=-20;i<=20;i++){x.beginPath();x.moveTo(256+i*14,200);x.lineTo(256+i*60,288);x.stroke();}for(let y=200;y<288;y+=y/18){x.beginPath();x.moveTo(0,y);x.lineTo(512,y);x.stroke();}
+    for(let i=0;i<40;i++){x.fillStyle=(i%2?a:b)+'aa';x.fillRect((i*97)%512,(i*53)%180,2,2);}bdT.needsUpdate=true;};
+  const root=new THREE.Group();sc.add(root);AV.root=root;
+  // body
+  const body=new THREE.Group();root.add(body);
+  add(body,new THREE.CylinderGeometry(0.5,0.6,0.5,32),toon(NAVY),[0,0.27,0]);
+  add(body,new THREE.CylinderGeometry(0.6,0.64,0.62,32),toon(RED),[0,-0.29,0]);
+  add(body,new THREE.SphereGeometry(0.5,32,16,0,Math.PI*2,0,Math.PI/2),toon(NAVY),[0,0.5,0],[1,0.32,1]);
+  const pocket=add(body,new THREE.BoxGeometry(0.2,0.16,0.04),toon(NAVY),[0.27,-0.12,0.58],null,0.12);pocket.rotation.y=0.42;
+  [-1,1].forEach(s=>{const sl=add(body,new THREE.SphereGeometry(0.2,20,14),toon(NAVY),[s*0.52,0.3,0.02],[1,1,1]);
+    const arm=add(body,new THREE.CylinderGeometry(0.1,0.09,0.62,12),toon(SKIN),[s*0.55,0.0,0.27]);arm.rotation.x=1.05;arm.rotation.z=s*0.35;});
+  add(body,new THREE.CylinderGeometry(0.17,0.19,0.3,16),toon(SKIN),[0,0.62,0]);
+  // hands + controller
+  const pad=new THREE.Group();pad.position.set(0,-0.18,0.72);body.add(pad);AV.pad=pad;
+  add(pad,new THREE.BoxGeometry(0.62,0.1,0.24),toon(0x3a3a44),[0,0,0]);
+  [-1,1].forEach(s=>{add(pad,new THREE.SphereGeometry(0.13,14,10),toon(0x3a3a44),[s*0.3,-0.03,0.0],[1,0.8,1.2]);});
+  add(pad,new THREE.BoxGeometry(0.18,0.03,0.1),toon(0xf2f2f6),[0,0.06,0.02],null,0.1);
+  AV.thumbs=[-1,1].map(s=>{add(pad,new THREE.SphereGeometry(0.15,14,10),toon(SKIN),[s*0.32,-0.04,-0.04]);return add(pad,new THREE.SphereGeometry(0.06,10,8),toon(SKIN),[s*0.2,0.09,0.03]);});
+  // head
+  const head=new THREE.Group();head.position.set(0,1.62,0);root.add(head);AV.head=head;
+  add(head,new THREE.SphereGeometry(1,48,32),toon(SKIN),null,[1.04,0.97,0.98],0.03);
+  [-1,1].forEach(s=>{add(head,new THREE.SphereGeometry(0.2,16,12),toon(SKIN),[s*1.0,-0.12,0.02],[0.5,0.85,0.45]);});
+  const onFace=(m,x,y,lift)=>{const z=Math.sqrt(Math.max(0.01,1-x*x-y*y))*0.98+(lift||0.02);m.position.set(x*1.04,y*0.97,z);m.lookAt(x*3,y*3,z*3);head.add(m);return m;};
+  // eyes
+  const eyeTex=(closed,flip)=>{const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.lineCap='round';
+    if(flip){x.translate(256,0);x.scale(-1,1);}
+    if(closed){x.strokeStyle='#181418';x.lineWidth=16;x.beginPath();x.moveTo(40,140);x.quadraticCurveTo(128,190,216,135);x.stroke();x.lineWidth=10;x.beginPath();x.moveTo(206,138);x.lineTo(236,120);x.stroke();}
+    else{x.fillStyle='#fff';x.beginPath();x.ellipse(128,140,92,88,0,0,7);x.fill();
+      const g=x.createLinearGradient(0,70,0,220);g.addColorStop(0,'#4a0808');g.addColorStop(0.55,'#a8181a');g.addColorStop(1,'#e8603a');
+      x.fillStyle=g;x.beginPath();x.ellipse(132,146,64,74,0,0,7);x.fill();x.strokeStyle='#2a0606';x.lineWidth=5;x.stroke();
+      x.fillStyle='#200404';x.beginPath();x.ellipse(132,150,28,38,0,0,7);x.fill();
+      x.fillStyle='#fff';x.beginPath();x.ellipse(108,112,18,15,-0.4,0,7);x.fill();x.beginPath();x.ellipse(158,188,9,7,0,0,7);x.fill();
+      x.fillStyle='rgba(255,180,160,.5)';x.beginPath();x.ellipse(140,196,30,10,0,0,7);x.fill();
+      x.strokeStyle='#161216';x.lineWidth=20;x.beginPath();x.moveTo(26,104);x.quadraticCurveTo(110,46,226,92);x.stroke();
+      x.lineWidth=12;x.beginPath();x.moveTo(218,92);x.lineTo(248,74);x.stroke();x.beginPath();x.moveTo(30,104);x.lineTo(12,118);x.stroke();
+      x.lineWidth=5;x.beginPath();x.moveTo(70,226);x.quadraticCurveTo(128,240,190,224);x.stroke();}
+    const t=new THREE.CanvasTexture(c);return t;};
+  AV.eyes=[-1,1].map(s=>{const open=eyeTex(false,s<0),closed=eyeTex(true,s<0);
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(0.6,0.6),new THREE.MeshBasicMaterial({map:open,transparent:true,depthWrite:false}));onFace(m,s*0.4,-0.17,0.04);m.userData={open,closed};return m;});
+  // mouth frames
+  AV.mouths=[];for(let k=0;k<6;k++){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const oh=6+k*9,w=34+k*3;
+    x.lineJoin='round';x.fillStyle='#4a1012';x.beginPath();x.moveTo(64-w,52);x.quadraticCurveTo(64,46,64+w,52);x.quadraticCurveTo(64+w*0.8,52+oh*1.6,64,52+oh*1.9);x.quadraticCurveTo(64-w*0.8,52+oh*1.6,64-w,52);x.fill();
+    x.save();x.clip();x.fillStyle='#fff';x.fillRect(0,40,128,12+k*1.5);if(k>1){x.fillStyle='#e0606a';x.beginPath();x.ellipse(64,52+oh*1.9,w*0.6,oh*0.7,0,0,7);x.fill();}x.restore();
+    x.strokeStyle='#161216';x.lineWidth=5;x.beginPath();x.moveTo(64-w,52);x.quadraticCurveTo(64,46,64+w,52);x.quadraticCurveTo(64+w*0.8,52+oh*1.6,64,52+oh*1.9);x.quadraticCurveTo(64-w*0.8,52+oh*1.6,64-w,52);x.stroke();
+    AV.mouths.push(new THREE.CanvasTexture(c));}
+  AV.mouth=new THREE.Mesh(new THREE.PlaneGeometry(0.46,0.46),new THREE.MeshBasicMaterial({map:AV.mouths[1],transparent:true,depthWrite:false}));onFace(AV.mouth,0.02,-0.56,0.03);
+  const dot=new THREE.Mesh(new THREE.CircleGeometry(0.025,10),new THREE.MeshBasicMaterial({color:0x161216}));onFace(dot,-0.07,-0.4,0.02);
+  [-1,1].forEach(s=>{const b=new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.2),new THREE.MeshBasicMaterial({alphaMap:softTex,color:0xff6f80,transparent:true,opacity:0.45,depthWrite:false}));onFace(b,s*0.6,-0.42,0.025);});
+  // curly hair
+  const hair=new THREE.Group();head.add(hair);AV.hair=hair;
+  const hm=toon(HAIR),him=new THREE.MeshBasicMaterial({color:HAIRHI,transparent:true,opacity:0.75});
+  let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+  const puff=(x,y,z,r)=>{const p=add(hair,new THREE.SphereGeometry(r,16,12),hm,[x,y,z],null,0.06);
+    const n=new THREE.Vector3(x,y,z).normalize();
+    for(let k=0;k<1;k++){const cu=new THREE.Mesh(new THREE.TorusGeometry(r*0.45,r*0.09,6,14,3.2+rnd()),him);
+      const off=new THREE.Vector3((rnd()-.5)*r*0.5,(rnd()-.5)*r*0.5,0);cu.position.set(x,y,z).addScaledVector(n,r*0.86).add(off.applyAxisAngle(new THREE.Vector3(0,1,0),Math.atan2(n.x,n.z)));
+      cu.lookAt(cu.position.clone().add(n));cu.rotateZ(rnd()*6.28);hair.add(cu);}
+    return p;};
+  for(let i=0;i<150;i++){const u=rnd()*2-1,a=rnd()*Math.PI*2;const y=u*0.95;const rr=Math.sqrt(1-u*u);const x=Math.cos(a)*rr,z=Math.sin(a)*rr;
+    if(y<-0.35)continue;if(z>0.35&&y<0.62&&Math.abs(x)<0.86)continue;if(z>0.25&&y>0.1&&Math.abs(x)<0.24)continue;
+    const R=1.04+rnd()*0.1;puff(x*R*1.05,y*R+0.08,z*R,0.26+rnd()*0.14);}
+  // fringe curls with a centre part
+  [[-0.5,0.62,0.78,0.3],[-0.78,0.5,0.6,0.28],[-0.28,0.74,0.7,0.24],[-0.62,0.3,0.78,0.22],[-0.9,0.18,0.5,0.24],
+   [0.5,0.62,0.78,0.3],[0.8,0.48,0.58,0.28],[0.3,0.75,0.68,0.24],[0.66,0.3,0.76,0.2],[0.92,0.15,0.48,0.24],
+   [-0.36,0.42,0.88,0.22],[-0.6,0.16,0.8,0.2],[-0.18,0.55,0.86,0.2],[0.36,0.42,0.88,0.22],[0.6,0.16,0.8,0.2],[0.18,0.55,0.86,0.2],[-0.98,-0.2,0.25,0.26],[0.98,-0.22,0.2,0.22],[-0.16,1.06,0.1,0.3],[0.18,1.04,0.05,0.28]].forEach(([x,y,z,r])=>puff(x,y,z,r));
+  [-1,1].forEach(s=>{const lock=new THREE.Mesh(new THREE.TorusGeometry(0.2,0.07,8,16,4.2),hm);lock.position.set(s*0.2,0.5,0.92);lock.rotation.set(0,s*0.3,s>0?2.2:-0.6);head.add(lock);
+    const lo=new THREE.Mesh(lock.geometry,outlineM);lo.scale.setScalar(1.12);lock.add(lo);});
+  const cow=new THREE.Mesh(new THREE.TorusGeometry(0.16,0.05,8,14,3.8),hm);cow.position.set(-0.15,1.28,0.15);cow.rotation.set(0.4,0.4,1.2);head.add(cow);AV.cow=cow;
+  AV.drawBackdrop('#ff4fd8','#3ff5ff','#1a0b2e');
+  // animation state
+  AV.lvl=0;AV.blinkAt=2;AV.glance=0;AV.glanceTo=0;AV.nextGlance=3;
+  AV.update=(t,dt,lvl)=>{
+    AV.lvl+=(lvl-AV.lvl)*(lvl>AV.lvl?0.6:0.18);const L=AV.lvl;
+    AV.mouth.material.map=AV.mouths[L<0.06?1:Math.min(5,1+Math.round(L*4))];
+    const b=t-AV.blinkAt;const shut=b>0&&b<0.13;AV.eyes.forEach(e=>{e.material.map=shut?e.userData.closed:e.userData.open;});if(b>0.13)AV.blinkAt=t+2.2+Math.random()*3;
+    if(t>AV.nextGlance){AV.glanceTo=(Math.random()-.5)*0.5;AV.nextGlance=t+2+Math.random()*4;}AV.glance+=(AV.glanceTo-AV.glance)*0.05;
+    head.rotation.set(Math.sin(t*1.3)*0.04+L*0.09*Math.sin(t*11)-L*0.05,Math.sin(t*0.5)*0.1+AV.glance,Math.sin(t*0.8)*0.06+L*0.05*Math.sin(t*6));
+    root.position.y=Math.sin(t*2)*0.025+L*0.06*Math.abs(Math.sin(t*9));
+    body.scale.set(1,1+Math.sin(t*2)*0.012,1);
+    hair.position.y=Math.sin(t*2+0.6)*0.015+L*0.025*Math.abs(Math.sin(t*9+0.4));AV.cow.rotation.z=1.2+Math.sin(t*3)*0.15+L*0.3*Math.sin(t*12);
+    AV.thumbs.forEach((th,i)=>{th.position.y=0.09+Math.max(0,Math.sin(t*(5+i*2.3)+i))*0.025;});pad.rotation.x=Math.sin(t*1.7)*0.05;
+  };
+})();
+// mic -> mouth
+let avAn=null,avBuf=null,avStream=null,avCtx=null,avSens=store.get('avsens',5),avMicLabel=store.get('avmic','');
+async function startAvatarMic(label){
+  try{if(avStream)avStream.getTracks().forEach(t=>t.stop());}catch(e){}avAn=null;
+  try{let id;if(label){const ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');const d=ds.find(d=>d.label===label)||ds.find(d=>d.label.toLowerCase().includes(label.toLowerCase()));if(d)id=d.deviceId;}
+    avStream=await navigator.mediaDevices.getUserMedia({audio:id?{deviceId:{exact:id},echoCancellation:false,autoGainControl:false}:{echoCancellation:false,autoGainControl:false},video:false});
+    avCtx=avCtx||new (window.AudioContext||window.webkitAudioContext)();try{await avCtx.resume();}catch(e){}
+    const src=avCtx.createMediaStreamSource(avStream);avAn=avCtx.createAnalyser();avAn.fftSize=1024;avBuf=new Float32Array(avAn.fftSize);src.connect(avAn);
+    setStatus('Avatar is listening to: '+(avStream.getAudioTracks()[0].label||'default mic'));refreshMics();
+  }catch(e){setStatus('Avatar could not use the mic: '+(e.message||e.name));}
+}
+function micLevel(){if(!avAn)return 0;avAn.getFloatTimeDomainData(avBuf);let s=0;for(let i=0;i<avBuf.length;i++)s+=avBuf[i]*avBuf[i];const rms=Math.sqrt(s/avBuf.length);
+  return Math.max(0,Math.min(1,(rms-0.006)*avSens*7));}
+async function refreshMics(){const el=$('avMic');if(!el)return;let ds=[];try{ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');}catch(e){}
+  el.innerHTML='';const o0=document.createElement('option');o0.value='';o0.textContent='Default mic';el.appendChild(o0);
+  ds.forEach((d,i)=>{if(d.deviceId==='default'||d.deviceId==='communications')return;const o=document.createElement('option');o.value=d.label||('Mic '+(i+1));o.textContent=d.label||('Mic '+(i+1)+' (click Find cameras)');el.appendChild(o);});
+  el.value=[...el.options].some(o=>o.value===avMicLabel)?avMicLabel:'';}
+$('avSens').value=avSens;
+function sendAv(restart){const label=$('avMic').value;avSens=+$('avSens').value;store.set('avsens',avSens);
+  if(isControl){remote('avmic',{label,sens:avSens,restart});setStatus('Avatar mic: '+($('avMic').selectedOptions[0]||{}).textContent);return;}
+  if(label!==avMicLabel||restart){avMicLabel=label;store.set('avmic',label);if(screens.cam.avatar||avatarOnly)startAvatarMic(label);}}
+$('avMic').onchange=()=>sendAv(true);$('avSens').oninput=()=>sendAv(false);
+refreshMics();
+if(avatarOnly){document.body.style.background='transparent';document.documentElement.style.background='transparent';$('panel').style.display='none';AV.bd.visible=false;setTimeout(()=>startAvatarMic(avMicLabel),300);}
+let lastAvTheme='';
+function avatarTick(t,dt){
+  if(lastAvTheme!==theme){lastAvTheme=theme;AV.drawBackdrop(T.a1,T.a2,'#'+new THREE.Color(T.bg).offsetHSL(0,0,0.06).getHexString());AV.rim.color.set(T.a1);}
+  AV.update(t,dt,micLevel());
 }
 // ---------- Remote link: control the OBS copy from any browser tab ----------
 const setObs=m=>{$('obsStatus').textContent=m;};
@@ -1346,9 +1525,13 @@ function applyRemote(cmd,d){
   else if(cmd==='cycle')cycleSource(d.id);
   else if(cmd==='qnext')nextFight();
   else if(cmd==='labels')applyLabels(d.labels,true);
+  else if(cmd==='clip')makeClip(d.by);
+  else if(cmd==='raid')raidWelcome(d.name,d.n);
+  else if(cmd==='avmic'){avSens=d.sens||avSens;store.set('avsens',avSens);$('avSens').value=avSens;if(typeof d.label==='string'&&(d.label!==avMicLabel||d.restart)){avMicLabel=d.label;store.set('avmic',avMicLabel);if(screens.cam.avatar||avatarOnly)startAvatarMic(avMicLabel);}}
   else if(cmd==='qclear'){fightQueue=[];postQ();}
   else if(cmd==='src'){const sel=$(d.id==='game'?'srcGame':'srcCam');
     if(d.value==='demo'){sel.value='demo';setSource(d.id,'demo');}
+    else if(d.value==='avatar'){sel.value='avatar';setSource(d.id,'avatar');}
     else if(d.value==='share'){setStatus('Screen share is not available inside OBS - use the Game Feed scene instead.');}
     else pickByName(d.id,(d.label||'').replace(/ \(click Find cameras\)$/,''));}
   else if(cmd==='chan'){connectChat(d.name);}
@@ -1377,7 +1560,7 @@ else{const spw=store.get('obspw','');if(spw){$('obspw').value=spw;linkObs(spw);}
 
 // ---------- Twitch account (EventSub: follows, channel points, hype train) ----------
 const TW_REDIRECT='https://raw.githack.com/LS-city/-rassir-twitch-stream/main/auth.html';
-const TW_SCOPES='moderator:read:followers channel:read:redemptions channel:read:hype_train channel:manage:broadcast';
+const TW_SCOPES='moderator:read:followers channel:read:redemptions channel:read:hype_train channel:manage:broadcast clips:edit';
 const DEFAULT_CID='tydew0sk04o28ypn5y2kqlpmu7j5bv';const okCid=c=>/^[a-z0-9]{25,40}$/.test(c||'');
 let twTok=store.get('twtoken',''),twCid=okCid(store.get('twcid',''))?store.get('twcid',''):DEFAULT_CID,twUser=null,esWs=null,esStarted=false;
 const setTw=m=>{$('twStatus').textContent=m;if(inOBS&&!isControl&&bc){try{bc.postMessage({cmd:'twstatus',data:{msg:m}});}catch(e){}}};
@@ -1410,6 +1593,7 @@ function onTwitchEvent(type,ev){
   }
   else if(type==='channel.hype_train.begin')pushAlert('HYPE TRAIN!',ev.broadcaster_user_name||'',"Level "+(ev.level||1)+" - let's go!");
   else if(type==='channel.update'){onCategory(ev.category_name);}
+  else if(type==='channel.raid')raidWelcome(ev.from_broadcaster_user_name||ev.from_broadcaster_user_login||'Someone',ev.viewers||0);
   else if(type==='channel.hype_train.end')pushAlert('HYPE TRAIN DONE',ev.broadcaster_user_name||'','Reached level '+(ev.level||'?'));
 }
 async function startEventSub(url){
@@ -1420,7 +1604,7 @@ async function startEventSub(url){
   s.onmessage=async e=>{let m;try{m=JSON.parse(e.data);}catch(x){return;}const t=m.metadata&&m.metadata.message_type;
     if(t==='session_welcome'){if(url){setTw('Twitch linked as '+u.login+' (reconnected).');return;}
       const sid=m.payload.session.id,id=u.user_id,errs=[];
-      for(const [ty,v,c] of [['channel.follow','2',{broadcaster_user_id:id,moderator_user_id:id}],['channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:id}],['channel.hype_train.begin','2',{broadcaster_user_id:id}],['channel.hype_train.end','2',{broadcaster_user_id:id}],['channel.update','2',{broadcaster_user_id:id}]]){
+      for(const [ty,v,c] of [['channel.follow','2',{broadcaster_user_id:id,moderator_user_id:id}],['channel.channel_points_custom_reward_redemption.add','1',{broadcaster_user_id:id}],['channel.hype_train.begin','2',{broadcaster_user_id:id}],['channel.hype_train.end','2',{broadcaster_user_id:id}],['channel.update','2',{broadcaster_user_id:id}],['channel.raid','1',{to_broadcaster_user_id:id}]]){
         try{const er=await helixSub(ty,v,c,sid);if(er)errs.push(er);}catch(x){errs.push(ty+': '+x.message);}}
       fetchCategory();
       setTw(errs.length?('Twitch linked as '+u.login+', but some alerts failed: '+errs.join(', ')):('Twitch linked as '+u.login+' - follows, channel points and hype trains are live.'));}
