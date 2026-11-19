@@ -123,6 +123,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 (function(){
 const $=id=>document.getElementById(id);
@@ -1467,6 +1468,55 @@ const AV={};
     hair.position.y=Math.sin(t*2+0.6)*0.015+L*0.025*Math.abs(Math.sin(t*9+0.4));AV.cow.rotation.z=1.2+Math.sin(t*3)*0.15+L*0.3*Math.sin(t*12);
     AV.thumbs.forEach((th,i)=>{th.position.y=0.09+Math.max(0,Math.sin(t*(5+i*2.3)+i))*0.025;});pad.rotation.x=Math.sin(t*1.7)*0.05;
   };
+  // --- Rassir's Blender character (character.glb) replaces the built-in one when it loads ---
+  AV.glb=null;
+  const loadGLB=(tries)=>{
+    if(!THREE.GLTFLoader){if(tries<40)setTimeout(()=>loadGLB(tries+1),500);return;}
+    new THREE.GLTFLoader().load('character.glb',g=>{
+      const ch=g.scene;let faceImg=null;
+      const meshes=[];ch.traverse(o=>{if(o.isMesh)meshes.push(o);});meshes.forEach(o=>{const m=o.material;const nm=m.name||'';
+        if(nm==='Char_Face'&&m.map)faceImg=m.map.image;
+        const col=m.color?m.color.clone().convertLinearToSRGB():new THREE.Color(0xffffff);
+        if(nm==='Char_HairHi')col.set(0x4a4648);const tm=new THREE.MeshToonMaterial({color:col,gradientMap:grad});tm.name=nm;o.material=tm;
+        if(/Skin|Hair$|Navy|Red|Pants|Shoe|Face|Controller$/.test(nm)&&o.geometry.attributes.normal){
+          const og=o.geometry.clone();const p=og.attributes.position,n=og.attributes.normal;for(let i=0;i<p.count;i++){p.setXYZ(i,p.getX(i)+n.getX(i)*0.012,p.getY(i)+n.getY(i)*0.012,p.getZ(i)+n.getZ(i)*0.012);}
+          o.add(new THREE.Mesh(og,outlineM));}});
+      if(faceImg){const fc=document.createElement('canvas');fc.width=faceImg.width;fc.height=faceImg.height;const fx=fc.getContext('2d');fx.drawImage(faceImg,0,0);
+        const base=fx.getImageData(0,0,fc.width,fc.height);const k=fc.width/512;const sk=fx.getImageData(Math.round(40*k),Math.round(40*k),1,1).data;const skin='rgb('+sk[0]+','+sk[1]+','+sk[2]+')';
+        const ft=new THREE.CanvasTexture(fc);ft.flipY=false;
+        ch.traverse(o=>{if(o.isMesh&&o.material.name==='Char_Face')o.material.map=ft,o.material.color.set(0xffffff),o.material.needsUpdate=true;});
+        AV.face={fx,fc,ft,base,skin,k,state:''};}
+      const box=new THREE.Box3().setFromObject(ch);const H=box.max.y-box.min.y,top=box.max.y+H*0.02,bot=box.min.y+H*0.3,cy=(top+bot)/2;
+      AV.glbFrame={cy,dist:((top-bot)/2)/Math.tan(THREE.MathUtils.degToRad(cam.fov/2))*1.04+box.max.z};
+      cam.position.set(0,cy+0.05,AV.glbFrame.dist);cam.lookAt(0,cy,0);
+      sc.add(ch);root.visible=false;
+      const P=n=>ch.getObjectByName(n);AV.glb={ch,head:P('Char_Head'),armL:P('Char_ArmL'),armR:P('Char_ArmR'),torso:P('Char_Torso'),hips:P('Char_Hips')};
+      const G=AV.glb;G.hipsY=G.hips?G.hips.position.y:0;['head','armL','armR','torso'].forEach(k=>{if(G[k])G[k].userData.r0=G[k].rotation.clone();});
+    },undefined,e=>{console.warn('character.glb failed to load',e);});
+  };
+  loadGLB(0);
+  AV.drawFace=(mi,blink)=>{const F=AV.face;if(!F)return;const st=mi+'_'+blink;if(st===F.state)return;F.state=st;const x=F.fx,k=F.k;
+    x.putImageData(F.base,0,0);x.save();x.scale(k,k);
+    x.fillStyle=F.skin;x.fillRect(206,366,100,76);
+    const L=mi/7,oh=6+L*30;
+    const path=()=>{x.beginPath();x.moveTo(219,389);x.lineTo(295,377);x.quadraticCurveTo(292,392+oh*1.6,258,392+oh*1.25);x.quadraticCurveTo(224,394+oh*1.2,219,389);x.closePath();};
+    path();x.fillStyle='#5a1018';x.fill();x.save();path();x.clip();
+    x.fillStyle='#fff';x.beginPath();x.moveTo(219,389);x.lineTo(295,377);x.lineTo(295,388);x.lineTo(219,399);x.fill();
+    x.strokeStyle='#cfc8c8';x.lineWidth=1.5;for(let i=1;i<7;i++){const tx=219+i*10.8;x.beginPath();x.moveTo(tx,389-i*1.7);x.lineTo(tx,399-i*1.6);x.stroke();}
+    if(mi>2){x.fillStyle='#e0606a';x.beginPath();x.ellipse(258,392+oh*1.2,24,oh*0.45,0,0,7);x.fill();}
+    x.restore();path();x.strokeStyle='#111';x.lineWidth=4;x.lineJoin='round';x.stroke();
+    if(blink){x.fillStyle=F.skin;x.fillRect(98,238,126,104);x.fillRect(290,238,126,104);
+      x.strokeStyle='#161216';x.lineCap='round';x.lineWidth=9;
+      x.beginPath();x.moveTo(110,292);x.quadraticCurveTo(160,318,212,290);x.stroke();
+      x.beginPath();x.moveTo(300,290);x.quadraticCurveTo(352,318,402,292);x.stroke();}
+    x.restore();F.ft.needsUpdate=true;};
+  const baseUpdate=AV.update;
+  AV.update=(t,dt,lvl)=>{baseUpdate(t,dt,lvl);const G=AV.glb;if(!G)return;const L=AV.lvl;
+    const blink=(t-AV.blinkAt)>0&&(t-AV.blinkAt)<0.13;AV.drawFace(L<0.06?0:Math.min(7,1+Math.round(L*6)),blink?1:0);
+    if(G.head){const r=G.head.userData.r0;G.head.rotation.set(r.x+Math.sin(t*1.3)*0.04+L*0.09*Math.sin(t*11)-L*0.05,r.y+Math.sin(t*0.5)*0.12+AV.glance,r.z+Math.sin(t*0.8)*0.06+L*0.05*Math.sin(t*6));}
+    if(G.hips)G.hips.position.y=G.hipsY+Math.sin(t*2)*0.02+L*0.05*Math.abs(Math.sin(t*9));
+    if(G.torso){const r=G.torso.userData.r0;G.torso.rotation.set(r.x,r.y+Math.sin(t*0.7)*0.05,r.z+Math.sin(t*1.1)*0.02);G.torso.scale.set(1,1+Math.sin(t*2)*0.012,1);}
+    [G.armL,G.armR].forEach((a,i)=>{if(!a)return;const r=a.userData.r0;a.rotation.set(r.x+Math.max(0,Math.sin(t*(5+i*2.3)+i))*0.06,r.y,r.z);});};
 })();
 // mic -> mouth
 let avAn=null,avBuf=null,avStream=null,avCtx=null,avSens=store.get('avsens',5),avMicLabel=store.get('avmic','');
