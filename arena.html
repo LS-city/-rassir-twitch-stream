@@ -157,6 +157,10 @@ const inOBS=!!window.obsstudio;let obsWs=null,obsOk=false,rx=false,remoteSeen=fa
 const isControl=new URLSearchParams(location.search).get('control')==='1';
 const bc=('BroadcastChannel' in window)?new BroadcastChannel('neonArena'):null;
 
+// self-update: when loaded from a pinned commit on githack, jump to the newest commit
+(function(){const m=location.href.match(/raw\.githack\.com\/LS-city\/-rassir-twitch-stream\/([0-9a-f]{40})\//);if(!m)return;
+  const chk=()=>fetch('https://api.github.com/repos/LS-city/-rassir-twitch-stream/commits/main',{cache:'no-store'}).then(r=>r.json()).then(j=>{if(j&&j.sha&&j.sha!==m[1]){try{localStorage.setItem('nha_lastsha',j.sha);}catch(e){}location.replace(location.href.replace(m[1],j.sha));}}).catch(()=>{});
+  chk();})();
 const avatarOnly=new URLSearchParams(location.search).get('avatar')==='1';
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:avatarOnly});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
