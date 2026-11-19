@@ -36,6 +36,13 @@
     <div id="obsStatus" class="hint" style="margin-top:6px">Not linked. Changes here only show in this tab.</div>
   </div>
 
+  <div style="border:2px solid #9dff3a;border-radius:8px;padding:8px;margin:6px 0">
+    <label class="t" style="margin-top:0;color:#9dff3a">NOW PLAYING (sets the world + your Twitch category)</label>
+    <div class="row" style="margin-top:0"><input type="text" id="npGame" list="npList" placeholder="Type your game, e.g. The Walking Dead"><button id="npSet">Set</button></div>
+    <datalist id="npList"></datalist>
+    <div id="npStatus" class="hint" style="margin-top:6px">Pick your game here before you go live.</div>
+  </div>
+
   <label class="t">Twitch channel (live chat + alerts)</label>
   <div class="row"><input type="text" id="chan" placeholder="yourchannel"><button id="chanGo">Connect</button></div>
 
@@ -844,7 +851,7 @@ function applyRemote(cmd,d){
     refreshFighters();
   }
 }
-if(bc)bc.onmessage=e=>{const m=e.data;if(!m||!m.cmd)return;if(isControl){if(m.cmd==='catstatus'){setStatus(m.data.msg);if(m.data.theme&&m.data.theme!==theme){rx=true;try{applyTheme(m.data.theme);}finally{rx=false;}}}else if(m.cmd==='twstatus')$('twStatus').textContent=m.data.msg;else if(m.cmd==='needtoken'&&twTok)remote('twtoken',{token:twTok,cid:twCid});return;}if(m.cmd==='needtoken'||m.cmd==='twstatus'||m.cmd==='catstatus')return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
+if(bc)bc.onmessage=e=>{const m=e.data;if(!m||!m.cmd)return;if(isControl){if(m.cmd==='catstatus'){setStatus(m.data.msg);if(m.data.cat)$('npGame').value=m.data.cat;if(m.data.theme&&m.data.theme!==theme){rx=true;try{applyTheme(m.data.theme);}finally{rx=false;}}}else if(m.cmd==='twstatus')$('twStatus').textContent=m.data.msg;else if(m.cmd==='needtoken'&&twTok)remote('twtoken',{token:twTok,cid:twCid});return;}if(m.cmd==='needtoken'||m.cmd==='twstatus'||m.cmd==='catstatus')return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}};
 window.addEventListener('neonArena',e=>{if(isControl)return;let m=e.detail;if(typeof m==='string'){try{m=JSON.parse(m);}catch(x){return;}}if(!m||!m.cmd)return;rx=true;try{applyRemote(m.cmd,m.data||{});}finally{rx=false;}});
 $('obsGo').onclick=()=>linkObs($('obspw').value);
 $('obspw').addEventListener('keydown',e=>{if(e.key==='Enter')linkObs($('obspw').value);});
@@ -854,7 +861,7 @@ else{const spw=store.get('obspw','');if(spw){$('obspw').value=spw;linkObs(spw);}
 
 // ---------- Twitch account (EventSub: follows, channel points, hype train) ----------
 const TW_REDIRECT='https://raw.githack.com/LS-city/-rassir-twitch-stream/main/auth.html';
-const TW_SCOPES='moderator:read:followers channel:read:redemptions channel:read:hype_train';
+const TW_SCOPES='moderator:read:followers channel:read:redemptions channel:read:hype_train channel:manage:broadcast';
 let twTok=store.get('twtoken',''),twCid=store.get('twcid',''),twUser=null,esWs=null,esStarted=false;
 const setTw=m=>{$('twStatus').textContent=m;if(inOBS&&!isControl&&bc){try{bc.postMessage({cmd:'twstatus',data:{msg:m}});}catch(e){}}};
 async function twValidate(){
@@ -927,7 +934,7 @@ let lastCategory='';
 function onCategory(name){
   if(!name)return;lastCategory=name;const w=themeForCategory(name);
   const msg='Twitch category: '+name+(opts.autoTheme?(' -> '+THEMES[w].name+' world'):' (auto world is off)');
-  setStatus(msg);if(bc&&inOBS&&!isControl){try{bc.postMessage({cmd:'catstatus',data:{msg,theme:opts.autoTheme?w:null}});}catch(e){}}
+  setStatus(msg);if(bc&&inOBS&&!isControl){try{bc.postMessage({cmd:'catstatus',data:{msg,cat:name,theme:opts.autoTheme?w:null}});}catch(e){}}
   if(opts.autoTheme&&w&&w!==theme){rx=true;try{switchTheme(w);}finally{rx=false;}}
 }
 async function fetchCategory(){
@@ -939,6 +946,30 @@ $('autoTheme').checked=opts.autoTheme;
 $('autoTheme').onchange=e=>{opts.autoTheme=e.target.checked;store.set('autoTheme',opts.autoTheme);remote('state',snap());if(opts.autoTheme&&lastCategory)onCategory(lastCategory);};
 $('thememap').value=store.get('thememap','');
 $('thememap').addEventListener('input',e=>{store.set('thememap',e.target.value);remote('state',snap());});
+
+// ---------- Now playing: one box sets the world AND your Twitch category ----------
+let npTimer=null;
+async function helixGet(path){const r=await fetch('https://api.twitch.tv/helix/'+path,{headers:{'Client-Id':twCid,Authorization:'Bearer '+twTok}});return r.ok?r.json():null;}
+$('npGame').addEventListener('input',e=>{clearTimeout(npTimer);const q=e.target.value.trim();if(q.length<2||!twTok||!twCid)return;
+  npTimer=setTimeout(async()=>{const j=await helixGet('search/categories?first=8&query='+encodeURIComponent(q));if(!j)return;
+    const dl=$('npList');dl.innerHTML='';(j.data||[]).forEach(c=>{const o=document.createElement('option');o.value=c.name;dl.appendChild(o);});},300);});
+async function setNowPlaying(){
+  const name=$('npGame').value.trim();if(!name){$('npStatus').textContent='Type the game you are playing first.';return;}
+  const w=themeForCategory(name);switchTheme(w);
+  let msg='World: '+THEMES[w].name+'.';
+  if(!twTok||!twCid){$('npStatus').textContent=msg+' (Log in with Twitch to also update your category.)';return;}
+  try{const u=twUser||await twValidate();if(!u){$('npStatus').textContent=msg+' Twitch login expired - click Log in again.';return;}
+    const j=await helixGet('search/categories?first=10&query='+encodeURIComponent(name));const list=(j&&j.data)||[];
+    const cat=list.find(c=>c.name.toLowerCase()===name.toLowerCase())||list[0];
+    if(!cat){$('npStatus').textContent=msg+' No Twitch category found for "'+name+'".';return;}
+    const r=await fetch('https://api.twitch.tv/helix/channels?broadcaster_id='+u.user_id,{method:'PATCH',headers:{'Client-Id':twCid,Authorization:'Bearer '+twTok,'Content-Type':'application/json'},body:JSON.stringify({game_id:cat.id})});
+    if(r.status===204||r.ok){$('npGame').value=cat.name;$('npStatus').textContent='Now playing '+cat.name+' -> '+THEMES[themeForCategory(cat.name)].name+' world. Twitch category updated.';}
+    else if(r.status===401||r.status===403){$('npStatus').textContent=msg+' To also change your Twitch category, click "Log in again" below and Authorize once.';}
+    else $('npStatus').textContent=msg+' Twitch said '+r.status+' when changing the category.';
+  }catch(e){$('npStatus').textContent=msg+' Could not reach Twitch.';}
+}
+$('npSet').onclick=setNowPlaying;
+$('npGame').addEventListener('keydown',e=>{if(e.key==='Enter')setNowPlaying();});
 
 $('twLogin').onclick=twLogin;$('twLogout').onclick=twLogout;
 twInit();
