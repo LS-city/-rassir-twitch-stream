@@ -386,16 +386,20 @@ function drawHelp(s,t){
   const {ctx,c}=s,w=c.width,h=c.height;ctx.fillStyle='#0a0814';ctx.fillRect(0,0,w,h);
   ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=1;for(let y=0;y<h;y+=4){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
   ctx.textAlign='center';ctx.font='bold 34px "Courier New",monospace';ctx.fillStyle=LIME;ctx.shadowColor=LIME;ctx.shadowBlur=12;ctx.fillText('TYPE IN CHAT:',w/2,46);ctx.shadowBlur=0;
-  const all=[['!join','get in line to fight'],['!duel @name','challenge a viewer'],['!attack','hit the boss'],['!drop','drop an item in the ring'],['!tag words','spray graffiti'],['!cheer','confetti + you jump'],['!boo','throw a tomato'],['!me','camera on you'],['!checkin','daily XP + streak'],['!level','your level + rank'],['!clip','save a clip'],['Cheer bits','fireworks']];
-  const pg=Math.floor(t/10)%2;const rows=all.slice(pg*6,pg*6+6);
+  // Every chat command lives in this list. Add new commands here so the INTERACTIVE WORLD screen always shows them.
+  const all=[['!join','get in line to fight'],['!leave','leave the fight line'],['!duel @name','challenge a viewer'],['!accept','accept a duel'],['!attack','hit the boss'],['!drop','drop an item in the ring'],
+    ['!drop bomb','pick: health bomb banana star crate'],['!tag words','spray graffiti'],['!cheer','confetti + you jump'],['!boo','throw a tomato'],['!me','camera on you'],['!checkin','daily XP + streak'],
+    ['!level','your level + rank'],['!top','top 3 viewers'],['!clip','save a clip'],['Cheer bits','fireworks']];
+  if(opts.chatFight)all.splice(2,0,['!fight','start the round']);
+  const per=6,pages=Math.ceil(all.length/per),pg=Math.floor(t/9)%pages;const rows=all.slice(pg*per,pg*per+per);
 
-  const hi=Math.floor(t/2.2)%rows.length,top=78,rh=(h-top-46)/rows.length;
+  const hi=Math.floor(t/2.2)%rows.length,top=78,rh=(h-top-46)/per;
   ctx.textAlign='left';
   rows.forEach(([cmd,what],i)=>{const y=top+i*rh;const on=i===hi;
     if(on){ctx.fillStyle='rgba(255,255,255,0.08)';ctx.fillRect(14,y,w-28,rh-6);ctx.fillStyle=PINK;ctx.fillRect(14,y,6,rh-6);}
-    ctx.font='bold '+Math.floor(rh*0.5)+'px "Courier New",monospace';ctx.fillStyle=on?'#ffffff':CYAN;ctx.fillText(cmd,34,y+rh*0.62);
+    ctx.font='bold '+Math.floor(rh*0.5)+'px "Courier New",monospace';ctx.fillStyle=on?'#ffffff':CYAN;ctx.fillText(cmd,34,y+rh*0.62,206);
     ctx.font=Math.floor(rh*0.38)+'px "Courier New",monospace';ctx.fillStyle=on?AMBER:'#b8b0d8';ctx.fillText(what,250,y+rh*0.6,w-264);});
-  ctx.textAlign='center';ctx.font='20px "Courier New",monospace';ctx.fillStyle='#8a80b0';ctx.fillText('Say anything to join the crowd',w/2,h-16);ctx.textAlign='left';
+  ctx.textAlign='center';ctx.font='20px "Courier New",monospace';ctx.fillStyle='#8a80b0';ctx.fillText('Say anything to join the crowd   '+(pg+1)+'/'+pages,w/2,h-16);ctx.textAlign='left';
   s.ctex.needsUpdate=true;
 }
 const startTime=Date.now();
