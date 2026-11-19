@@ -1237,14 +1237,70 @@ function buildDojoRing(){
 }
 ringBuilders.mansion=buildMansionRing;ringBuilders.armory=buildArmoryRing;ringBuilders.harbor=buildHarborRing;ringBuilders.arcade=buildArcadeRing;ringBuilders.dojo=buildDojoRing;
 padCols.mansion=0x1c1822;padCols.armory=0x2a2d33;padCols.harbor=0x8a6640;padCols.arcade=0x120826;padCols.dojo=0xc8b878;
-const RSTYLES={auto:'Auto (matches world)',rooftop:'Helipad',bar:'Bar stage',horror:'Ritual circle',shooter:'Octagon cage',beach:'Tiki beach',nightcity:'Street',haunted:'Haunted house',warfield:'War field',island:'Beach island + water',lava:'Lava pit',space:'Space station',mansion:'Haunted mansion',armory:'Gun armory',harbor:'Harbor (boats + fish)',arcade:'Arcade',dojo:'Dojo'};
+// ---------- Rooftop Fight Club: square fight ring ----------
+function buildFightClubRing(){
+  const g=new THREE.Group();const lamps=[],beams=[],ropes=[];
+  const S=4.0;// half size of the ring
+  const mat=canvasTex(1024,1024,(x)=>{x.fillStyle='#1a1622';x.fillRect(0,0,1024,1024);
+    x.fillStyle='rgba(255,255,255,0.03)';for(let i=0;i<1024;i+=8)x.fillRect(i,0,1,1024);
+    const tri=(cx,cy,c)=>{const g2=x.createRadialGradient(cx,cy,0,cx,cy,260);g2.addColorStop(0,c+'cc');g2.addColorStop(1,c+'00');x.fillStyle=g2;x.fillRect(cx-260,cy-260,520,520);};
+    tri(0,0,'#ff2a3a');tri(1024,1024,'#2a6aff');
+    x.strokeStyle='rgba(255,255,255,0.85)';x.lineWidth=6;x.beginPath();x.arc(512,512,250,0,7);x.stroke();x.lineWidth=3;x.beginPath();x.arc(512,512,232,0,7);x.stroke();
+    x.textAlign='center';x.textBaseline='middle';x.font='bold 64px "Courier New",monospace';x.fillStyle='#ffffff';x.fillText('LUCID STATE',512,440);
+    x.font='bold 120px "Courier New",monospace';x.fillStyle='#ff2a3a';x.shadowColor='#ff2a3a';x.shadowBlur=20;x.fillText('FIGHT',512,530);x.fillStyle='#ffffff';x.shadowBlur=0;
+    x.font='bold 70px "Courier New",monospace';x.fillText('CLUB',512,620);
+    x.fillStyle='rgba(255,255,255,0.6)';x.font='bold 30px "Courier New",monospace';x.fillText('1ST RULE: TYPE !JOIN',512,960);});
+  const top=new THREE.Mesh(new THREE.PlaneGeometry(S*2+0.6,S*2+0.6),new THREE.MeshBasicMaterial({map:mat}));top.rotation.x=-Math.PI/2;top.position.y=0.035;g.add(top);
+  const apronTex=canvasTex(1024,128,(x)=>{x.fillStyle='#0a0810';x.fillRect(0,0,1024,128);x.fillStyle='#ff2a3a';x.fillRect(0,0,1024,8);x.fillRect(0,120,1024,8);
+    x.font='bold 64px "Courier New",monospace';x.textAlign='center';x.textBaseline='middle';x.fillStyle='#ffffff';x.fillText('ROOFTOP  FIGHT  CLUB',512,66);});
+  const apron=new THREE.Mesh(new THREE.BoxGeometry(S*2+0.6,0.32,S*2+0.6),[0,1,2,3,4,5].map(i=>i===2||i===3?B(0x1a1622):new THREE.MeshBasicMaterial({map:apronTex})));apron.position.y=-0.15;g.add(apron);
+  // corner posts with turnbuckle pads
+  const cornerCols=[0xff2a3a,0xffffff,0x2a6aff,0xffffff];const corners=[[-S,-S],[S,-S],[S,S],[-S,S]];
+  corners.forEach(([x,z],i)=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,1.85,12),B(0x9aa0aa));p.position.set(x,0.92,z);g.add(p);
+    const pad=new THREE.Mesh(new THREE.BoxGeometry(0.34,1.15,0.34),B(cornerCols[i]));pad.position.set(x,0.98,z);pad.rotation.y=Math.PI/4;g.add(pad);
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,8),B(0xdddddd));cap.position.set(x,1.88,z);g.add(cap);});
+  // three ropes per side, red / white / blue
+  const ropeCols=[0xff2a3a,0xffffff,0x2a6aff];
+  [0.5,0.95,1.4].forEach((y,ri)=>{for(let i=0;i<4;i++){const a=corners[i],b=corners[(i+1)%4];const pts=[];for(let k=0;k<=12;k++){const t=k/12;pts.push(new THREE.Vector3(a[0]+(b[0]-a[0])*t,y-Math.sin(t*Math.PI)*0.06,a[1]+(b[1]-a[1])*t));}
+    const curve=new THREE.CatmullRomCurve3(pts);const r=new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.045,6,false),B(ropeCols[ri]));r.userData={a,b,y,ri,i};g.add(r);ropes.push(r);}});
+  // ring steps + corner stools and buckets
+  const steps=new THREE.Group();steps.position.set(S+0.7,0,S-0.6);g.add(steps);
+  for(let k=0;k<3;k++){const st=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.12,0.9),B(0x2a2a30));st.position.set(0.3*k,-0.24-k*0.0+(-0.02*k)-k*0.05-0.0,0);st.position.y=-0.06-k*0.08;st.position.x=k*0.32;steps.add(st);}
+  [[-S+0.55,-S+0.55,0xff2a3a],[S-0.55,S-0.55,0x2a6aff]].forEach(([x,z,c])=>{const stool=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.18,0.45,12),B(0x2a2a30));stool.position.set(x+(x>0?0.9:-0.9),0.0,z+(z>0?0.9:-0.9));g.add(stool);
+    const bk=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.13,0.3,12),B(c));bk.position.set(x+(x>0?1.3:-1.3),-0.1,z+(z>0?0.5:-0.5));g.add(bk);
+    const tw=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.02,0.3),B(0xffffff));tw.position.set(x+(x>0?0.9:-0.9),0.24,z+(z>0?0.9:-0.9));g.add(tw);});
+  // crowd barricades (open at the front)
+  const barM=B(0x8a9099);for(let i=0;i<14;i++){const a=Math.PI*(1.08+i*0.064);const r=6.4;const x=Math.cos(a)*r*1.1,z=Math.sin(a)*r*0.85-0.6;
+    const bar=new THREE.Group();bar.position.set(x,-0.28,z);bar.rotation.y=-a+Math.PI/2;g.add(bar);
+    const t1=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.05,0.05),barM);t1.position.y=0.95;bar.add(t1);const t2=t1.clone();t2.position.y=0.2;bar.add(t2);
+    for(let k=0;k<6;k++){const v=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.75,0.03),barM);v.position.set(-0.6+k*0.24,0.58,0);bar.add(v);}}
+  // light towers at the back corners
+  [-1,1].forEach(s=>{const x=s*6.2,z=-4.4;const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.14,6,8),B(0x2a2a30));pole.position.set(x,2.7,z);g.add(pole);
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.14,0.14),B(0x2a2a30));bar.position.set(x,5.7,z);g.add(bar);
+    [-0.55,0,0.55].forEach(o=>{const head=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.26,0.3,12),B(0x1a1a1e));head.position.set(x+o,5.5,z+0.05);head.lookAt(0,0,0);head.rotateX(Math.PI/2);g.add(head);
+      const lamp=flameSprite(0xfff4d0,x+o,5.45,z+0.2,0.8,0.8);g.add(lamp);lamps.push(lamp);});
+    const beam=new THREE.Mesh(new THREE.ConeGeometry(2.4,7.6,20,1,true),B(0xfff4d0,Object.assign({opacity:.06,side:THREE.DoubleSide},ADD)));
+    beam.position.set(x*0.5,2.75,z*0.5);beam.lookAt(x,5.6,z);beam.rotateX(Math.PI/2);g.add(beam);beams.push(beam);});
+  // ring bell table at the front left
+  const table=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.08,0.6),B(0x3a2a1a));table.position.set(-5.3,0.5,3.4);g.add(table);
+  [[-5.9,3.15],[-4.7,3.15],[-5.9,3.65],[-4.7,3.65]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.78,0.06),B(0x2a1a0a));l.position.set(x,0.1,z);g.add(l);});
+  const bell=new THREE.Mesh(new THREE.SphereGeometry(0.2,14,10,0,Math.PI*2,0,Math.PI/2),B(0xd8a83a));bell.position.set(-5.5,0.56,3.4);g.add(bell);
+  const belt=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.04,0.22),B(0x1a1a1a));belt.position.set(-4.95,0.56,3.4);g.add(belt);const plate=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.05,16),B(0xffd23a));plate.position.set(-4.95,0.58,3.4);g.add(plate);
+  g.userData.anim=(t)=>{const hit=Math.max(0,Math.sin(t*5))*Math.max(0,Math.sin(t*5+Math.PI));
+    ropes.forEach(r=>{r.position.y=Math.sin(t*14+r.userData.i*1.7+r.userData.ri)*0.012*(1+hit*3);});
+    lamps.forEach((l,i)=>{const k=0.9+0.1*Math.sin(t*2+i);l.scale.set(0.8*k,0.8*k,1);});
+    beams.forEach((b,i)=>{b.material.opacity=0.05+0.02*Math.sin(t*1.3+i*2);});};
+  return g;
+}
+ringBuilders.rooftop=buildFightClubRing;padCols.helipad=0x1a0f30;padCols.rooftop=0x1a1622;FULLSETS.push('rooftop');
+const RSTYLES={auto:'Auto (matches world)',rooftop:'Rooftop Fight Club ring',helipad:'Helipad (classic)',bar:'Bar stage',horror:'Ritual circle',shooter:'Octagon cage',beach:'Tiki beach',nightcity:'Street',haunted:'Haunted house',warfield:'War field',island:'Beach island + water',lava:'Lava pit',space:'Space station',mansion:'Haunted mansion',armory:'Gun armory',harbor:'Harbor (boats + fish)',arcade:'Arcade',dojo:'Dojo'};
 let ringStyle=store.get('ringStyle','auto');if(!RSTYLES[ringStyle])ringStyle='auto';
 function ringFor(w){return ringStyle==='auto'?w:ringStyle;}
 function applyRing(name){
-  if(!padCols[name]&&name!=='rooftop')name='rooftop';
-  ringDefault.forEach(o=>o.visible=(name==='rooftop'));
+  if(!padCols[name])name='rooftop';
+  ringDefault.forEach(o=>o.visible=(name==='helipad'));
   for(const k in ringBuilders){if(k===name&&!rings[k]){rings[k]=ringBuilders[k]();stage.add(rings[k]);}if(rings[k])rings[k].visible=(k===name);}
-  pad.material.color.set(padCols[name]||0x1a0f30);pad.visible=!FULLSETS.includes(name);logo.visible=!['nightcity','lava','space','warfield','mansion','armory','harbor','arcade','dojo'].includes(name);padRing.visible=!['shooter','nightcity','warfield','island','lava','haunted','mansion','harbor','dojo','arcade','armory'].includes(name);
+  pad.material.color.set(padCols[name]||0x1a0f30);pad.visible=!FULLSETS.includes(name);logo.visible=!['rooftop','nightcity','lava','space','warfield','mansion','armory','harbor','arcade','dojo'].includes(name);padRing.visible=!['rooftop','shooter','nightcity','warfield','island','lava','haunted','mansion','harbor','dojo','arcade','armory'].includes(name);
   ringAnim=(rings[name]&&rings[name].userData.anim)||{bar:rings.barAnim,horror:rings.horrorAnim,shooter:rings.warAnim,beach:rings.beachAnim,nightcity:rings.streetAnim}[name]||null;
   if($('ringStyle'))$('ringStyle').value=ringStyle;
 }
@@ -1252,7 +1308,7 @@ function setRingStyle(v,quiet){if(!RSTYLES[v])v='auto';ringStyle=v;store.set('ri
 
 // ---------- Fighter looks ----------
 const FSTYLES={classic:'Classic blocks',robot:'Robot',boxer:'Boxer',ninja:'Ninja',zombie:'Zombie',skeleton:'Skeleton',soldier:'Soldier',surfer:'Surfer',street:'Street fighter',luchador:'Luchador',ghost:'Ghost',vampire:'Vampire',pirate:'Pirate',gamer:'Gamer'};
-const FAUTO={rooftop:['robot','robot'],bar:['boxer','boxer'],horror:['zombie','skeleton'],shooter:['soldier','soldier'],beach:['surfer','surfer'],nightcity:['street','street'],haunted:['zombie','skeleton'],mansion:['ghost','vampire'],warfield:['soldier','soldier'],armory:['soldier','soldier'],island:['surfer','surfer'],harbor:['pirate','pirate'],lava:['skeleton','robot'],space:['robot','robot'],arcade:['gamer','robot'],dojo:['ninja','ninja']};
+const FAUTO={rooftop:['boxer','street'],helipad:['robot','robot'],bar:['boxer','boxer'],horror:['zombie','skeleton'],shooter:['soldier','soldier'],beach:['surfer','surfer'],nightcity:['street','street'],haunted:['zombie','skeleton'],mansion:['ghost','vampire'],warfield:['soldier','soldier'],armory:['soldier','soldier'],island:['surfer','surfer'],harbor:['pirate','pirate'],lava:['skeleton','robot'],space:['robot','robot'],arcade:['gamer','robot'],dojo:['ninja','ninja']};
 function buildFigure(style,col){
   const g=new THREE.Group();let fist=null,fb=0.38;
   const M=c=>B(c);
