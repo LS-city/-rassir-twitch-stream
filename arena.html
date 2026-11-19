@@ -1491,36 +1491,65 @@ function buildTourney(){
 }
 decorBuilders.tourney=buildTourney;
 function buildTourneyRing(){
-  const g=new THREE.Group();const tiles=[],pyros=[],cracks=[];
-  // stone octagon stage with glowing trim
-  const base=new THREE.Mesh(new THREE.CylinderGeometry(5.6,6.0,0.9,8,1,true),B(0x2a2630,{side:THREE.DoubleSide}));base.position.y=-0.75;base.rotation.y=Math.PI/8;g.add(base);
-  const trim=new THREE.Mesh(new THREE.TorusGeometry(5.65,0.06,6,8),B(0xff5a2a));trim.rotation.x=Math.PI/2;trim.rotation.z=Math.PI/8;trim.position.y=-0.3;g.add(trim);
-  // breakable floor: 7x7 stone tiles
-  const tileT=canvasTex(128,128,(x)=>{x.fillStyle='#4a4450';x.fillRect(0,0,128,128);for(let i=0;i<60;i++){x.fillStyle='rgba(0,0,0,'+Math.random()*0.18+')';x.fillRect(Math.random()*128,Math.random()*128,6,3);}x.strokeStyle='#2a2630';x.lineWidth=6;x.strokeRect(0,0,128,128);});
-  const N=7,TS=1.3;for(let i=0;i<N;i++)for(let j=0;j<N;j++){const cx=(i-(N-1)/2)*TS,cz=(j-(N-1)/2)*TS;if(Math.hypot(cx,cz)>5.3)continue;
-    const tl=new THREE.Mesh(new THREE.BoxGeometry(TS-0.04,0.3,TS-0.04),new THREE.MeshBasicMaterial({map:tileT}));tl.position.set(cx,-0.15,cz);tl.userData={x:cx,z:cz,vy:0,rx:(Math.random()-.5)*4,rz:(Math.random()-.5)*4,d:Math.hypot(cx,cz)};g.add(tl);tiles.push(tl);}
-  // glowing cracks decal (shows when the floor breaks)
-  const crT=canvasTex(512,512,(x)=>{x.strokeStyle='#ffb020';x.lineWidth=7;x.shadowColor='#ff5a00';x.shadowBlur=18;for(let k=0;k<10;k++){let px=256,py=256,a=k/10*Math.PI*2;x.beginPath();x.moveTo(px,py);for(let s=0;s<9;s++){a+=(Math.random()-.5)*0.9;px+=Math.cos(a)*28;py+=Math.sin(a)*28;x.lineTo(px,py);}x.stroke();}});
-  const crack=new THREE.Mesh(new THREE.PlaneGeometry(10,10),new THREE.MeshBasicMaterial({map:crT,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));crack.rotation.x=-Math.PI/2;crack.position.y=0.02;g.add(crack);
-  const lava=new THREE.Mesh(new THREE.CircleGeometry(5.3,8),B(0xff5a1a));lava.rotation.x=-Math.PI/2;lava.rotation.z=Math.PI/8;lava.position.y=-0.9;g.add(lava);const lavaGlow=flameSprite(0xff7a1a,0,-0.4,0,9,3);g.add(lavaGlow);
-  // stone corner pillars with braziers + pyro cannons
-  for(let i=0;i<8;i++){const a=i/8*Math.PI*2+Math.PI/8;const x=Math.cos(a)*5.9,z=Math.sin(a)*5.9;if(z>3)continue;
-    const p=new THREE.Mesh(new THREE.BoxGeometry(0.5,1.6,0.5),B(0x3a3440));p.position.set(x,0.5,z);g.add(p);
-    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.2,0.25,10),B(0x6a5a3a));bowl.position.set(x,1.42,z);g.add(bowl);
-    const fl=flameSprite(0xff7a1a,x,1.9,z,0.9,1.4);g.add(fl);pyros.push({fl,x,z,base:true});}
-  [[-5.2,2.6],[5.2,2.6],[-4.2,-4.2],[4.2,-4.2]].forEach(([x,z])=>{const cn=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.32,0.5,10),B(0x1a1a1e));cn.position.set(x,-0.05,z);g.add(cn);
-    const jet=[];for(let k=0;k<5;k++){const f=flameSprite(k%2?0xffd23a:0xff4a1a,x,0.4+k*0.7,z,1.2,1.4);f.visible=false;g.add(f);jet.push(f);}pyros.push({jet,x,z});});
-  // embers
-  const embers=[];for(let i=0;i<30;i++){const e=flameSprite(0xffa020,0,0,0,0.12,0.12);e.userData={a:Math.random()*7,r:Math.random()*5,o:Math.random()};g.add(e);embers.push(e);}
+  const g=new THREE.Group();const tiles=[],pyros=[],boards=[],sweeps=[];
+  const FW=11,FD=7.6,TS=0.95;const NX=Math.round(FW/TS),NZ=Math.round(FD/TS);
+  // base under the floor (hollow so the lava shows when the floor breaks)
+  const pit=new THREE.Mesh(new THREE.BoxGeometry(FW+0.2,1.2,FD+0.2),[0,1,2,3,4,5].map(i=>i===2?new THREE.MeshBasicMaterial({visible:false}):B(0x1a1620)));pit.position.y=-0.75;g.add(pit);
+  const lava=new THREE.Mesh(new THREE.PlaneGeometry(FW,FD),B(0xff5a1a));lava.rotation.x=-Math.PI/2;lava.position.y=-0.27;g.add(lava);const lavaGlow=flameSprite(0xff7a1a,0,0.2,0,13,4);g.add(lavaGlow);
+  // LED floor tiles
+  const tileGeo=new THREE.BoxGeometry(TS-0.05,0.25,TS-0.05);
+  for(let i=0;i<NX;i++)for(let j=0;j<NZ;j++){const x=(i-(NX-1)/2)*TS,z=(j-(NZ-1)/2)*TS;const m=new THREE.MeshBasicMaterial({color:0x222028});const tl=new THREE.Mesh(tileGeo,m);tl.position.set(x,-0.125,z);
+    tl.userData={x,z,d:Math.hypot(x,z),rx:(Math.random()-.5)*4,rz:(Math.random()-.5)*4,i,j};g.add(tl);tiles.push(tl);}
+  const grout=g.userData.grout=new THREE.Mesh(new THREE.PlaneGeometry(FW,FD),B(0x0a0810));grout.rotation.x=-Math.PI/2;grout.position.y=-0.26;g.add(grout);
+  // center emblem decal (original star crest)
+  const crest=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial({map:canvasTex(512,512,(x)=>{x.strokeStyle='rgba(255,210,58,0.9)';x.lineWidth=10;x.beginPath();x.arc(256,256,230,0,7);x.stroke();x.lineWidth=4;x.beginPath();x.arc(256,256,205,0,7);x.stroke();
+    x.fillStyle='rgba(255,210,58,0.85)';x.beginPath();for(let k=0;k<10;k++){const a=-Math.PI/2+k*Math.PI/5,r=k%2?70:170;x.lineTo(256+Math.cos(a)*r,256+Math.sin(a)*r);}x.fill();}),transparent:true,depthWrite:false}));
+  crest.rotation.x=-Math.PI/2;crest.position.y=0.01;g.add(crest);
+  // LED barrier boards around three sides with scrolling text
+  const boardTex=(txt,c)=>{const t=canvasTex(1024,64,(x)=>{x.fillStyle='#05040a';x.fillRect(0,0,1024,64);x.font='bold 40px Impact, "Arial Black", sans-serif';x.textBaseline='middle';x.fillStyle=c;const tw=x.measureText(txt).width+40;for(let px=10;px<1024;px+=tw)x.fillText(txt,px,34);
+      x.fillStyle='rgba(0,0,0,0.35)';for(let y=0;y<64;y+=4)x.fillRect(0,y,1024,2);});t.wrapS=THREE.RepeatWrapping;return t;};
+  const bt=[boardTex('GRAND TOURNAMENT','#ffd23a'),boardTex('FIGHT!','#ff3b2a'),boardTex('LUCID STATE CITY','#3fd8ff')];
+  const mkBoard=(w,x,z,ry,k)=>{const tex=bt[k].clone();tex.needsUpdate=true;tex.repeat.set(w/6,1);const b=new THREE.Mesh(new THREE.BoxGeometry(w,0.7,0.15),[B(0x111111),B(0x111111),B(0x111111),B(0x111111),new THREE.MeshBasicMaterial({map:tex}),B(0x111111)]);
+    b.position.set(x,0.35,z);b.rotation.y=ry;g.add(b);boards.push(tex);};
+  mkBoard(FW+1.2,0,-FD/2-0.55,0,0);mkBoard(FD+0.6,-FW/2-0.6,0,Math.PI/2,1);mkBoard(FD+0.6,FW/2+0.6,0,-Math.PI/2,2);
+  // ringside bleachers (left, right, back) packed with fans
+  const seats=[];const mkBleach=(cx,cz,ry,w,rows)=>{const st=new THREE.Group();st.position.set(cx,0,cz);st.rotation.y=ry;g.add(st);
+    for(let r=0;r<rows;r++){const s=new THREE.Mesh(new THREE.BoxGeometry(w,0.55,0.8),B(r%2?0x2a2634:0x34303e));s.position.set(0,0.27+r*0.55,-r*0.8);st.add(s);
+      const front=new THREE.Mesh(new THREE.BoxGeometry(w,0.06,0.04),B(0xffd23a));front.position.set(0,0.56+r*0.55,-r*0.8+0.4);st.add(front);
+      for(let k=0;k<Math.floor(w/0.55);k++)seats.push({st,x:-w/2+0.28+k*0.55,y:0.55+r*0.55,z:-r*0.8-0.1,o:Math.random()*6,c:Math.random()});}
+    return st;};
+  mkBleach(-FW/2-1.4,0.2,Math.PI/2,FD+1,6);mkBleach(FW/2+1.4,0.2,-Math.PI/2,FD+1,6);mkBleach(0,-FD/2-1.3,0,FW+1.5,4);
+  const inst=new THREE.InstancedMesh(new THREE.BoxGeometry(0.34,0.6,0.24),new THREE.MeshBasicMaterial({color:0xffffff}),seats.length);
+  const fanCols=[0xff3b2a,0xffd23a,0x3fa8ff,0xffffff,0xff8a1a,0xc77dff,0x9dff3a,0x2a2a34,0xe8b890,0x8a5a3a];seats.forEach((s,i)=>inst.setColorAt(i,new THREE.Color(fanCols[i%fanCols.length]).multiplyScalar(0.6+s.c*0.4)));g.add(inst);
+  // fans holding signs + glow sticks
+  const signs=[];['GO!','KO!','#1','WOW','LSC','FIGHT'].forEach((w,i)=>{const tx=canvasTex(128,72,(x)=>{x.fillStyle=['#fff','#ffd23a','#ff3b2a','#3fa8ff','#fff','#ff8a1a'][i];x.fillRect(0,0,128,72);x.fillStyle='#111';x.font='bold 40px Impact, "Arial Black", sans-serif';x.textAlign='center';x.fillText(w,64,52);});
+    const sg=new THREE.Mesh(new THREE.PlaneGeometry(0.7,0.4),new THREE.MeshBasicMaterial({map:tx,side:THREE.DoubleSide}));sg.userData={s:seats[Math.floor(Math.random()*seats.length)],o:i};g.add(sg);signs.push(sg);});
+  const dummy=new THREE.Object3D(),v=new THREE.Vector3();
+  // pyro cannons on the four corners + flame jets behind the back board
+  [[-FW/2-0.2,FD/2+0.2],[FW/2+0.2,FD/2+0.2],[-FW/2-0.2,-FD/2-0.2],[FW/2+0.2,-FD/2-0.2],[-2.5,-FD/2-0.55],[2.5,-FD/2-0.55]].forEach(([x,z])=>{const cn=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.3,0.6,10),B(0x1a1a1e));cn.position.set(x,0.3,z);g.add(cn);
+    const jet=[];for(let k=0;k<6;k++){const f=flameSprite(k%2?0xffd23a:0xff4a1a,x,0.7+k*0.7,z,1.2,1.4);f.visible=false;g.add(f);jet.push(f);}pyros.push(jet);});
+  // sweeping spotlight cones
+  [[-3,0xffffff],[3,0xffd23a],[0,0xff5a3a]].forEach(([x,c],i)=>{const sw=new THREE.Mesh(new THREE.ConeGeometry(1.6,9,18,1,true),B(c,Object.assign({opacity:.08,side:THREE.DoubleSide},ADD)));sw.geometry.translate(0,-4.5,0);sw.position.set(x,9,1);g.add(sw);sweeps.push(sw);});
+  // floor-break cracks
+  const crT=canvasTex(512,512,(x)=>{x.strokeStyle='#ffb020';x.lineWidth=7;x.shadowColor='#ff5a00';x.shadowBlur=18;for(let k=0;k<12;k++){let px=256,py=256,a=k/12*Math.PI*2;x.beginPath();x.moveTo(px,py);for(let s=0;s<9;s++){a+=(Math.random()-.5)*0.9;px+=Math.cos(a)*28;py+=Math.sin(a)*28;x.lineTo(px,py);}x.stroke();}});
+  const crack=new THREE.Mesh(new THREE.PlaneGeometry(11,11),new THREE.MeshBasicMaterial({map:crT,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));crack.rotation.x=-Math.PI/2;crack.position.y=0.03;g.add(crack);
+  const pal=[[0xff3b2a,0x3a0a0a],[0xffd23a,0x3a2a0a],[0x3fa8ff,0x0a1a3a]];let mode=0;
   g.userData.anim=(t)=>{
-    const wa=now-winT,ra=now-roundStart;const breaking=wa>=0&&wa<4.2;
-    tiles.forEach(tl=>{const u=tl.userData;if(breaking&&wa>0.5+u.d*0.05){const k=wa-0.5-u.d*0.05;if(wa<2.6){tl.position.set(u.x,-0.15-k*k*3.5,u.z);tl.rotation.set(u.rx*k,0,u.rz*k);}else{const r=Math.min(1,(wa-2.6)/1.4);tl.position.set(u.x,-0.15-(1-r)*12,u.z);tl.rotation.set(u.rx*(1-r)*2,0,u.rz*(1-r)*2);}}
-      else{tl.position.set(u.x,-0.15,u.z);tl.rotation.set(0,0,0);}});
-    crack.material.opacity=breaking?Math.max(0,1-Math.abs(wa-0.4)*1.5):0;lava.visible=lavaGlow.visible=breaking;if(breaking)lava.material.color.setHSL(0.05+0.03*Math.sin(t*6),1,0.55);
-    const fire=(ra>=0&&ra<1.8)||(wa>=0&&wa<2)||((t%14)<1.2);
-    pyros.forEach((p,i)=>{if(p.base){const k=0.85+0.15*Math.sin(t*12+i);p.fl.scale.set(0.9*k,1.4*k,1);return;}
-      p.jet.forEach((f,k)=>{f.visible=fire;if(fire){const s=1+Math.sin(t*30+k+i)*0.25;f.scale.set(1.2*s+k*0.15,1.4*s+k*0.2,1);f.position.y=0.4+k*0.75+Math.sin(t*20+k)*0.08;}});});
-    embers.forEach(e=>{const u=e.userData,ph=(t*0.3+u.o)%1;e.position.set(Math.cos(u.a)*u.r,ph*6,Math.sin(u.a)*u.r);e.material.opacity=1-ph;});};
+    const wa=now-winT,ra=now-roundStart;const breaking=wa>=0&&wa<4.4;const hype=(ra>=0&&ra<3.2)||(wa>=0&&wa<4)?1:0;
+    if(Math.floor(t/6)%3!==mode)mode=Math.floor(t/6)%3;
+    tiles.forEach(tl=>{const u=tl.userData;let k;
+      if(mode===0)k=0.5+0.5*Math.sin(u.d*1.6-t*4);else if(mode===1)k=0.5+0.5*Math.sin(u.x*1.2+t*3);else k=((u.i+u.j+Math.floor(t*3))%2)?1:0.15;
+      if(hype)k=0.5+0.5*Math.sin(u.d*3-t*12);
+      const [a,b]=u.x<0?pal[0]:pal[2];const c=tl.material.color;c.setHex(b);c.lerp(new THREE.Color(Math.abs(u.x)<1.2?pal[1][0]:a),k*0.75);
+      if(breaking&&wa>0.5+u.d*0.05){const q=wa-0.5-u.d*0.05;if(wa<2.8){tl.position.set(u.x,-0.125-q*q*3.5,u.z);tl.rotation.set(u.rx*q,0,u.rz*q);}else{const r=Math.min(1,(wa-2.8)/1.5);tl.position.set(u.x,-0.125-(1-r)*12,u.z);tl.rotation.set(u.rx*(1-r)*2,0,u.rz*(1-r)*2);}}
+      else{tl.position.set(u.x,-0.125,u.z);tl.rotation.set(0,0,0);}});
+    crest.visible=!breaking;g.userData.grout.visible=!breaking;crack.material.opacity=breaking?Math.max(0,1-Math.abs(wa-0.4)*1.5):0;lava.visible=lavaGlow.visible=breaking;if(breaking)lava.material.color.setHSL(0.05+0.03*Math.sin(t*6),1,0.55);
+    boards.forEach((b,i)=>{b.offset.x=-t*0.12*(i%2?1:-1);});
+    seats.forEach((s,i)=>{const jump=Math.max(0,Math.sin(t*(hype?10:5)+s.o*3))*(hype?0.35:0.12);v.set(s.x,s.y+0.3+jump,s.z);s.st.localToWorld(v);g.worldToLocal(v);dummy.position.copy(v);dummy.rotation.set(0,s.st.rotation.y,Math.sin(t*3+s.o)*0.12);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);});inst.instanceMatrix.needsUpdate=true;
+    signs.forEach(sg=>{const s=sg.userData.s;v.set(s.x,s.y+1.0+Math.abs(Math.sin(t*4+sg.userData.o))*0.25,s.z+0.05);s.st.localToWorld(v);g.worldToLocal(v);sg.position.copy(v);sg.rotation.set(0,s.st.rotation.y,Math.sin(t*3+sg.userData.o)*0.25);});
+    const fire=hype||((t%12)<1.0);pyros.forEach((jet,i)=>jet.forEach((f,k)=>{f.visible=fire;if(fire){const sc=1+Math.sin(t*30+k+i)*0.25;f.scale.set(1.2*sc+k*0.15,1.4*sc+k*0.2,1);}}));
+    sweeps.forEach((s,i)=>{s.rotation.z=Math.sin(t*(hype?2:0.6)+i*2)*0.55;s.rotation.x=Math.cos(t*(hype?1.7:0.5)+i)*0.35;s.material.opacity=hype?0.14:0.07;});};
+  g.updateMatrixWorld(true);if(inst.instanceColor)inst.instanceColor.needsUpdate=true;
   return g;
 }
 ringBuilders.tourney=buildTourneyRing;padCols.tourney=0x2a2630;FULLSETS.push('tourney');
