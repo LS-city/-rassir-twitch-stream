@@ -788,7 +788,7 @@ function buildBeach(){
   function palm(x,z,h,lean){const p=new THREE.Group();let px=0,py=0;for(let i=0;i<8;i++){const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.16-i*0.01,0.2-i*0.01,h/8,7),trunkM);px+=lean*i*0.05;seg.position.set(px,py+h/16,0);seg.rotation.z=-lean*0.12*i/8;p.add(seg);py+=h/8;}
     for(let k=0;k<7;k++){const leaf=new THREE.Mesh(new THREE.PlaneGeometry(3.2,0.55),leafM);leaf.position.set(px+Math.cos(k/7*Math.PI*2)*1.4,py-0.25,Math.sin(k/7*Math.PI*2)*1.4);leaf.rotation.y=-k/7*Math.PI*2;leaf.rotation.z=-0.45;p.add(leaf);}
     p.position.set(x,0,z);g.add(p);}
-  [[-13.5,1,7,1],[-11.5,-11,8,0.6],[19,4,6.5,-1],[21,-13,7.5,-0.7],[-17,-5,9,0.8],[22,-4,8.5,-0.9],[-16,7,6.5,0.6],[17,10,6.8,-0.5]].forEach(a=>palm(...a));
+  [[-13.5,1,7,1],[-11.5,-11,8,0.6],[19,4,6.5,-1],[21,-13,7.5,-0.7],[-27,1,9,0.8],[22,-4,8.5,-0.9],[-16,7,6.5,0.6],[17,10,6.8,-0.5]].forEach(a=>palm(...a));
   const tw=new THREE.Group();const wood=B(0xe8e0d0),red=B(0xff3b3b);
   [[-0.7,-0.7],[0.7,-0.7],[-0.7,0.7],[0.7,0.7]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,2.4,6),wood);l.position.set(x,1.2,z);tw.add(l);});
   const cab=new THREE.Mesh(new THREE.BoxGeometry(1.9,1.2,1.9),wood);cab.position.y=3;tw.add(cab);const rf=new THREE.Mesh(new THREE.ConeGeometry(1.6,0.7,4),red);rf.position.y=3.95;rf.rotation.y=Math.PI/4;tw.add(rf);
