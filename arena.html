@@ -40,6 +40,7 @@
     <label class="ck"><input type="checkbox" id="mirror"> Mirror cam</label>
   </div>
 
+  <div class="hint" style="margin-top:6px">Keys: C = next cam source, G = next gameplay source</div>
   <label class="t">Camera shot (keys 1-8)</label>
   <div class="shots" id="shots"></div>
   <div class="row"><label class="ck"><input type="checkbox" id="auto"> Auto-switch shots every 20s</label></div>
@@ -364,6 +365,18 @@ $('allow').onclick=async()=>{
   try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());await refreshDevices();setStatus('Cameras found. Pick one from the lists above (capture cards and OBS Virtual Camera show up too).');}
   catch(e){setStatus('Camera access was blocked: '+(e.message||e.name));}
 };
+async function cycleSource(id){
+  const sel=$(id==='game'?'srcGame':'srcCam');
+  if([...sel.options].every(o=>o.value==='demo'||o.value==='share'||/^dev\d+$/.test(o.value))){try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());}catch(e){}await refreshDevices();}
+  const opts2=[...sel.options].filter(o=>o.value!=='share');if(!opts2.length)return;
+  const i=opts2.findIndex(o=>o.value===sel.value);const next=opts2[(i+1)%opts2.length];
+  sel.value=next.value;setStatus((id==='game'?'Gameplay':'Live cam')+': '+next.textContent);await setSource(id,next.value);
+}
+async function pickByName(id,q){
+  if(!q)return;try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());}catch(e){}await refreshDevices();
+  const sel=$(id==='game'?'srcGame':'srcCam');const o=[...sel.options].find(o=>o.textContent.toLowerCase().includes(q.toLowerCase()));
+  if(o){sel.value=o.value;await setSource(id,o.value);}else setStatus('No camera matching "'+q+'"');
+}
 $('srcGame').onchange=e=>setSource('game',e.target.value);
 $('srcCam').onchange=e=>setSource('cam',e.target.value);
 
@@ -507,6 +520,8 @@ addEventListener('keydown',e=>{
   else if(k==='t')$('testAlert').onclick();
   else if(k==='q')declareWin(0);
   else if(k==='e')declareWin(1);
+  else if(k==='c')cycleSource('cam');
+  else if(k==='g')cycleSource('game');
   else if(k>='1'&&k<='8')setShot(shotKeys[+k-1]);
 });
 if(params.get('hideui')==='1')togglePanel();
@@ -565,6 +580,8 @@ function loop(){
 refreshDevices().then(async()=>{
   for(const id of ['game','cam']){const saved=store.get('src_'+id,'demo');const sel=$(id==='game'?'srcGame':'srcCam');
     if(saved!=='demo'&&[...sel.options].some(o=>o.value===saved)){sel.value=saved;setSource(id,saved);}}
+  if(params.get('game'))await pickByName('game',params.get('game'));
+  if(params.get('cam'))await pickByName('cam',params.get('cam'));
 });
 const startChan=params.get('channel')||store.get('chan','');
 if(startChan)connectChat(startChan);
