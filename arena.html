@@ -211,6 +211,7 @@ function building(x,z,w,h,d,parent,pal,dens){
   const wc=document.createElement('canvas');wc.width=64;wc.height=160;const wx=wc.getContext('2d');wx.fillStyle='#0a0816';wx.fillRect(0,0,64,160);
   for(let yy=4;yy<160;yy+=8)for(let xx=4;xx<64;xx+=8)if(rnd()<dens){wx.fillStyle=pal[Math.floor(rnd()*pal.length)];wx.globalAlpha=0.3+rnd()*0.5;wx.fillRect(xx,yy,4,4);}
   const f=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(wc)}));f.position.set(x,h/2-30,z+d/2+0.02);parent.add(f);
+  f.userData.box=m;f.userData.night=f.material.map;f.userData.wh=[w,h];
   return f;
 }
 const skyNeon=new THREE.Group();scene.add(skyNeon);
@@ -1763,7 +1764,15 @@ function applyTheme(name){
   retextPlane(sign,T.sign1,T.a1,120);retextPlane(sign2,T.sign2,T.a2,110);
   drawLogo(T.glyph);
   skyNeon.visible=T.sky==='neon';skyRuin.visible=T.sky==='ruins';
-  bigFaces.forEach(f=>f.material.color.set(T.tint));
+  bigFaces.forEach(f=>{f.material.color.set(T.tint);const day=T.decor==='monster';
+    if(day){if(!f.userData.day){const [w,h]=f.userData.wh;f.userData.day=canvasTex(256,1024,(x)=>{x.fillStyle='#e8ecf2';x.fillRect(0,0,256,1024);
+        for(let y=0;y<1024;y+=64){x.fillStyle=(y/64)%2?'#d8261a':'#2a5ad8';x.fillRect(0,y,256,10);}
+        x.fillStyle='#9ab8d8';for(let y=24;y<1024;y+=64)for(let xx=16;xx<256;xx+=40)x.fillRect(xx,y,26,28);
+        x.fillStyle='#c8ccd4';x.fillRect(0,0,14,1024);x.fillRect(242,0,14,1024);});
+        f.userData.dayBox=new THREE.MeshBasicMaterial({color:0xc8ccd6});}
+      f.material.map=f.userData.day;f.userData.box.material=f.userData.dayBox;f.material.color.set(0xffffff);}
+    else{f.material.map=f.userData.night;f.userData.box.material=towerMat;}
+    f.material.needsUpdate=true;});
   rainLines.visible=T.weather==='rain';particles.visible=T.weather!=='rain'&&T.weather!=='none';
   ppMat.color.set({sparkle:0xffd59a,ash:0x9a9aa0,embers:0xff8a2a}[T.weather]||0xffffff);ppMat.size=T.weather==='ash'?0.07:0.09;
   antenna.visible=beacon.visible=!['horror','beach','nightcity','galaxy','heroes','tourney','monster'].includes(T.decor);
