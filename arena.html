@@ -906,7 +906,8 @@ $('twLogin').onclick=twLogin;$('twLogout').onclick=twLogout;
 twInit();
 if(inOBS&&!isControl&&bc&&!twTok){try{bc.postMessage({cmd:'needtoken',data:{}});}catch(e){}}
 
-refreshDevices().then(async()=>{
+(async()=>{if(!isControl&&(store.get('src_game','demo')!=='demo'||store.get('src_cam','demo')!=='demo'||inOBS)){try{const st=await navigator.mediaDevices.getUserMedia({video:true});st.getTracks().forEach(t=>t.stop());}catch(e){}}return refreshDevices();})().then(async()=>{
+  if(inOBS&&!isControl&&store.get('src_game','demo')==='demo'&&!params.get('game')){await pickByName('game','OBS Virtual Camera');}
   for(const id of ['game','cam']){const saved=store.get('src_'+id,'demo');const sel=$(id==='game'?'srcGame':'srcCam');
     if(saved!=='demo'&&[...sel.options].some(o=>o.value===saved)){sel.value=saved;setSource(id,saved);}}
   if(params.get('game'))await pickByName('game',params.get('game'));
