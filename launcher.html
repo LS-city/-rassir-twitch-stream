@@ -3,10 +3,11 @@
 <style>html,body{margin:0;background:transparent;color:#fff;font:16px monospace}</style></head>
 <body>
 <script>
-// Always opens the newest version of the arena, so OBS never needs a new link.
+// Always opens the newest version of the arena (or ?world=city for Lucid State City), so OBS never needs a new link.
 (async()=>{
   const q=location.search;
-  const go=sha=>location.replace('https://raw.githack.com/LS-city/-rassir-twitch-stream/'+sha+'/arena.html'+q);
+  const page=new URLSearchParams(q).get('world')==='city'?'city.html':'arena.html';
+  const go=sha=>location.replace('https://raw.githack.com/LS-city/-rassir-twitch-stream/'+sha+'/'+page+q);
   try{
     const r=await fetch('https://api.github.com/repos/LS-city/-rassir-twitch-stream/commits/main',{cache:'no-store'});
     const j=await r.json();
