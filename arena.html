@@ -99,6 +99,7 @@
   <label class="t">Stream show (intro / BRB / outro)</label>
   <div class="row"><select id="showLen" style="flex:1"><option value="60">1 min countdown</option><option value="180">3 min countdown</option><option value="300">5 min countdown</option><option value="600">10 min countdown</option></select><button id="showStart">Start intro</button></div>
   <div class="row"><button id="showBrb">BRB</button><button id="showLive">Back live</button><button id="showOutro">End stream</button></div>
+  <div class="row"><label class="ck"><input type="checkbox" id="showMusic"> Show music</label><input type="range" id="musicVol" min="0" max="100" step="5" style="flex:1"></div>
   <div class="row"><label class="ck"><input type="checkbox" id="scAuto"> Switch OBS scenes automatically</label></div>
   <div class="hint" style="margin:2px 0">Intro / BRB / main scene names in OBS:</div>
   <div class="row" style="margin-top:0"><input id="scIntro" style="flex:1;min-width:0"><input id="scBrb" style="flex:1;min-width:0"><input id="scMain" style="flex:1;min-width:0"></div>
@@ -2822,13 +2823,13 @@ const showP=new THREE.Vector3(),showT=new THREE.Vector3(),wideP=new THREE.Vector
 function obsScene(n){if(!autoScene||!inOBS||!n||!window.obsstudio||!window.obsstudio.setCurrentScene)return;try{window.obsstudio.setCurrentScene(n);}catch(e){}}
 function startShow(mode,len,fromObs){
   if(isControl){remote('show',{mode,len});return;}
-  const prev=SHOW.mode;SHOW.mode=mode;SHOW.t0=now;
+  const prev=SHOW.mode;SHOW.mode=mode;SHOW.t0=now;musInit();
   if(mode==='intro'){SHOW.len=len||SHOW.len;SHOW.end=now+SHOW.len;store.set('introLen',SHOW.len);if(!fromObs)obsScene(introScene);}
   if(mode==='brb'&&!fromObs)obsScene(brbScene);
-  if(mode==='live'){if(prev==='intro'){landLive();}else if(prev==='brb'){SHOW.mode='return';SHOW.t0=now;}if(!fromObs)obsScene(mainScene);}
+  if(mode==='live'){if(prev==='intro'){landLive();}else if(prev==='brb'){SHOW.mode='return';SHOW.t0=now;MUS.landT=now;}if(!fromObs)obsScene(mainScene);}
   if(mode==='outro'){SHOW.tops=topXP(5).map(e=>e.name);if(!SHOW.tops.length)SHOW.tops=[...crowd.values()].slice(0,5).map(v=>v.name);}
   setStatus({intro:'Intro running',brb:'BRB mode',outro:'Outro running',live:'Live'}[mode]||'');}
-function landLive(){SHOW.mode='live';showG.visible=false;showOv.style.display='none';restoreShowWorld();
+function landLive(){SHOW.mode='live';if(MUS.lastSec!=='land')MUS.landT=now;showG.visible=false;showOv.style.display='none';restoreShowWorld();
   winText="WE'RE LIVE!";winCol=T.a1;winT=now;roundPhase='';burst(0,8,-6,160,7,['#ffd23a','#ff4fd8','#3ff5ff','#ffffff'],true);
   for(let k=0;k<5;k++)setTimeout(()=>burst((Math.random()-.5)*18,10+Math.random()*4,-8,90,6,['#ffd166','#ff4fd8','#3ff5ff','#ffffff'],false),k*300);
   avReact('excited','wave',6);crowd.forEach(v=>v.jump=now);}
@@ -2863,6 +2864,79 @@ function showTick(t){
     const k=ease(a/22);const o=t*0.02;showP.copy(wideP).lerp(V3(Math.sin(o)*70,320,80+Math.cos(o)*70),k);showT.copy(wideT).lerp(V3(0,GROUND,30),Math.min(1,k*1.4));return true;}
   return false;}
 function showFog(){if(SHOW.mode==='live')return;scene.fog.near=200;scene.fog.far=1300;}
+// ---------- Show music: original synthwave score that follows the intro / BRB / outro ----------
+const MUS={ctx:null,on:store.get('showMusic')!==false,vol:+(store.get('musicVol')??70)/100,step:0,next:0,timer:null,sec:'off',landT:-99,lastSec:'off',fade:0};
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+const PROG={main:[[57,60,64,69],[53,57,60,65],[55,60,64,67],[55,59,62,67]],chill:[[53,57,60,64],[52,55,59,64],[50,53,57,60],[57,60,64,67]],outro:[[53,57,60,65],[55,59,62,67],[57,60,64,69],[57,60,64,69]]};
+const ROOT={main:[33,29,36,31],chill:[29,28,26,33],outro:[29,31,33,33]};
+function musInit(){if(MUS.ctx||isControl)return;try{
+  const c=new (window.AudioContext||window.webkitAudioContext)();MUS.ctx=c;
+  const comp=c.createDynamicsCompressor();comp.threshold.value=-16;comp.ratio.value=6;comp.attack.value=0.002;comp.connect(c.destination);
+  MUS.master=c.createGain();MUS.master.gain.value=0;MUS.master.connect(comp);
+  // reverb
+  const len=c.sampleRate*2.6,ir=c.createBuffer(2,len,c.sampleRate);for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.4);}
+  MUS.verb=c.createConvolver();MUS.verb.buffer=ir;const vg=c.createGain();vg.gain.value=0.55;MUS.verb.connect(vg);vg.connect(MUS.master);
+  // ping-pong-ish delay for the arp
+  MUS.dly=c.createDelay(1);MUS.dly.delayTime.value=60/100*0.75;const fb=c.createGain();fb.gain.value=0.38;const dlp=c.createBiquadFilter();dlp.type='lowpass';dlp.frequency.value=2600;
+  MUS.dly.connect(dlp);dlp.connect(fb);fb.connect(MUS.dly);const dg=c.createGain();dg.gain.value=0.5;dlp.connect(dg);dg.connect(MUS.master);dg.connect(MUS.verb);
+  const nb=c.createBuffer(1,c.sampleRate*2,c.sampleRate),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;MUS.noise=nb;
+  MUS.next=c.currentTime+0.1;MUS.timer=setInterval(musSched,25);
+}catch(e){console.warn('music',e);}}
+const BPM=100,SPB=60/BPM/4; // seconds per 16th
+function out(node,dry,wet){node.connect(MUS.master);if(dry!==undefined){}const s=MUS.ctx.createGain();s.gain.value=wet||0;node.connect(s);s.connect(MUS.verb);}
+function env(g,t,a,peak,dec,sus,rel,len){g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(peak,t+a);g.gain.setTargetAtTime(peak*sus,t+a,dec);g.gain.setTargetAtTime(0.0001,t+len,rel);}
+function vPad(notes,t,len,lvl,cut){const c=MUS.ctx;const f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=cut;f.Q.value=0.7;const g=c.createGain();env(g,t,0.9,lvl,1,1,0.9,len);f.connect(g);out(g,1,0.7);
+  notes.forEach(n=>[-7,7].forEach(dt=>{const o=c.createOscillator();o.type='sawtooth';o.frequency.value=mtof(n);o.detune.value=dt;o.connect(f);o.start(t);o.stop(t+len+4);}));}
+function vArp(n,t,lvl,cut){const c=MUS.ctx;const o=c.createOscillator();o.type='square';o.frequency.value=mtof(n);const f=c.createBiquadFilter();f.type='lowpass';f.Q.value=6;
+  f.frequency.setValueAtTime(cut*2.2,t);f.frequency.exponentialRampToValueAtTime(Math.max(200,cut*0.5),t+0.18);const g=c.createGain();env(g,t,0.004,lvl,0.06,0.3,0.05,0.16);
+  o.connect(f);f.connect(g);out(g,1,0.25);const s=c.createGain();s.gain.value=0.6;g.connect(s);s.connect(MUS.dly);o.start(t);o.stop(t+0.6);}
+function vBass(n,t,lvl,cut){const c=MUS.ctx;const o=c.createOscillator();o.type='sawtooth';o.frequency.value=mtof(n);const o2=c.createOscillator();o2.type='square';o2.frequency.value=mtof(n-12);
+  const f=c.createBiquadFilter();f.type='lowpass';f.Q.value=4;f.frequency.setValueAtTime(cut,t);f.frequency.exponentialRampToValueAtTime(120,t+0.2);const g=c.createGain();env(g,t,0.005,lvl,0.08,0.55,0.04,SPB*1.7);
+  o.connect(f);o2.connect(f);f.connect(g);out(g);o.start(t);o2.start(t);o.stop(t+0.6);o2.stop(t+0.6);}
+function vKick(t,lvl){const c=MUS.ctx;const o=c.createOscillator();o.type='sine';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+0.13);const g=c.createGain();g.gain.setValueAtTime(lvl,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.45);o.connect(g);out(g);o.start(t);o.stop(t+0.5);}
+function vNoise(t,len,type,freq,q,lvl,dec,wet){const c=MUS.ctx;const s=c.createBufferSource();s.buffer=MUS.noise;const f=c.createBiquadFilter();f.type=type;f.frequency.value=freq;f.Q.value=q;const g=c.createGain();g.gain.setValueAtTime(lvl,t);g.gain.exponentialRampToValueAtTime(0.001,t+dec);s.connect(f);f.connect(g);out(g,1,wet||0);s.start(t);s.stop(t+len);return f;}
+function vSnare(t,lvl){vNoise(t,0.4,'bandpass',1800,0.8,lvl,0.22,0.9);const c=MUS.ctx;const o=c.createOscillator();o.type='triangle';o.frequency.setValueAtTime(240,t);o.frequency.exponentialRampToValueAtTime(160,t+0.08);const g=c.createGain();g.gain.setValueAtTime(lvl*0.6,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.12);o.connect(g);out(g,1,0.4);o.start(t);o.stop(t+0.2);}
+function vHat(t,lvl,open){vNoise(t,0.3,'highpass',8000,0.5,lvl,open?0.18:0.04,0.15);}
+function vRiser(t,len,lvl){const c=MUS.ctx;const s=c.createBufferSource();s.buffer=MUS.noise;s.loop=true;const f=c.createBiquadFilter();f.type='bandpass';f.Q.value=3;f.frequency.setValueAtTime(300,t);f.frequency.exponentialRampToValueAtTime(7000,t+len);
+  const g=c.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(lvl,t+len);g.gain.setTargetAtTime(0.0001,t+len,0.05);s.connect(f);f.connect(g);out(g,1,0.6);s.start(t);s.stop(t+len+0.5);}
+function vImpact(t){vKick(t,1.1);vNoise(t,3,'highpass',3000,0.3,0.35,2.6,1);const c=MUS.ctx;const o=c.createOscillator();o.type='sine';o.frequency.setValueAtTime(70,t);o.frequency.exponentialRampToValueAtTime(30,t+2);const g=c.createGain();g.gain.setValueAtTime(0.7,t);g.gain.exponentialRampToValueAtTime(0.001,t+2.2);o.connect(g);out(g,1,0.5);o.start(t);o.stop(t+2.3);}
+function musSection(){const m=SHOW.mode;
+  if(m==='intro'){const R=SHOW.end-now;return R>45?'space':R>32?'dive':R>12?'street':R>4?'climb':'hold';}
+  if(m==='live')return now-MUS.landT<7?'land':'off';
+  if(m==='brb')return 'chill';if(m==='return')return 'land';if(m==='outro')return 'outro';return 'off';}
+function musSched(){const c=MUS.ctx;if(!c)return;if(c.state==='suspended')c.resume();
+  const sec=musSection();
+  if(sec!==MUS.lastSec){const t0=Math.max(c.currentTime,MUS.next);
+    if(sec==='dive')vRiser(t0,12,0.22);
+    if(sec==='climb')vRiser(t0,8,0.3);
+    if(sec==='land'&&(MUS.lastSec==='hold'||MUS.lastSec==='climb'||MUS.lastSec==='chill')){vImpact(t0);const p=PROG.main[0];vPad(p.concat([p[0]+12]),t0,3,0.07,2400);}
+    if(MUS.lastSec==='off'&&sec!=='off'){MUS.step=0;MUS.next=c.currentTime+0.05;}
+    MUS.lastSec=sec;}
+  // master level: fade out after landing, silence when off
+  let tgt=MUS.on?MUS.vol*0.45:0;if(sec==='off')tgt=0;if(sec==='land')tgt*=Math.max(0,1-(now-MUS.landT-1.5)/5);
+  MUS.master.gain.setTargetAtTime(tgt,c.currentTime,sec==='off'?0.6:0.15);
+  if(sec==='off'){MUS.next=c.currentTime+0.05;return;}
+  while(MUS.next<c.currentTime+0.15){musStep(sec,MUS.step,MUS.next);MUS.step++;MUS.next+=SPB;}}
+function musStep(sec,s,t){const b=s%16,bar=Math.floor(s/16)%4;
+  const key=sec==='chill'?'chill':sec==='outro'?'outro':'main';const ch=PROG[key][bar],rt=ROOT[key][bar];
+  const R=SHOW.mode==='intro'?SHOW.end-now:0;
+  // how open the filters are (rises through the dive and climb)
+  let cut={space:700,dive:700+Math.min(1,(45-R)/13)*1500,street:2400,climb:2400+Math.min(1,(12-R)/8)*2600,hold:4000,land:3000,chill:1100,outro:900}[sec]||1200;
+  if(b===0)vPad(ch,t,SPB*16,sec==='hold'?0.06:0.045,sec==='space'||sec==='outro'?900:Math.min(cut,2600));
+  const arpN=[0,1,2,3,2,1,0,1].map(i=>ch[i%ch.length]+12);
+  if(sec==='space'||sec==='outro'){if(b%4===0)vArp(arpN[(b/4+bar)%8]+(b%8===0?0:12),t,0.05,cut);return;}
+  if(sec==='chill'){if(b%2===0)vArp(arpN[(b/2)%8],t,0.045,cut);if(b===0||b===10)vKick(t,0.5);if(b===8)vSnare(t,0.18);if(b%4===2)vHat(t,0.05,false);if(b%4===0)vBass(rt+12,t,0.12,500);return;}
+  if(sec==='land'){if(b%2===0)vArp(arpN[(b/2)%8]+12,t,0.05,3000);return;}
+  if(sec==='hold'){if(b%2===0)vArp(arpN[(b/2)%8]+12,t,0.06,cut);return;}
+  // dive / street / climb
+  vArp(arpN[b%8]+(b%16>=8?12:0),t,sec==='dive'?0.045:0.06,cut);
+  if(sec==='dive'){if(b%8===4)vHat(t,0.05,true);if(b%4===0)vBass(rt+12,t,0.08,300+cut*0.2);return;}
+  if(b%4===0)vKick(t,0.9);if(b===4||b===12)vSnare(t,0.32);vHat(t,b%4===2?0.1:0.04,b%4===2);
+  const bp=[0,0,12,0,0,12,0,12];vBass(rt+bp[b%8],t,0.16,400+cut*0.25);
+  if(sec==='climb'){const k=Math.min(1,(12-R)/8);if(k>0.5&&b%(k>0.8?1:2)===0)vSnare(t,0.08+k*0.12);}}
+$('showMusic').checked=MUS.on;$('musicVol').value=Math.round(MUS.vol*100);
+const musSave=()=>{MUS.on=$('showMusic').checked;MUS.vol=+$('musicVol').value/100;store.set('showMusic',MUS.on);store.set('musicVol',Math.round(MUS.vol*100));remote('music',{on:MUS.on,vol:MUS.vol});};
+$('showMusic').onchange=musSave;$('musicVol').oninput=musSave;
 // OBS scene changes drive the show too
 window.addEventListener('obsSceneChanged',e=>{if(isControl)return;const n=e.detail&&e.detail.name;if(!n)return;
   if(n===introScene&&SHOW.mode!=='intro')startShow('intro',SHOW.len,true);
@@ -2914,6 +2988,7 @@ function applyRemote(cmd,d){
   else if(cmd==='pip')setPip(d.pos,d.size,true);
   else if(cmd==='expr')setExpr(d.e,true);
   else if(cmd==='show')startShow(d.mode,d.len);
+  else if(cmd==='music'){MUS.on=d.on;MUS.vol=d.vol;}
   else if(cmd==='scenes'){introScene=d.introScene;brbScene=d.brbScene;mainScene=d.mainScene;autoScene=d.autoScene;['introScene','brbScene','mainScene','autoScene'].forEach(k=>store.set(k,d[k]));}
   else if(cmd==='avspot')setAvSpot(d.v,true);
   else if(cmd==='trophies'){trophies=d.list||[];trophyOn=d.on!==false;store.set('trophies',trophies);store.set('trophyOn',trophyOn);renderTrophyList();applyTrophyVis();if(d.spot&&!isControl){trophyOn=true;applyTrophyVis();dirCut('trophy',6,5);if(!opts.director)setShot('trophy');avReact('excited',null,4);burst(7.9,7.5,-13.5,80,5,['#ffd23a','#ffffff','#fff1a8'],true);}}
