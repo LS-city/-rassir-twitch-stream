@@ -467,7 +467,19 @@ async function setVideo(screenName, deviceId) {
     const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = st; await v.play();
     const t = new THREE.VideoTexture(v); t.flipY = false; t.encoding = THREE.sRGBEncoding;
     setGroup(type, t);
-  } catch (e) { setStatus('That camera could not start here. In OBS, launch with --enable-media-stream.'); }
+    setStatus('Screen live: ' + (st.getVideoTracks()[0] || {}).label);
+  } catch (e) {
+    if (deviceId && e && (e.name === 'OverconstrainedError' || e.name === 'NotReadableError')) {     // retry with no size/fps asks: another source may already hold the device at its own size
+      try {
+        const st2 = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } }, audio: false });
+        streams[screenName] = st2;
+        const v2 = document.createElement('video'); v2.muted = true; v2.playsInline = true; v2.srcObject = st2; await v2.play();
+        const t2 = new THREE.VideoTexture(v2); t2.flipY = false; t2.encoding = THREE.sRGBEncoding; setGroup(type, t2);
+        setStatus('Screen live: ' + (st2.getVideoTracks()[0] || {}).label); return;
+      } catch (e2) { e = e2; }
+    }
+    setStatus('Camera could not start: ' + (e && e.name) + (e && e.message ? ' (' + e.message + ')' : '') + '. If another source uses it, it can only show in one place.');
+  }
 }
 async function findCams() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('Cameras are off in this browser. In OBS, start it from the shortcut with --enable-media-stream.'); return false; }
