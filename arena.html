@@ -626,7 +626,8 @@ const THEMES={
   tourney:{name:'Grand Tournament',bg:0x07050c,fog:0x1a0a10,near:40,far:150,a1:'#ff3b2a',a2:'#ffd23a',a3:'#ff8a1a',a4:'#ff3b3b',a5:'#c77dff',roof:0x14121a,edge:0x4a2a1a,grid:null,glyph:'cross',sign1:'LUCID STATE CITY',sign2:'GRAND TOURNAMENT',weather:'embers',sky:'none',spot:0xffe0b0,tint:0x8a7070,decor:'tourney'},
   monster:{name:'Monster Stadium',bg:0x7ac0f0,fog:0xa8d8ff,near:50,far:190,a1:'#ff3b3b',a2:'#2a8aff',a3:'#ffd23a',a4:'#ff8a1a',a5:'#3ab83a',roof:0x3a8a3a,edge:0xd8dce4,grid:null,glyph:'cross',sign1:'LUCID STATE CITY',sign2:'MONSTER STADIUM',weather:'none',sky:'none',spot:0xffffff,tint:0xd8e8ff,decor:'monster'},
   nostalgia:{name:'Nostalgia',bg:0x120e24,fog:0x1a1430,near:40,far:120,a1:'#ff4fd8',a2:'#3ff5ff',a3:'#ffd23a',a4:'#ff8a1a',a5:'#9a5aff',roof:0x2a2a5a,edge:0x3a2a6a,grid:null,glyph:'cross',sign1:'LUCID STATE CITY',sign2:'NOSTALGIA',weather:'none',sky:'none',spot:0xffe8c0,tint:0xffffff,decor:'nostalgia'},
-  shooter:{name:'Warzone',bg:0x0b0906,fog:0x1a130c,near:22,far:110,a1:'#ff7a1a',a2:'#39ff88',a3:'#e8e14a',a4:'#ff3b3b',a5:'#9ad1ff',roof:0x18160f,edge:0x6b5a2a,grid:[0x3a3320,0x1d1a12],glyph:'cross',sign1:'LUCID STATE CITY',sign2:'WARZONE ARENA',weather:'embers',sky:'ruins',spot:0xffe2b0,tint:0x9a7050,decor:'shooter'}
+  shooter:{name:'Warzone',bg:0x0b0906,fog:0x1a130c,near:22,far:110,a1:'#ff7a1a',a2:'#39ff88',a3:'#e8e14a',a4:'#ff3b3b',a5:'#9ad1ff',roof:0x18160f,edge:0x6b5a2a,grid:[0x3a3320,0x1d1a12],glyph:'cross',sign1:'LUCID STATE CITY',sign2:'WARZONE ARENA',weather:'embers',sky:'ruins',spot:0xffe2b0,tint:0x9a7050,decor:'shooter'},
+  raccoon:{name:'Raccoon City',bg:0x0a0608,fog:0x150c10,near:30,far:150,a1:'#ff2a2a',a2:'#3fd0ff',a3:'#e8c41a',a4:'#ff8a1a',a5:'#7dff4a',roof:0x1c1b20,edge:0x3a3236,grid:null,glyph:'cross',sign1:'LUCID STATE CITY',sign2:'RACCOON CITY',weather:'rain',sky:'none',spot:0xffe0c0,tint:0x6a5050,decor:'raccoon'}
 };
 const themeKeys=Object.keys(THEMES);
 let theme='rooftop',T=THEMES.rooftop,gridObj=grid;
@@ -1886,6 +1887,166 @@ function buildNostalgiaRing(){
   return g;
 }
 ringBuilders.nostalgia=buildNostalgiaRing;padCols.nostalgia=0x2a2a5a;FULLSETS.push('nostalgia');
+// ---------- RACCOON CITY: zombie-outbreak city (for Resident Evil and survival horror) ----------
+function buildRaccoon(){
+  const g=new THREE.Group();const anim=[];const NF={fog:false};
+  // wet asphalt streets
+  const asph=canvasTex(512,512,(x)=>{x.fillStyle='#16151a';x.fillRect(0,0,512,512);for(let i=0;i<3000;i++){x.fillStyle=['#1e1d23','#121116','#24222a'][i%3];x.fillRect(Math.random()*512,Math.random()*512,2,2);}
+    x.fillStyle='#d8c23a';for(let y=0;y<512;y+=48)x.fillRect(250,y,5,26);x.fillStyle='rgba(120,130,160,0.10)';for(let i=0;i<14;i++){x.beginPath();x.ellipse(Math.random()*512,Math.random()*512,20+Math.random()*50,8+Math.random()*16,Math.random()*3,0,7);x.fill();}
+    x.fillStyle='rgba(90,10,10,0.45)';for(let i=0;i<5;i++){x.beginPath();x.ellipse(Math.random()*512,Math.random()*512,6+Math.random()*14,3+Math.random()*8,Math.random()*3,0,7);x.fill();}
+    x.fillStyle='#e8e4dc';x.globalAlpha=0.5;for(let i=0;i<6;i++){x.save();x.translate(Math.random()*512,Math.random()*512);x.rotate(Math.random()*3);x.fillRect(-8,-6,16,12);x.restore();}});
+  asph.wrapS=asph.wrapT=THREE.RepeatWrapping;asph.repeat.set(6,5);
+  const street=new THREE.Mesh(new THREE.PlaneGeometry(130,110),new THREE.MeshBasicMaterial({map:asph}));street.rotation.x=-Math.PI/2;street.position.set(0,0.012,-20);g.add(street);
+  // moon + mountains + clock tower on the skyline
+  const moon=new THREE.Mesh(new THREE.CircleGeometry(9,40),B(0xc84a3a,NF));moon.position.set(-45,62,-120);g.add(moon);
+  const moonGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:softTex,color:0xff4a2a,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));moonGlow.position.copy(moon.position);moonGlow.scale.set(60,60,1);g.add(moonGlow);
+  {const pts=[];for(let i=0;i<=40;i++){const x=-200+i*10;pts.push(new THREE.Vector2(x,20+Math.sin(i*0.7)*10+Math.sin(i*1.9)*6+(i%5)*2));}const sh=new THREE.Shape();sh.moveTo(-200,-20);pts.forEach(p=>sh.lineTo(p.x,p.y));sh.lineTo(200,-20);
+   const mt=new THREE.Mesh(new THREE.ShapeGeometry(sh),B(0x120a0e,NF));mt.position.set(0,0,-130);g.add(mt);}
+  // burning skyline (many buildings, some floors on fire)
+  const fireTex=canvasTex(64,128,(x)=>{x.fillStyle='#000';x.fillRect(0,0,64,128);for(let r=0;r<12;r++)for(let c=0;c<4;c++){const v=Math.random();x.fillStyle=v<0.08?'#ff6a1a':v<0.22?'#d8b070':'#120e10';x.globalAlpha=v<0.22?0.4+Math.random()*0.6:1;x.fillRect(4+c*15,4+r*10,10,6);}});
+  fireTex.wrapS=fireTex.wrapT=THREE.RepeatWrapping;const skyFires=[];
+  for(let i=0;i<22;i++){const x=-110+i*10+(Math.random()-.5)*4,z=-60-Math.random()*40,w=7+Math.random()*6,h=14+Math.random()*30;
+    const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,w),B(0x1a1216,NF));b.position.set(x,h/2-2,z);g.add(b);
+    const t=fireTex.clone();t.needsUpdate=true;t.repeat.set(Math.round(w/4),Math.round(h/7));const f=new THREE.Mesh(new THREE.PlaneGeometry(w*0.9,h*0.9),new THREE.MeshBasicMaterial({map:t,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));f.position.set(x,h/2-2,z+w/2+0.05);g.add(f);
+    if(i%3===0){const fl=flameSprite(0xff5a14,x,h-1,z+w/2,w*1.2,6);fl.material.fog=false;g.add(fl);skyFires.push(fl);}}
+  // clock tower (generic gothic clock tower with moving hands + bell glow)
+  const tower=new THREE.Group();{const stone=B(0x3a3236,NF),dark=B(0x241e22,NF);const base=new THREE.Mesh(new THREE.BoxGeometry(8,30,8),stone);base.position.y=15;tower.add(base);
+    const top=new THREE.Mesh(new THREE.BoxGeometry(6,8,6),dark);top.position.y=34;tower.add(top);const spire=new THREE.Mesh(new THREE.ConeGeometry(4.6,12,4),dark);spire.position.y=44;spire.rotation.y=Math.PI/4;tower.add(spire);
+    const face=new THREE.Mesh(new THREE.CircleGeometry(2.6,32),B(0xf0e2b0,NF));face.position.set(0,26,4.05);tower.add(face);
+    const hh=new THREE.Mesh(new THREE.BoxGeometry(0.25,1.5,0.05),B(0x111111,NF));hh.geometry.translate(0,0.75,0);hh.position.set(0,26,4.12);tower.add(hh);
+    const mh=new THREE.Mesh(new THREE.BoxGeometry(0.15,2.2,0.05),B(0x111111,NF));mh.geometry.translate(0,1.1,0);mh.position.set(0,26,4.14);tower.add(mh);
+    const bell=new THREE.Sprite(new THREE.SpriteMaterial({map:softTex,color:0xffb04a,transparent:true,opacity:0.6,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));bell.position.set(0,34,3.2);bell.scale.set(7,7,1);tower.add(bell);
+    tower.userData={hh,mh};}
+  tower.position.set(32,-2,-70);g.add(tower);
+  // pharma company HQ with a giant billboard (original brand: VEXA)
+  const hq=new THREE.Group();{const glass=canvasTex(64,128,(x)=>{x.fillStyle='#0c1418';x.fillRect(0,0,64,128);for(let r=0;r<16;r++)for(let c=0;c<4;c++){x.fillStyle=Math.random()<0.25?'#7ad8c8':'#10202a';x.fillRect(3+c*16,3+r*8,13,5);}});glass.wrapS=glass.wrapT=THREE.RepeatWrapping;glass.repeat.set(4,7);
+    const t=new THREE.Mesh(new THREE.BoxGeometry(16,46,12),[0,1,2,3,4,5].map(i=>i===2||i===3?B(0x101418,NF):new THREE.MeshBasicMaterial({map:glass,fog:false})));t.position.y=23;hq.add(t);
+    const logoT=canvasTex(512,256,(x)=>{x.fillStyle='#08100f';x.fillRect(0,0,512,256);x.strokeStyle='#3fffd0';x.lineWidth=10;x.shadowColor='#3fffd0';x.shadowBlur=20;
+      x.beginPath();for(let k=0;k<6;k++){const a=k/6*Math.PI*2+Math.PI/6;x.lineTo(110+Math.cos(a)*70,128+Math.sin(a)*70);}x.closePath();x.stroke();x.beginPath();x.moveTo(80,90);x.bezierCurveTo(150,110,70,150,140,168);x.stroke();
+      x.fillStyle='#e8fff8';x.font='bold 84px Impact,"Arial Black",sans-serif';x.fillText('VEXA',205,135);x.font='bold 28px monospace';x.fillStyle='#3fffd0';x.fillText('PHARMACEUTICALS',205,180);});
+    const lg=new THREE.Mesh(new THREE.PlaneGeometry(14,7),new THREE.MeshBasicMaterial({map:logoT,fog:false}));lg.position.set(0,41.5,6.05);hq.add(lg);
+    const bc=new THREE.Sprite(new THREE.SpriteMaterial({map:softTex,color:0xff2020,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));bc.position.y=46.8;bc.scale.set(4,4,1);hq.add(bc);hq.userData.bc=bc;}
+  hq.position.set(-34,-2,-58);g.add(hq);
+  // emergency broadcast ticker on a big screen
+  const tickT=canvasTex(2048,128,(x)=>{x.fillStyle='#200404';x.fillRect(0,0,2048,128);x.fillStyle='#ffd23a';x.font='bold 66px Impact,"Arial Black",sans-serif';x.textBaseline='middle';
+    x.fillText('EMERGENCY BROADCAST  //  CITY UNDER QUARANTINE  //  STAY INDOORS  //  EVACUATION POINT: CITY HALL  //  DO NOT APPROACH THE INFECTED  //  ',20,66);});
+  tickT.wrapS=THREE.RepeatWrapping;tickT.repeat.set(0.35,1);
+  const tick=new THREE.Mesh(new THREE.PlaneGeometry(15,1.5),new THREE.MeshBasicMaterial({map:tickT,fog:false}));tick.position.set(-34,36.6,-51.8);g.add(tick);
+  const tickFrame=new THREE.Mesh(new THREE.PlaneGeometry(15.6,2.1),B(0xff2020,NF));tickFrame.position.set(-34,36.6,-51.85);g.add(tickFrame);
+  // police station (neoclassical facade) behind the arena
+  const ps=new THREE.Group();{const st=B(0x4a443e),st2=B(0x3a3530);const body=new THREE.Mesh(new THREE.BoxGeometry(40,16,10),st);body.position.y=8;ps.add(body);
+    const ped=new THREE.Mesh(new THREE.CylinderGeometry(0.1,14,5,3),st2);ped.rotation.z=Math.PI/2;ped.rotation.y=Math.PI/2;ped.scale.set(1,1,0.35);ped.position.set(0,18.5,5.2);ps.add(ped);
+    for(let k=-5;k<=5;k++){const col=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.65,13,12),B(0x6a645a));col.position.set(k*3.4,6.5,6.2);ps.add(col);}
+    const steps=new THREE.Mesh(new THREE.BoxGeometry(30,1,4),st2);steps.position.set(0,0.5,8);ps.add(steps);
+    const signT=canvasTex(1024,128,(x)=>{x.fillStyle='#2a2622';x.fillRect(0,0,1024,128);x.fillStyle='#e8dcc0';x.font='bold 74px Georgia,serif';x.textAlign='center';x.textBaseline='middle';x.fillText('CITY POLICE DEPARTMENT',512,68);});
+    const sg=new THREE.Mesh(new THREE.PlaneGeometry(22,2.6),new THREE.MeshBasicMaterial({map:signT}));sg.position.set(0,14.4,5.3);ps.add(sg);
+    const winT=canvasTex(64,64,(x)=>{x.fillStyle='#151214';x.fillRect(0,0,64,64);x.fillStyle=Math.random()<0.5?'#ffcf7a':'#1a1412';x.fillRect(12,8,40,48);x.fillStyle='#2a2420';x.fillRect(30,8,4,48);x.fillRect(12,30,40,4);});
+    for(let k=-6;k<=6;k++){if(k===0)continue;const w=new THREE.Mesh(new THREE.PlaneGeometry(1.8,2.6),new THREE.MeshBasicMaterial({map:winT,color:Math.random()<0.5?0xffffff:0x553322}));w.position.set(k*3,9,5.05);ps.add(w);}}
+  ps.position.set(0,0,-42);g.add(ps);
+  // barricades, wrecks, fires
+  const fires=[];const addFire=(x,y,z,s)=>{const f=flameSprite(0xff6a14,x,y,z,1.6*s,2.4*s);g.add(f);fires.push(f);const sm=[];for(let k=0;k<5;k++){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:softTex,color:0x2a2426,transparent:true,opacity:0.4,depthWrite:false}));sp.userData={x,y,z,s,o:k/5};g.add(sp);sm.push(sp);}anim.push((t)=>sm.forEach(sp=>{const u=sp.userData,ph=(t*0.2+u.o)%1;sp.position.set(u.x+ph*1.5,u.y+ph*8*u.s,u.z);const sc=(1+ph*4)*u.s;sp.scale.set(sc,sc,1);sp.material.opacity=0.45*(1-ph);}));};
+  function police(x,z,ry,flip){const c=new THREE.Group();const blk=B(0x111114),wht=B(0xe8e8e8);const b1=new THREE.Mesh(new THREE.BoxGeometry(4.2,0.75,1.9),blk);b1.position.y=0.6;c.add(b1);const doors=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.76,1.92),wht);doors.position.set(0,0.6,0);c.add(doors);
+    const cab=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.65,1.7),blk);cab.position.set(-0.2,1.3,0);c.add(cab);const bar=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.15,1.2),B(0x222222));bar.position.set(-0.2,1.7,0);c.add(bar);
+    const r=flameSprite(0xff1a1a,-0.2,1.8,0.35,1.8,1.8),bl=flameSprite(0x1a4aff,-0.2,1.8,-0.35,1.8,1.8);c.add(r,bl);
+    [[-1.4,0.95],[1.4,0.95],[-1.4,-0.95],[1.4,-0.95]].forEach(([wx,wz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.38,0.38,0.25,10),B(0x0a0a0a));w.rotation.x=Math.PI/2;w.position.set(wx,0.38,wz);c.add(w);});
+    c.position.set(x,0,z);c.rotation.y=ry;if(flip){c.rotation.z=Math.PI*0.95;c.position.y=2.1;}g.add(c);anim.push((t)=>{const on=Math.floor(t*5)%2===0;r.visible=on;bl.visible=!on;});return c;}
+  police(-12.3,6.5,0.5,false);police(15.5,-14,-0.8,true);
+  {const amb=new THREE.Group();const w=B(0xeeeeea);const b=new THREE.Mesh(new THREE.BoxGeometry(4.6,2,2.1),w);b.position.y=1.25;amb.add(b);const s=new THREE.Mesh(new THREE.BoxGeometry(4.62,0.25,2.12),B(0xd01818));s.position.y=1.1;amb.add(s);
+   const cr=new THREE.Mesh(new THREE.PlaneGeometry(0.8,0.8),new THREE.MeshBasicMaterial({map:canvasTex(64,64,(x)=>{x.fillStyle='#d01818';x.fillRect(24,6,16,52);x.fillRect(6,24,52,16);}),transparent:true}));cr.position.set(0.6,1.65,1.07);amb.add(cr);
+   amb.position.set(13,0,7.5);amb.rotation.set(0,-0.9,0.12);g.add(amb);addFire(13.4,2.4,7.5,1);}
+  {// streetcar on rails (left back)
+   const tram=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(11,3,2.6),B(0xc8b88a));body.position.y=1.9;tram.add(body);const band=new THREE.Mesh(new THREE.BoxGeometry(11.02,0.6,2.62),B(0x2a5a3a));band.position.y=0.8;tram.add(band);
+   const wt=canvasTex(256,32,(x)=>{x.fillStyle='#2a2a24';x.fillRect(0,0,256,32);for(let i=0;i<8;i++){x.fillStyle=Math.random()<0.4?'#ffd890':'#121210';x.fillRect(6+i*31,4,24,24);}});
+   [1.31,-1.31].forEach(zz=>{const w=new THREE.Mesh(new THREE.PlaneGeometry(10,1),new THREE.MeshBasicMaterial({map:wt,side:THREE.DoubleSide}));w.position.set(0,2.4,zz);tram.add(w);});
+   const roofT=new THREE.Mesh(new THREE.BoxGeometry(11,0.3,2.2),B(0x3a3a34));roofT.position.y=3.5;tram.add(roofT);tram.position.set(-21,0,-20);tram.rotation.y=0.15;g.add(tram);
+   [-1,1].forEach(s=>{const rl=new THREE.Mesh(new THREE.BoxGeometry(70,0.08,0.15),B(0x5a5a5a));rl.position.set(-21,0.05,-20+s*0.75);rl.rotation.y=0.15;g.add(rl);});}
+  // police sawhorse barricades + quarantine signs + fences
+  const stripeT=canvasTex(128,32,(x)=>{for(let i=-32;i<160;i+=32){x.fillStyle='#e8e8e8';x.fillRect(0,0,0,0);x.fillStyle='#ff5a14';x.beginPath();x.moveTo(i,0);x.lineTo(i+16,0);x.lineTo(i+48,32);x.lineTo(i+32,32);x.fill();}x.globalCompositeOperation='destination-over';x.fillStyle='#f0f0f0';x.fillRect(0,0,128,32);});
+  function sawhorse(x,z,ry){const s=new THREE.Group();const top=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.35,0.08),new THREE.MeshBasicMaterial({map:stripeT}));top.position.y=0.95;s.add(top);
+    [-1,1].forEach(k=>{const l=new THREE.Mesh(new THREE.BoxGeometry(0.08,1.1,0.5),B(0xd8d8d8));l.position.set(k*1,0.55,0);s.add(l);});const lt=flameSprite(0xffaa20,0.9,1.25,0,0.6,0.6);s.add(lt);anim.push((t)=>{lt.visible=Math.floor(t*2+x)%2===0;});
+    s.position.set(x,0,z);s.rotation.y=ry;g.add(s);}
+  [[-13,10,0.3],[-10.5,11.2,0.1],[10.8,11,-0.2],[13.2,9.8,-0.4],[-13.5,-2,1.4],[13.6,0.5,-1.4],[-6,-12.5,0],[6,-12.5,0]].forEach(a=>sawhorse(...a));
+  const qT=canvasTex(512,256,(x)=>{x.fillStyle='#e8c41a';x.fillRect(0,0,512,256);x.fillStyle='#111';x.fillRect(10,10,492,236);x.fillStyle='#e8c41a';x.fillRect(18,18,476,220);x.fillStyle='#111';
+    x.beginPath();x.arc(90,128,26,0,7);x.fill();for(let k=0;k<3;k++){const a=k*Math.PI*2/3-Math.PI/2;x.beginPath();x.arc(90+Math.cos(a)*36,128+Math.sin(a)*36,30,0,7);x.lineWidth=12;x.stroke();}x.fillStyle='#e8c41a';x.beginPath();x.arc(90,128,10,0,7);x.fill();
+    x.fillStyle='#111';x.font='bold 54px Impact,"Arial Black",sans-serif';x.fillText('QUARANTINE',170,110);x.font='bold 32px Impact,"Arial Black",sans-serif';x.fillText('ZONE  -  DO NOT ENTER',172,160);x.font='bold 22px monospace';x.fillText('BY ORDER OF THE CITY',174,200);});
+  [[-14.2,3.5,Math.PI/2],[14.2,-4,-Math.PI/2],[-4.5,-13.6,0]].forEach(([x,z,ry])=>{const sg=new THREE.Group();const p=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.3),new THREE.MeshBasicMaterial({map:qT,side:THREE.DoubleSide}));p.position.y=1.9;sg.add(p);
+    [-1.1,1.1].forEach(k=>{const l=new THREE.Mesh(new THREE.BoxGeometry(0.08,2.6,0.08),B(0x555555));l.position.set(k,1.3,0);sg.add(l);});sg.position.set(x,0,z);sg.rotation.y=ry;g.add(sg);});
+  {const fenceT=canvasTex(64,64,(x)=>{x.strokeStyle='rgba(170,170,165,0.9)';x.lineWidth=2;for(let i=-64;i<128;i+=12){x.beginPath();x.moveTo(i,0);x.lineTo(i+64,64);x.stroke();x.beginPath();x.moveTo(i+64,0);x.lineTo(i,64);x.stroke();}});fenceT.wrapS=fenceT.wrapT=THREE.RepeatWrapping;fenceT.repeat.set(8,1.2);
+   [[-24,-16,0],[24,-14,0]].forEach(([x,z,ry])=>{const f=new THREE.Mesh(new THREE.PlaneGeometry(16,3),new THREE.MeshBasicMaterial({map:fenceT,transparent:true,side:THREE.DoubleSide,depthWrite:false}));f.position.set(x,1.5,z);f.rotation.y=ry;g.add(f);
+     for(let k=-8;k<=8;k+=4){const p=new THREE.Mesh(new THREE.BoxGeometry(0.1,3.2,0.1),B(0x6a6a66));p.position.set(x+k,1.6,z);g.add(p);}
+     for(let k=0;k<3;k++){const pl=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.35,0.06),B(0x5a4430));pl.position.set(x-4+k*3.5,1+k*0.6,z+0.05);pl.rotation.z=(Math.random()-.5)*0.5;g.add(pl);}});}
+  // burning barrels + street fires
+  [[-11.5,-9],[11,-10.5],[-15.5,12.5]].forEach(([x,z])=>{const b=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,1.2,12),B(0x4a3020));b.position.set(x,0.6,z);g.add(b);addFire(x,1.6,z,0.8);});
+  addFire(-20,2,-28,2.4);addFire(22,3,-26,2.8);
+  // flickering street lamps + blinking traffic light
+  const lamps=[];[[-16,-6],[16,-8],[-16,9],[16,6]].forEach(([x,z],i)=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.2,7,0.2),B(0x2a2a2e));p.position.set(x,3.5,z);g.add(p);
+    const gl=flameSprite(0xffd8a0,x+(x<0?1:-1),6.8,z,3,3);g.add(gl);const pool=new THREE.Mesh(new THREE.PlaneGeometry(7,7),new THREE.MeshBasicMaterial({map:softTex,color:0x6a5030,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));pool.rotation.x=-Math.PI/2;pool.position.set(x+(x<0?1:-1),0.03,z);g.add(pool);lamps.push({gl,pool,i});});
+  const tl=new THREE.Group();{const pole=new THREE.Mesh(new THREE.BoxGeometry(0.2,6,0.2),B(0x2a2a2e));pole.position.y=3;tl.add(pole);const arm=new THREE.Mesh(new THREE.BoxGeometry(4,0.2,0.2),B(0x2a2a2e));arm.position.set(2,5.8,0);tl.add(arm);const box=new THREE.Mesh(new THREE.BoxGeometry(0.6,1.6,0.6),B(0x1a1a1a));box.position.set(3.6,5.2,0);tl.add(box);
+    const yl=flameSprite(0xffb020,3.6,5.2,0.35,1.2,1.2);tl.add(yl);tl.userData.yl=yl;}tl.position.set(-14.6,0,-11);g.add(tl);
+  // safe room corner: desk, typewriter, storage chest, warm lamp, healing herbs
+  {const sr=new THREE.Group();const wood=B(0x5a3a22);const desk=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.1,0.9),wood);desk.position.y=0.85;sr.add(desk);[[-0.8,-0.35],[0.8,-0.35],[-0.8,0.35],[0.8,0.35]].forEach(([x,z])=>{const l=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.85,0.08),wood);l.position.set(x,0.42,z);sr.add(l);});
+   const tw=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.22,0.45),B(0x1a1a1a));tw.position.set(-0.2,1.0,0);sr.add(tw);const pap=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.3,0.02),B(0xf0ead8));pap.position.set(-0.2,1.22,-0.12);pap.rotation.x=-0.3;sr.add(pap);
+   const chest=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.7,0.7),B(0x4a3a2a));chest.position.set(1.7,0.35,0);sr.add(chest);const band=new THREE.Mesh(new THREE.BoxGeometry(1.22,0.08,0.72),B(0x8a7a50));band.position.set(1.7,0.55,0);sr.add(band);
+   const lampG=flameSprite(0xffc070,0.6,1.5,0,3.2,3.2);sr.add(lampG);sr.userData.lamp=lampG;
+   [[0.55,0.3],[-0.3,0.95],[0.3,1.05]].forEach(([x,z],k)=>{const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.15,0.3,10),B(0x8a4a2a));pot.position.set(x-1.6,0.15,z);sr.add(pot);for(let l=0;l<5;l++){const lf=new THREE.Mesh(new THREE.SphereGeometry(0.14,6,4),B([0x2aa83a,0xd83a2a,0x3a7aff][k]));lf.scale.set(0.5,1,0.3);lf.position.set(x-1.6+Math.cos(l)*0.1,0.42,z+Math.sin(l)*0.1);lf.rotation.z=Math.cos(l)*0.6;sr.add(lf);}});
+   sr.position.set(-11.6,0,-11.4);sr.rotation.y=0.35;g.add(sr);anim.push((t)=>{lampG.material.opacity=0.85+0.15*Math.sin(t*3);});}
+  // shambling zombie horde (generic infected)
+  const horde=[];for(let i=0;i<14;i++){const z=new THREE.Group();const fig=buildFigure('zombie',[0x3a3a52,0x5a3a2a,0x2a4a3a,0x4a4a4a][i%4]);fig.g.children.slice().forEach(c=>z.add(c));z.scale.setScalar(1.4+Math.random()*0.15);
+    const lane=i%3,side=i%2?1:-1;z.userData={x0:side*(14+lane*4+Math.random()*2),z0:-34-Math.random()*10,v:0.55+Math.random()*0.35,o:Math.random()*40,ph:Math.random()*6,side};g.add(z);horde.push(z);}
+  // crows circling, helicopter with searchlight
+  const crows=[];const crowM=B(0x0a0a0a,NF);for(let i=0;i<10;i++){const c=new THREE.Group();const b=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.15,0.18),crowM);c.add(b);const wl=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.03,0.7),crowM);wl.geometry.translate(0,0,0.35);c.add(wl);const wr=wl.clone();wr.rotation.y=Math.PI;c.add(wr);
+    c.userData={wl,wr,r:6+Math.random()*10,h:22+Math.random()*12,s:0.4+Math.random()*0.4,o:Math.random()*6};g.add(c);crows.push(c);}
+  const heli=new THREE.Group();{const hm=B(0x1e2226);const bd=new THREE.Mesh(new THREE.BoxGeometry(3.4,1.2,1.4),hm);heli.add(bd);const tail=new THREE.Mesh(new THREE.BoxGeometry(3.6,0.3,0.3),hm);tail.position.set(-3.2,0.2,0);heli.add(tail);
+    const rot=new THREE.Mesh(new THREE.BoxGeometry(8,0.05,0.3),hm);rot.position.y=0.8;heli.add(rot);const rot2=rot.clone();rot2.rotation.y=Math.PI/2;heli.add(rot2);heli.userData={rot,rot2};
+    const beam=new THREE.Mesh(new THREE.ConeGeometry(4,30,24,1,true),B(0xfff4d8,{transparent:true,opacity:0.07,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));beam.position.y=-15;heli.add(beam);
+    const nav=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,4),B(0xff2020));nav.position.set(-5,0.4,0);heli.add(nav);heli.userData.nav=nav;}
+  g.add(heli);
+  decorAnim.raccoon=(t,dt)=>{
+    anim.forEach(f=>f(t));
+    tickT.offset.x=(t*0.05)%1;
+    fires.forEach((f,i)=>{const k=1+0.15*Math.sin(t*12+i*2)*Math.sin(t*5.3+i);f.scale.y=f.userData.sy||(f.userData.sy=f.scale.y);f.scale.y=f.userData.sy*k;});
+    skyFires.forEach((f,i)=>{f.material.opacity=0.6+0.3*Math.sin(t*6+i);});
+    lamps.forEach(l=>{const fl=(l.i===1&&Math.sin(t*23)>0.6)||(l.i===2&&Math.sin(t*9.7)*Math.sin(t*3.1)>0.7);l.gl.visible=!fl;l.pool.visible=!fl;});
+    tl.userData.yl.visible=Math.floor(t*1.5)%2===0;
+    hq.userData.bc.visible=Math.floor(t*1.2)%2===0;
+    tower.userData.hh.rotation.z=-t*0.02;tower.userData.mh.rotation.z=-t*0.24;
+    moonGlow.material.opacity=0.45+0.08*Math.sin(t*0.5);
+    horde.forEach(z=>{const u=z.userData;const k=((t*u.v+u.o)%40);const zz=u.z0+k;// walk toward the arena, then sink back into the dark
+      z.position.set(u.x0+Math.sin(t*0.7+u.ph)*0.6-u.side*k*0.12,Math.abs(Math.sin(t*2.2+u.ph))*0.05,zz);z.rotation.y=-Math.PI/2+u.side*0.25+Math.sin(t*0.9+u.ph)*0.15;z.rotation.z=Math.sin(t*2.2+u.ph)*0.08;
+      const sink=k>34?(k-34)/6:k<3?(3-k)/3:0;z.position.y-=sink*2.8;});
+    crows.forEach(c=>{const u=c.userData,a=t*u.s+u.o;c.position.set(32+Math.cos(a)*u.r,u.h+Math.sin(t*0.7+u.o)*1.5,-66+Math.sin(a)*u.r);c.rotation.y=-a;const fl=Math.sin(t*12+u.o)*0.6;u.wl.rotation.x=fl;u.wr.rotation.x=-fl;});
+    const ha=t*0.09;heli.position.set(Math.cos(ha)*28,26+Math.sin(t*0.4)*1.5,-22+Math.sin(ha)*14);heli.rotation.y=-ha-Math.PI/2;heli.rotation.z=0.08;heli.userData.rot.rotation.y=t*25;heli.userData.rot2.rotation.y=t*25+Math.PI/2;heli.userData.nav.visible=Math.floor(t*2)%2===0;
+  };
+  return g;
+}
+decorBuilders.raccoon=buildRaccoon;
+function buildRaccoonRing(){
+  // the fight stage: a blocked-off intersection with a crashed police car, flares, caution tape and a steaming manhole
+  const g=new THREE.Group();const anim=[];
+  const padT=canvasTex(512,512,(x)=>{x.fillStyle='#1c1b20';x.fillRect(0,0,512,512);for(let i=0;i<2500;i++){x.fillStyle=['#24232a','#141318'][i%2];x.fillRect(Math.random()*512,Math.random()*512,3,3);}
+    x.fillStyle='#e8e4dc';for(let k=0;k<7;k++){x.fillRect(110+k*44,30,26,90);x.fillRect(110+k*44,392,26,90);}x.fillStyle='rgba(120,10,10,0.55)';x.beginPath();x.ellipse(300,280,40,22,0.4,0,7);x.fill();x.beginPath();x.ellipse(200,210,18,10,1.1,0,7);x.fill();
+    x.strokeStyle='#e8c41a';x.lineWidth=6;x.setLineDash([24,16]);x.beginPath();x.arc(256,256,232,0,7);x.stroke();});
+  const pad=new THREE.Mesh(new THREE.CylinderGeometry(5.4,5.5,0.16,48),[B(0x2a2a2e),new THREE.MeshBasicMaterial({map:padT}),B(0x2a2a2e)]);pad.position.y=0.02;g.add(pad);
+  const man=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.55,0.03,20),B(0x3a3a3a));man.position.set(-2.3,0.12,-1.4);g.add(man);
+  const steam=[];for(let k=0;k<6;k++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:softTex,color:0xa8a0a8,transparent:true,opacity:0.3,depthWrite:false}));s.userData={o:k/6};g.add(s);steam.push(s);}
+  // caution tape on posts around the stage
+  const tapeT=canvasTex(512,32,(x)=>{x.fillStyle='#ffd21a';x.fillRect(0,0,512,32);x.fillStyle='#111';x.font='bold 22px Impact,"Arial Black",sans-serif';for(let i=0;i<4;i++)x.fillText('CAUTION  BIOHAZARD',6+i*128-(i?0:0),24);});
+  tapeT.wrapS=THREE.RepeatWrapping;const posts=[];const N=8;for(let i=0;i<N;i++){const a=i/N*Math.PI*2+Math.PI/8;posts.push([Math.cos(a)*5.3,Math.sin(a)*5.3]);}
+  posts.forEach(([x,z])=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1.3,8),B(0xff6a1a));p.position.set(x,0.65,z);g.add(p);const cap=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.1,0.3),B(0x222222));cap.position.set(x,0.05,z);g.add(cap);});
+  for(let i=0;i<N;i++){const a=posts[i],b=posts[(i+1)%N];if(Math.abs((a[1]+b[1])/2-5)<0.6&&(a[0]+b[0])/2>-1&&(a[0]+b[0])/2<1)continue;const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);
+    const tp=new THREE.Mesh(new THREE.PlaneGeometry(L,0.16),new THREE.MeshBasicMaterial({map:tapeT.clone(),side:THREE.DoubleSide}));tp.material.map.needsUpdate=true;tp.material.map.repeat.set(L/4,1);tp.position.set((a[0]+b[0])/2,1.1,(a[1]+b[1])/2);tp.rotation.y=-Math.atan2(dz,dx);g.add(tp);anim.push((t)=>{tp.rotation.x=Math.sin(t*3+i)*0.15;});}
+  // road flares
+  [[3.6,2.6],[-3.4,2.9],[3.9,-2.2]].forEach(([x,z],i)=>{const st=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.35,6),B(0xd01818));st.position.set(x,0.12,z);st.rotation.z=1.3;g.add(st);
+    const fl=flameSprite(0xff2a1a,x+0.15,0.3,z,1.4,1.4);g.add(fl);const pool=new THREE.Mesh(new THREE.PlaneGeometry(3.4,3.4),new THREE.MeshBasicMaterial({map:softTex,color:0xaa1a10,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));pool.rotation.x=-Math.PI/2;pool.position.set(x,0.12,z);g.add(pool);
+    anim.push((t)=>{const k=0.8+0.3*Math.sin(t*17+i*3)*Math.sin(t*6+i);fl.scale.set(1.4*k,1.4*k,1);pool.material.opacity=0.6+0.25*k;});});
+  // spilled supply crate with ammo + herbs at the back edge
+  const cr=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.6,0.6),B(0x3d3a2a));cr.position.set(-3.8,0.38,-3.2);cr.rotation.y=0.6;g.add(cr);
+  const hb=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.17,0.32,10),B(0x8a4a2a));hb.position.set(4.3,0.26,-2.9);g.add(hb);for(let l=0;l<6;l++){const lf=new THREE.Mesh(new THREE.SphereGeometry(0.14,6,4),B(0x2aa83a));lf.scale.set(0.5,1,0.3);lf.position.set(4.3+Math.cos(l)*0.1,0.52,-2.9+Math.sin(l)*0.1);lf.rotation.z=Math.cos(l)*0.6;g.add(lf);}
+  g.userData.anim=(t)=>{anim.forEach(f=>f(t));steam.forEach(s=>{const ph=(t*0.3+s.userData.o)%1;s.position.set(-2.3+Math.sin(t+s.userData.o*6)*0.2,0.2+ph*3.5,-1.4);const sc=0.5+ph*2;s.scale.set(sc,sc,1);s.material.opacity=0.35*(1-ph);});};
+  return g;
+}
+ringBuilders.raccoon=buildRaccoonRing;padCols.raccoon=0x1c1b20;FULLSETS.push('raccoon');
+
 // ---------- Fog town upgrade for the Haunted world: thick fog, ash, and a rusty "dark world" shift ----------
 const owDiv=document.createElement('div');owDiv.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(120,0,0,0.55) 100%)';document.body.appendChild(owDiv);
 const grainDiv=document.createElement('canvas');grainDiv.width=256;grainDiv.height=144;grainDiv.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;opacity:0;mix-blend-mode:overlay';document.body.appendChild(grainDiv);
@@ -1935,22 +2096,22 @@ function buildFogTown(){
   return g;
 }
 {const _hb=decorBuilders.horror;decorBuilders.horror=()=>{const g=_hb();const ft=buildFogTown();g.add(ft);const _ha=decorAnim.horror;decorAnim.horror=(t,dt)=>{if(_ha)_ha(t,dt);ft.userData.anim(t);};return g;};}
-const RSTYLES={auto:'Auto (matches world)',rooftop:'Rooftop Fight Club ring',helipad:'Helipad (classic)',bar:'Bar stage',horror:'Ritual circle',shooter:'Octagon cage',beach:'Tiki beach',nightcity:'Street',haunted:'Haunted house',warfield:'War field',island:'Beach island + water',lava:'Lava pit',space:'Space station',mansion:'Haunted mansion',armory:'Gun armory',harbor:'Harbor (boats + fish)',arcade:'Arcade',dojo:'Dojo',heroes:'Hero Rift platform',galaxy:'Galactic landing pad',tourney:'Tournament stage (breakable floor)',monster:'Monster battle field',nostalgia:'Nostalgia game room'};
+const RSTYLES={auto:'Auto (matches world)',raccoon:'Quarantine street',rooftop:'Rooftop Fight Club ring',helipad:'Helipad (classic)',bar:'Bar stage',horror:'Ritual circle',shooter:'Octagon cage',beach:'Tiki beach',nightcity:'Street',haunted:'Haunted house',warfield:'War field',island:'Beach island + water',lava:'Lava pit',space:'Space station',mansion:'Haunted mansion',armory:'Gun armory',harbor:'Harbor (boats + fish)',arcade:'Arcade',dojo:'Dojo',heroes:'Hero Rift platform',galaxy:'Galactic landing pad',tourney:'Tournament stage (breakable floor)',monster:'Monster battle field',nostalgia:'Nostalgia game room'};
 let ringStyle=store.get('ringStyle','auto');if(!RSTYLES[ringStyle])ringStyle='auto';
 const AUTO_RING={shooter:'warfield'};function ringFor(w){return ringStyle==='auto'?(AUTO_RING[w]||w):ringStyle;}
 function applyRing(name){
   if(!padCols[name])name='rooftop';
   ringDefault.forEach(o=>o.visible=(name==='helipad'));
   for(const k in ringBuilders){if(k===name&&!rings[k]){rings[k]=ringBuilders[k]();stage.add(rings[k]);}if(rings[k])rings[k].visible=(k===name);}
-  pad.material.color.set(padCols[name]||0x1a0f30);pad.visible=!FULLSETS.includes(name);logo.visible=!['nostalgia','monster','tourney','galaxy','heroes','rooftop','nightcity','lava','space','warfield','mansion','armory','harbor','arcade','dojo'].includes(name);padRing.visible=!['nostalgia','monster','tourney','galaxy','heroes','rooftop','shooter','nightcity','warfield','island','lava','haunted','mansion','harbor','dojo','arcade','armory'].includes(name);
+  pad.material.color.set(padCols[name]||0x1a0f30);pad.visible=!FULLSETS.includes(name);logo.visible=!['raccoon','nostalgia','monster','tourney','galaxy','heroes','rooftop','nightcity','lava','space','warfield','mansion','armory','harbor','arcade','dojo'].includes(name);padRing.visible=!['raccoon','nostalgia','monster','tourney','galaxy','heroes','rooftop','shooter','nightcity','warfield','island','lava','haunted','mansion','harbor','dojo','arcade','armory'].includes(name);
   ringAnim=(rings[name]&&rings[name].userData.anim)||{bar:rings.barAnim,horror:rings.horrorAnim,shooter:rings.warAnim,beach:rings.beachAnim,nightcity:rings.streetAnim}[name]||null;
   if($('ringStyle'))$('ringStyle').value=ringStyle;
 }
 function setRingStyle(v,quiet){if(!RSTYLES[v])v='auto';ringStyle=v;store.set('ringStyle',v);applyRing(ringFor(theme));applyFighterStyle();if(!quiet){setStatus('Arena: '+RSTYLES[v]);remote('state',snap());}}
 
 // ---------- Fighter looks ----------
-const FSTYLES={classic:'Classic blocks',robot:'Robot',boxer:'Boxer',ninja:'Ninja',zombie:'Zombie',skeleton:'Skeleton',soldier:'Soldier',surfer:'Surfer',street:'Street fighter',luchador:'Luchador',ghost:'Ghost',vampire:'Vampire',pirate:'Pirate',gamer:'Gamer',hero:'Superhero',villain:'Supervillain',knight:'Space knight',darkknight:'Dark knight',karate:'Karate master',leafmon:'Leaf monster',aquamon:'Water monster',flamemon:'Fire monster',retrokid:'90s kid'};
-const FAUTO={nostalgia:['retrokid','gamer'],monster:['leafmon','aquamon'],tourney:['karate','luchador'],galaxy:['knight','darkknight'],heroes:['hero','villain'],rooftop:['boxer','street'],helipad:['robot','robot'],bar:['boxer','boxer'],horror:['zombie','skeleton'],shooter:['soldier','soldier'],beach:['surfer','surfer'],nightcity:['street','street'],haunted:['zombie','skeleton'],mansion:['ghost','vampire'],warfield:['soldier','soldier'],armory:['soldier','soldier'],island:['surfer','surfer'],harbor:['pirate','pirate'],lava:['skeleton','robot'],space:['robot','robot'],arcade:['gamer','robot'],dojo:['ninja','ninja']};
+const FSTYLES={classic:'Classic blocks',cop:'Survivor cop',robot:'Robot',boxer:'Boxer',ninja:'Ninja',zombie:'Zombie',skeleton:'Skeleton',soldier:'Soldier',surfer:'Surfer',street:'Street fighter',luchador:'Luchador',ghost:'Ghost',vampire:'Vampire',pirate:'Pirate',gamer:'Gamer',hero:'Superhero',villain:'Supervillain',knight:'Space knight',darkknight:'Dark knight',karate:'Karate master',leafmon:'Leaf monster',aquamon:'Water monster',flamemon:'Fire monster',retrokid:'90s kid'};
+const FAUTO={raccoon:['cop','zombie'],nostalgia:['retrokid','gamer'],monster:['leafmon','aquamon'],tourney:['karate','luchador'],galaxy:['knight','darkknight'],heroes:['hero','villain'],rooftop:['boxer','street'],helipad:['robot','robot'],bar:['boxer','boxer'],horror:['zombie','skeleton'],shooter:['soldier','soldier'],beach:['surfer','surfer'],nightcity:['street','street'],haunted:['zombie','skeleton'],mansion:['ghost','vampire'],warfield:['soldier','soldier'],armory:['soldier','soldier'],island:['surfer','surfer'],harbor:['pirate','pirate'],lava:['skeleton','robot'],space:['robot','robot'],arcade:['gamer','robot'],dojo:['ninja','ninja']};
 function buildFigure(style,col){
   const g=new THREE.Group();let fist=null,fb=0.38;
   const M=c=>B(c);
@@ -1973,6 +2134,10 @@ function buildFigure(style,col){
     sph(0.17,K,0,1.25,0);box(0.36,0.05,0.36,col,0,1.3,0);box(0.04,0.04,0.18,0xf0e0d0,0.17,1.25,0);
     box(0.25,0.04,0.04,col,-0.28,1.3,0.06);box(0.22,0.04,0.04,col,-0.26,1.27,-0.04);
     box(0.1,0.1,0.1,K,0.1,0.92,-0.24);fist=box(0.12,0.12,0.12,K,0.38,0.95,0.16);fb=0.38;
+  }else if(style==='cop'){
+    const NV=0x1f2a44;legs(NV,0x111111);box(0.42,0.5,0.27,0x2a3a5a,0,0.8,0);box(0.44,0.36,0.29,0x15171c,0,0.86,0);box(0.05,0.08,0.3,0xd8c040,0,0.98,0.08);box(0.06,0.1,0.18,0x111111,0,0.55,0.2);
+    sph(0.15,0xe0b08a,0,1.24,0);const hair=new THREE.Mesh(new THREE.SphereGeometry(0.165,14,8,0,Math.PI*2,0,Math.PI/2),M(0x6a4a2a));hair.position.set(-0.01,1.27,0);g.add(hair);box(0.09,0.12,0.3,0x6a4a2a,0.1,1.34,0);
+    box(0.36,0.1,0.1,0x2a3a5a,0.12,0.94,0.2);fist=box(0.11,0.11,0.11,0xe0b08a,0.38,0.94,0.18);fb=0.38;
   }else if(style==='zombie'){
     const Z=0x6a8a4a;legs(0x2a3550,0x2a2018);box(0.42,0.5,0.26,new THREE.Color(col).multiplyScalar(0.45).getHex(),0,0.8,0);
     box(0.12,0.16,0.27,Z,0.08,0.66,0.06);box(0.34,0.32,0.3,Z,0,1.24,0);sph(0.035,0xff2020,0.16,1.28,0.07);sph(0.035,0xff2020,0.16,1.28,-0.07);box(0.03,0.05,0.14,0x200000,0.17,1.15,0);
@@ -2114,7 +2279,7 @@ function applyTheme(name){
     f.material.needsUpdate=true;});
   rainLines.visible=T.weather==='rain';particles.visible=T.weather!=='rain'&&T.weather!=='none';
   ppMat.color.set({sparkle:0xffd59a,ash:0x9a9aa0,embers:0xff8a2a}[T.weather]||0xffffff);ppMat.size=T.weather==='ash'?0.07:0.09;
-  antenna.visible=beacon.visible=!['horror','beach','nightcity','galaxy','heroes','tourney','monster','nostalgia'].includes(T.decor);
+  antenna.visible=beacon.visible=!['raccoon','horror','beach','nightcity','galaxy','heroes','tourney','monster','nostalgia'].includes(T.decor);
   owDiv.style.opacity=0;grainDiv.style.opacity=0;
   for(const k in decorBuilders){if(k===T.decor&&!decor[k]){decor[k]=decorBuilders[k]();scene.add(decor[k]);}if(decor[k])decor[k].visible=(k===T.decor);}
   applyRing(ringFor(name));
@@ -2134,7 +2299,7 @@ function themeTick(t,dt){
   if(ringAnim)ringAnim(t);
 }
 themeKeys.forEach(k=>{const b=document.createElement('button');b.textContent=THEMES[k].name;b.dataset.k=k;b.onclick=()=>switchTheme(k);$('themes').appendChild(b);});
-const themeAlias={nostalgia:'nostalgia',retro:'nostalgia','90s':'nostalgia','2000s':'nostalgia',gameroom:'nostalgia',bedroom:'nostalgia',monster:'monster',pokemon:'monster',stadium:'monster',monsters:'monster',creature:'monster',tourney:'tourney',tekken:'tourney',tournament:'tourney',fighting:'tourney',fighter:'tourney',dojo2:'tourney',galaxy:'galaxy',space:'galaxy',starwars:'galaxy','star wars':'galaxy',clone:'galaxy',galactic:'galaxy',scifi:'galaxy',heroes:'heroes',hero:'heroes',marvel:'heroes',rivals:'heroes',superhero:'heroes',rift:'heroes',beach:'beach',vice:'beach',gta:'beach',island:'beach',sunset:'beach',city:'nightcity',nightcity:'nightcity',street:'nightcity',cyberpunk:'nightcity',night:'nightcity',rooftop:'rooftop',roof:'rooftop',neon:'rooftop',bar:'bar',lounge:'bar',horror:'horror',scary:'horror',haunted:'horror',spooky:'horror',shooter:'shooter',war:'shooter',warzone:'shooter',fps:'shooter'};
+const themeAlias={raccoon:'raccoon',racoon:'raccoon','raccoon city':'raccoon','racoon city':'raccoon','resident evil':'raccoon',biohazard:'raccoon',outbreak:'raccoon',nostalgia:'nostalgia',retro:'nostalgia','90s':'nostalgia','2000s':'nostalgia',gameroom:'nostalgia',bedroom:'nostalgia',monster:'monster',pokemon:'monster',stadium:'monster',monsters:'monster',creature:'monster',tourney:'tourney',tekken:'tourney',tournament:'tourney',fighting:'tourney',fighter:'tourney',dojo2:'tourney',galaxy:'galaxy',space:'galaxy',starwars:'galaxy','star wars':'galaxy',clone:'galaxy',galactic:'galaxy',scifi:'galaxy',heroes:'heroes',hero:'heroes',marvel:'heroes',rivals:'heroes',superhero:'heroes',rift:'heroes',beach:'beach',vice:'beach',gta:'beach',island:'beach',sunset:'beach',city:'nightcity',nightcity:'nightcity',street:'nightcity',cyberpunk:'nightcity',night:'nightcity',rooftop:'rooftop',roof:'rooftop',neon:'rooftop',bar:'bar',lounge:'bar',horror:'horror',scary:'horror',haunted:'horror',spooky:'horror',shooter:'shooter',war:'shooter',warzone:'shooter',fps:'shooter'};
 applyTheme(themeAlias[(params.get('theme')||'').toLowerCase()]||store.get('theme','rooftop'));
 
 // ---------- !clip and raid welcome ----------
@@ -3309,6 +3474,7 @@ async function twInit(){
 }
 // ---------- Auto world from Twitch category ----------
 const AUTO_RULES=[
+  ['raccoon',/resident evil|biohazard|raccoon city|racoon city|code veronica|\bre ?[2-9]\b|re village|re4|re2|re3|operation raccoon|umbrella corps|state of decay|days gone|dying light|dead rising|world war z|back 4 blood|7 days to die|project zomboid|zombie/],
   ['nostalgia',/^retro$|retro games|nostalgia|\bnes\b|\bsnes\b|\bn64\b|nintendo 64|gamecube|dreamcast|sega genesis|mega drive|playstation 1|\bps1\b|\bps2\b|super mario 64|super mario world|ocarina of time|goldeneye|banjo|crash bandicoot|spyro|tony hawk|sonic the hedgehog|mario kart 64|donkey kong country|earthbound|chrono trigger|final fantasy vii$|metal gear solid$|pac-man|tetris/],
   ['monster',/pok[eé]mon|palworld|temtem|digimon|monster sanctuary|cassette beasts|nexomon|coromon|yo-kai|monster rancher|ni no kuni|dragon quest monsters|creature/],
   ['tourney',/tekken|soulcalibur|soul calibur|virtua fighter|dead or alive|guilty gear|blazblue|king of fighters|fatal fury|2xko|granblue fantasy versus|under night|melty blood|mortal kombat|street fighter|dragon ball fighterz|sparking|naruto|jump force|bloody roar|fighting games/],
