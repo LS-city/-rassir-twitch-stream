@@ -117,6 +117,8 @@ const moon = new THREE.DirectionalLight(0x8090ff, 0.35); moon.position.set(-60, 
 // Zero Cool: dark neon red only
 const clubLights = [[-23, 22.5, 8, 1.3], [-28, 22.5, 5, 0.8], [-26.5, 13.5, 4, 0.7], [-16, 31, 3.5, 0.5]].map(([x, y, z, i]) => {
   const L = new THREE.PointLight(0xff0a1e, i, 22, 2); L.position.copy(B(x, y, z)); L.userData.base = i; scene.add(L); return L; });
+[[-72, 17, 8, 0xff1020, 1.3], [-72, 28, 8, 0x2050ff, 1.3], [-77, 22.5, 5, 0xffc030, 0.9], [-48, 22.5, 6, 0xff1a2a, 1.6]].forEach(([x, y, z, c, i]) => {
+  const L = new THREE.PointLight(c, i, 24, 2); L.position.copy(B(x, y, z)); L.userData.base = i; scene.add(L); clubLights.push(L); });
 
 // stars + moon
 { const g = new THREE.BufferGeometry(), p = [];
@@ -134,11 +136,12 @@ addEventListener('resize', resize); resize();
 
 // ---------------------------------------------------------------- state
 const shots = [];             // {name,label,pos,quat,fov}
+const extraScreens = [];
 const citizens = [], cars = [], beams = [], adSlots = {}, screens = { GAMEPLAY: [], LIVECAM: [], CHAT: [], COMMANDS: [] };
 let holoRing = null, holoText = null, spray = null;
 const neonMats = [];          // materials we can recolor with !lights
 const stripes = [];           // Zero Cool facade stripes for strobe
-const SHOT_LABELS = { CAM_WIDE: 'Gateway', CAM_STRIP: 'Strip', CAM_MEDIA: 'Tower', CAM_PARK: 'Park', CAM_CLUB: 'Club outside', CAM_ZC_DOOR: 'Zero Cool', CAM_ZC_FLOOR: 'Club floor', CAM_ZC_BAR: 'Green Room', CAM_AERIAL: 'Aerial' };
+const SHOT_LABELS = { CAM_WIDE: 'Gateway', CAM_STRIP: 'Strip', CAM_MEDIA: 'Tower', CAM_PARK: 'Park', CAM_CLUB: 'Club outside', CAM_ZC_DOOR: 'Zero Cool', CAM_ZC_FLOOR: 'Club floor', CAM_ZC_BAR: 'Green Room', CAM_FC_OUT: 'Fight Club outside', CAM_FC_STAGE: 'Fight stage', CAM_FC_FLOOR: 'Fight Club floor', CAM_FC_LOUNGE: 'K.O. Lounge', CAM_AERIAL: 'Aerial' };
 const DYNAMIC = /^(CITIZEN_|CAR_|AD_SLOT_|SCREEN_|PARK_holo|ZC_beam|ZC_stripe|PARK_fountain_spray)/;
 
 function hasDynamicAncestor(o) { for (let p = o; p; p = p.parent) if (DYNAMIC.test(p.name)) return true; return false; }
@@ -173,7 +176,7 @@ loader.load('Lucid_State_City.glb', gltf => {
       if (m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b > 0 || m.emissiveMap)) {
         m.emissiveIntensity = Math.min(3.2, 0.55 + s * 0.28);
         if (/^Windows_/.test(m.name)) m.emissiveIntensity = 1.25;
-        if (/^(AD_SLOT|SCREEN_)/.test(m.name)) { m.emissiveIntensity = 1.05; m.color.setRGB(0, 0, 0); m.roughness = 1; m.metalness = 0; }   // screens glow on their own, no light glare
+        if (/^(AD_SLOT|SCREEN_|FC_BRACKET)/.test(m.name)) { m.emissiveIntensity = 1.05; m.color.setRGB(0, 0, 0); m.roughness = 1; m.metalness = 0; }   // screens glow on their own, no light glare
       }
       if (/^Beam_/.test(m.name)) { m.transparent = true; m.opacity = 0.16; m.depthWrite = false; m.blending = THREE.AdditiveBlending; m.emissiveIntensity = 1.4; }
       if (/^Grass/.test(m.name)) m.color.multiplyScalar(0.45);
@@ -189,7 +192,8 @@ loader.load('Lucid_State_City.glb', gltf => {
     if (/^CITIZEN_\d+$/.test(n)) citizens.push(makeWalker(o));
     else if (/^CAR_\d+$/.test(n)) cars.push(makeCar(o));
     else if (/^AD_SLOT_\d+$/.test(n) && o.isMesh) adSlots[n] = o;
-    else if (/^SCREEN_(GAMEPLAY|LIVECAM|CHAT|COMMANDS)(_ZC\d?)?$/.test(n) && o.isMesh) screens[n.split('_')[1]].push(o);
+    else if (/^SCREEN_(GAMEPLAY|LIVECAM|CHAT|COMMANDS)(_(ZC|FC)\d?)?$/.test(n) && o.isMesh) screens[n.split('_')[1]].push(o);
+    else if (n === 'SCREEN_BRACKET_FC' && o.isMesh) extraScreens.push(o);
     else if (/^ZC_beam/.test(n)) beams.push({ o, rx: o.rotation.x, rz: o.rotation.z, ph: Math.random() * 6 });
     else if (n === 'PARK_holo_ring') holoRing = o;
     else if (n === 'PARK_holo_LSC') holoText = o;
@@ -274,7 +278,14 @@ for (let i = 0; i < 18; i++) CLUB_SPOTS.push(B(-27.5 + Math.random() * 9.5, 22.5
 for (let i = 0; i < 6; i++) CLUB_SPOTS.push(B(-31 + i * 1.6, 14.6, 0.25));                                              // Green Room bar
 for (let i = 0; i < 5; i++) CLUB_SPOTS.push(B(-19 + i * 1.1, 31.2, 0.25));                                              // lounge
 const CLUB_CENTER = B(-23, 22.5, 0);
-const isInClub = p => p.x < -12.2 && p.x > -34 && -p.z > 9.5 && -p.z < 35.5;
+const FC_SPOTS = [];
+for (let i = 0; i < 14; i++) FC_SPOTS.push(B(-74 + Math.random() * 6, 18.5 + Math.random() * 8, 0.25));          // crowd at the fight stage
+for (let i = 0; i < 8; i++) FC_SPOTS.push(B(-63.5 + Math.random() * 7, 29.5 + Math.random() * 4.5, 0.25));      // K.O. Lounge dance floor
+for (let i = 0; i < 5; i++) FC_SPOTS.push(B(-79 + i * 1.7, 32.6, 0.25));                                         // K.O. Lounge bar
+for (let i = 0; i < 6; i++) FC_SPOTS.push(B(-75 + i * 3, 11.2, 0.25));                                           // arcade row
+const SPOTS = { zc: CLUB_SPOTS, fc: FC_SPOTS };
+const zoneOf = p => (p.x < -12.2 && p.x > -34 && -p.z > 9.5 && -p.z < 35.5) ? 'zc' : (p.x < -52.6 && p.x > -82.5 && -p.z > 7.5 && -p.z < 37.5) ? 'fc' : null;
+const isInClub = p => !!zoneOf(p);
 function stepTo(w, target, speed, dt) {
   const o = w.o, dx = target.x - o.position.x, dz = target.z - o.position.z, d = Math.hypot(dx, dz);
   if (d < 0.25) return true;
@@ -283,15 +294,28 @@ function stepTo(w, target, speed, dt) {
   o.rotation.y = Math.atan2(dx, dz);
   return false;
 }
-function sendToClub(w) {
-  if (!w || w.state === 'inside' || w.state === 'entering') return false;
-  const side = w.o.position.x < 0 ? -1 : 1;
-  w.path = [];
-  if (side > 0) w.path.push(new THREE.Vector3(10, 0.25, w.o.position.z), new THREE.Vector3(-10.6, 0.25, w.o.position.z));   // cross the strip
-  w.path.push(new THREE.Vector3(-10.6, 0.25, DOOR_OUT.z), DOOR_IN.clone(), CLUB_SPOTS[Math.random() * CLUB_SPOTS.length | 0].clone());
-  w.state = 'entering'; w.walk = false;
+// walking routes between the Strip, Zero Cool and Fight Club (Blender x/y, kept on sidewalks and side streets)
+function sendTo(w, dest) {
+  if (!w || w.state === 'entering' || (w.state === 'inside' && w.zone === dest)) return false;
+  const P = (x, y) => B(x, y, 0.25), pts = [];
+  const bx = w.o.position.x, by = -w.o.position.z, from = zoneOf(w.o.position);
+  let west = false;
+  if (from === 'zc') pts.push(P(-14.5, 22.5), P(-10.6, 22.5));
+  else if (from === 'fc') { pts.push(P(-55, 22.5), P(-50.5, 22.5), P(-47, 22.5)); west = true; }
+  else if (bx > 0) pts.push(P(10, by), P(-10.6, by));                     // cross the strip
+  else pts.push(P(-10.6, by));
+  if (dest === 'zc') {
+    if (west) pts.push(P(-47, 3), P(-10.6, 3));
+    pts.push(P(-10.6, 22.5), P(-14.5, 22.5));
+  } else {
+    if (!west) pts.push(P(-10.6, 3), P(-47, 3), P(-47, 22.5));
+    pts.push(P(-50.5, 22.5), P(-55, 22.5));
+  }
+  pts.push(SPOTS[dest][Math.random() * SPOTS[dest].length | 0].clone());
+  w.path = pts; w.state = 'entering'; w.walk = false; w.dest = dest; w.goal = null;
   return true;
 }
+const sendToClub = w => sendTo(w, 'zc');
 
 // spawned viewer citizens
 const spawned = [];
@@ -331,20 +355,22 @@ function updateWalkers(dt, t) {
     const o = w.o;
     if (w.state === 'street' && performance.now() - w.born > 90000) sendToClub(w);   // viewers head into Zero Cool after 90s
     if (w.state === 'entering') {
-      if (stepTo(w, w.path[0], 2.0, dt)) { w.path.shift(); if (!w.path.length) { w.state = 'inside'; w.idleT = 4 + Math.random() * 8; } }
+      if (stepTo(w, w.path[0], 2.0, dt)) { w.path.shift(); if (!w.path.length) { w.state = 'inside'; w.zone = w.dest; w.idleT = 4 + Math.random() * 8; } }
       o.position.y = w.y0 + Math.abs(Math.sin(t * 8 + w.ph)) * 0.07;
       return;
     }
     if (w.state === 'inside') {
       if (party || w.dance > t) { o.position.y = w.y0 + Math.abs(Math.sin(t * 7 + w.ph)) * 0.45; o.rotation.y += dt * 2.5; return; }
       w.idleT -= dt;
-      if (w.idleT < 0) { if (!w.goal) w.goal = CLUB_SPOTS[Math.random() * CLUB_SPOTS.length | 0].clone(); if (stepTo(w, w.goal, 1.2, dt)) { w.goal = null; w.idleT = 5 + Math.random() * 10; } }
+      if (w.idleT < 0) { if (!w.goal) { const sp = SPOTS[w.zone || 'zc']; w.goal = sp[Math.random() * sp.length | 0].clone(); } if (stepTo(w, w.goal, 1.2, dt)) { w.goal = null; w.idleT = 5 + Math.random() * 10; } }
       o.position.y = w.y0 + Math.abs(Math.sin(t * 4 + w.ph)) * 0.12;
       return;
     }
     if (w.role) {
       if (w.role === 'dancer' || party) { o.position.y = w.y0 + Math.abs(Math.sin(t * (party ? 7 : 4.2) + w.ph)) * (party ? 0.45 : 0.18); o.rotation.y += dt * (party ? 2.5 : 0.6) * Math.sin(w.ph + t * 0.3); }
       else if (w.role === 'dj') { o.position.y = w.y0 + Math.abs(Math.sin(t * 4.2)) * 0.08; }
+      else if (w.role === 'crowd') { o.position.y = w.y0 + Math.max(0, Math.sin(t * 3.1 + w.ph)) ** 3 * 0.35; }     // hype jumps at the fight stage
+      else if (w.role === 'player') { o.rotation.z = Math.sin(t * 9 + w.ph) * 0.03; }
       else { o.position.y = w.y0 + Math.sin(t * 1.3 + w.ph) * 0.015; }
       return;
     }
@@ -372,7 +398,7 @@ function updateWalkers(dt, t) {
 const chatLines = [];
 let chatCanvas, chatTex, cmdCanvas, cmdTex;
 const COMMANDS = [
-  ['!spawn', 'join the city as a citizen'], ['!club', 'walk into Zero Cool'], ['!dance', 'start a dance at Zero Cool'], ['!rain', 'make it rain on the city'],
+  ['!spawn', 'join the city as a citizen'], ['!club', 'walk into Zero Cool'], ['!fight', 'walk into Fight Club'], ['!dance', 'start a dance at Zero Cool'], ['!rain', 'make it rain on the city'],
   ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard']
 ];
 function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; return [c, t]; }
@@ -397,7 +423,7 @@ function drawCommands() {
   const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, '#05051a'); g.addColorStop(1, '#1e002d'); x.fillStyle = g; x.fillRect(0, 0, w, h);
   x.textAlign = 'center'; x.font = '120px Anton, Impact, sans-serif'; x.shadowColor = '#38e8ff'; x.shadowBlur = 24; x.fillStyle = '#fff';
   x.fillText('INTERACTIVE WORLD', w / 2, 150); x.shadowBlur = 0; x.textAlign = 'left';
-  COMMANDS.forEach(([c, d], i) => { const y = 248 + i * 66;
+  COMMANDS.forEach(([c, d], i) => { const y = 238 + i * 59;
     x.font = 'bold 50px Poppins, sans-serif'; x.fillStyle = '#ff50c8'; x.fillText(c, 140, y);
     x.font = 'bold 40px Poppins, sans-serif'; x.fillStyle = '#e6e6ff'; x.fillText(d, 520, y); });
   frame(x, w, h, '#38e8ff'); cmdTex.needsUpdate = true;
@@ -535,7 +561,10 @@ $('adShow').onclick = () => {
 const FOCUS = [
   ['Tower gameplay', 'SCREEN_GAMEPLAY'], ['Tower cam', 'SCREEN_LIVECAM'], ['Tower chat', 'SCREEN_CHAT'], ['Tower commands', 'SCREEN_COMMANDS'],
   ['Zero Cool main', 'SCREEN_GAMEPLAY_ZC1'], ['Zero Cool cam', 'SCREEN_LIVECAM_ZC'], ['Zero Cool chat', 'SCREEN_CHAT_ZC'],
-  ['Zero Cool commands', 'SCREEN_COMMANDS_ZC'], ['Green Room screen', 'SCREEN_GAMEPLAY_ZC2']
+  ['Zero Cool commands', 'SCREEN_COMMANDS_ZC'], ['Green Room screen', 'SCREEN_GAMEPLAY_ZC2'],
+  ['Fight Club main', 'SCREEN_GAMEPLAY_FC1'], ['Fight Club cam', 'SCREEN_LIVECAM_FC'], ['Fight Club chat', 'SCREEN_CHAT_FC'],
+  ['Fight Club commands', 'SCREEN_COMMANDS_FC'], ['Bracket board', 'SCREEN_BRACKET_FC'], ['Fight Club door screen', 'SCREEN_GAMEPLAY_FC2'],
+  ['Versus TV 1', 'SCREEN_GAMEPLAY_FC3'], ['Versus TV 2', 'SCREEN_GAMEPLAY_FC4'], ['Versus TV 3', 'SCREEN_GAMEPLAY_FC5']
 ];
 let focused = null;
 function focusMesh(m, label, instant) {
@@ -556,7 +585,7 @@ function focusMesh(m, label, instant) {
   document.querySelectorAll('#shots button').forEach(b => b.classList.remove('on'));
   if (label) toast(label);
 }
-function meshByName(n) { return screens.GAMEPLAY.concat(screens.LIVECAM, screens.CHAT, screens.COMMANDS).find(m => m.name === n); }
+function meshByName(n) { return screens.GAMEPLAY.concat(screens.LIVECAM, screens.CHAT, screens.COMMANDS, extraScreens).find(m => m.name === n); }
 function buildFocusUI() {
   $('focusBtns').innerHTML = FOCUS.filter(([, n]) => meshByName(n)).map(([l, n]) => `<button data-n="${n}">${l}</button>`).join('');
   $('focusBtns').onclick = e => { const b = e.target.closest('button'); if (b) focusMesh(meshByName(b.dataset.n)); };
@@ -567,7 +596,7 @@ function pickAt(ev) {
   const r = canvas.getBoundingClientRect();
   mouse.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(mouse, cam);
-  const targets = screens.GAMEPLAY.concat(screens.LIVECAM, screens.CHAT, screens.COMMANDS, Object.values(adSlots));
+  const targets = screens.GAMEPLAY.concat(screens.LIVECAM, screens.CHAT, screens.COMMANDS, extraScreens, Object.values(adSlots));
   if (floatScreen && floatScreen.visible) targets.push(floatScreen.userData.plane);
   // only count the first thing hit, so screens behind walls don't steal the click
   const blockers = scene.children.filter(o => o.isMesh && !o.userData.noBlock);
@@ -604,7 +633,7 @@ function prepFollow(s) {               // start the follow shot right behind the
 }
 function flyTo(s, dur = 3.2) {
   if (s.follow) prepFollow(s);
-  if (isInClub(cam.position) !== isInClub(s.pos)) {          // TV-style cut in/out of the club
+  if (zoneOf(cam.position) !== zoneOf(s.pos)) {          // TV-style cut in/out of a building
     cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix();
     hold = { s, t: 0 }; fly = null; return;
   }
@@ -724,7 +753,7 @@ function startDance(t) {
 const cooldown = {};
 function runCommand(cmd, user, color) {
   const t = clock.getElapsedTime(), now = performance.now();
-  const cd = { '!spawn': 0, '!club': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000 }[cmd];
+  const cd = { '!spawn': 0, '!club': 0, '!fight': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000 }[cmd];
   if (cd === undefined) return;
   if (cd && cooldown[cmd] && now - cooldown[cmd] < cd) return;
   cooldown[cmd] = now;
@@ -735,6 +764,11 @@ function runCommand(cmd, user, color) {
     if (!w) { spawnCitizen(user, color); w = spawned.find(s => s.user === user); }
     if (sendToClub(w)) toast(user + ' is heading into Zero Cool');
   }
+  if (cmd === '!fight') {
+    let w = spawned.find(s => s.user === user);
+    if (!w) { spawnCitizen(user, color); w = spawned.find(s => s.user === user); }
+    if (sendTo(w, 'fc')) toast(user + ' is heading into Fight Club');
+  }
   if (cmd === '!dance') { startDance(t); toast(user + ' started a dance at Zero Cool'); }
   if (cmd === '!rain') { rainUntil = t + 45; toast(user + ' made it rain'); }
   if (cmd === '!fireworks') { fwQueue += 7; toast(user + ' lit up the sky'); }
@@ -742,7 +776,7 @@ function runCommand(cmd, user, color) {
   if (cmd === '!ad') { chatLines.push({ user: 'LSC', color: '#38e8ff', text: 'Want a billboard in Lucid State City? Message Rassir to rent an ad slot.' }); drawChat(); toast('Billboards for rent: message Rassir'); }
 }
 $('cmdbtns').innerHTML = COMMANDS.map(([c]) => `<button data-c="${c}">${c}</button>`).join('');
-$('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) { const c = b.dataset.c; delete cooldown[c]; runCommand(c, c === '!spawn' ? 'Viewer' + (Math.random() * 900 + 100 | 0) : c === '!club' ? (spawned.find(w => w.state === 'street') || { user: 'Viewer' + (Math.random() * 900 + 100 | 0) }).user : 'Rassir', ['#ff2d8f', '#38e8ff', '#7dff6a', '#ffd23f'][Math.random() * 4 | 0]); } };
+$('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) { const c = b.dataset.c; delete cooldown[c]; runCommand(c, c === '!spawn' ? 'Viewer' + (Math.random() * 900 + 100 | 0) : (c === '!club' || c === '!fight') ? (spawned.find(w => w.state === 'street') || { user: 'Viewer' + (Math.random() * 900 + 100 | 0) }).user : 'Rassir', ['#ff2d8f', '#38e8ff', '#7dff6a', '#ffd23f'][Math.random() * 4 | 0]); } };
 
 // ---------------------------------------------------------------- Twitch chat (read-only, anonymous)
 let ws = null, chanName = '', reconnectTimer = 0;
@@ -812,7 +846,7 @@ function loop() {
   composer.render();
 }
 loop();
-window.LSC = { goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
+window.LSC = { sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
 </script>
 </body></html>
