@@ -85,15 +85,17 @@ canvas#c.pick{cursor:pointer}
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>window.LSC_CONTROL = new URLSearchParams(location.search).get('control') === '1';</script>
 <script>
-{
+if (!window.LSC_CONTROL) {
 const $ = id => document.getElementById(id);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('lsc_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('lsc_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } }
 };
 const params = new URLSearchParams(location.search);
-const setStatus = t => { $('status').textContent = t; };
+const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('lscCity') : null;     // talks to the LSC Control dock
+const setStatus = t => { $('status').textContent = t; if (bc) try { bc.postMessage({ cmd: 'status', data: { msg: t } }); } catch (e) {} };
 let toastT = 0;
 function toast(t) { const el = $('toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = 0, 3200); }
 // Blender (x,y,z) -> three (x, z, -y)
@@ -220,6 +222,7 @@ loader.load('Lucid_State_City.glb', gltf => {
   $('load').style.display = 'none';
   goShot(0, true);
   setStatus(`City loaded: ${citizens.length} citizens, ${cars.length} cars, ${Object.keys(adSlots).length} ad slots.`);
+  cityReady = true; postState();
   if (params.get('channel')) { $('chan').value = params.get('channel'); connectChat(params.get('channel')); }
   else if (store.get('chan', '')) { $('chan').value = store.get('chan', ''); connectChat(store.get('chan', '')); }
 }, e => { if (e.total) $('bar').firstChild.style.width = (100 * e.loaded / e.total).toFixed(0) + '%'; },
@@ -617,6 +620,7 @@ function focusMesh(m, label, instant) {
   document.querySelectorAll('#focusBtns button').forEach(b => b.classList.toggle('on', b.dataset.n === m.name));
   document.querySelectorAll('#shots button').forEach(b => b.classList.remove('on'));
   if (label) toast(label);
+  setTimeout(postState, 50);
 }
 function meshByName(n) { return screens.GAMEPLAY.concat(screens.LIVECAM, screens.CHAT, screens.COMMANDS, extraScreens).find(m => m.name === n); }
 function buildFocusUI() {
@@ -674,6 +678,7 @@ function flyTo(s, dur = 3.2) {
   hold = null;
 }
 function goShot(i, instant) {
+  setTimeout(postState, 50);
   cur = (i + shots.length) % shots.length; const s = shots[cur];
   document.querySelectorAll('#shots button').forEach((b, k) => b.classList.toggle('on', k === cur));
   document.querySelectorAll('#focusBtns button').forEach(b => b.classList.remove('on')); focused = null;
@@ -681,7 +686,7 @@ function goShot(i, instant) {
   else flyTo(s);
   tourT = 0;
 }
-function setTour(on) { tourOn = on; $('tour').classList.toggle('on', on); tourT = 0; }
+function setTour(on) { tourOn = on; $('tour').classList.toggle('on', on); tourT = 0; postState(); }
 function buildShotUI() {
   $('shots').innerHTML = shots.map((s, i) => `<button data-i="${i}">${i + 1} ${s.label}</button>`).join('');
   $('shots').onclick = e => { const b = e.target.closest('button'); if (b) { setTour(false); goShot(+b.dataset.i); } };
@@ -885,7 +890,102 @@ function loop() {
   composer.render();
 }
 loop();
+
+// ---------------------------------------------------------------- LSC Control dock (same page with ?control=1 inside an OBS Custom Browser Dock)
+var cityReady = false;
+function postState() {
+  if (!bc || !cityReady) return;
+  try {
+    bc.postMessage({ cmd: 'state', data: {
+      shots: shots.map(s => s.label), cur: focused ? -1 : cur, tour: tourOn,
+      focus: FOCUS.filter(([, n]) => meshByName(n)), focused: focused ? focused.name : '',
+      commands: COMMANDS.map(c => c[0]), ads: Object.keys(adSlots).sort(),
+      cams: [...$('srcGame').options].map(o => ({ v: o.value, t: o.text })), srcGame: $('srcGame').value, srcCam: $('srcCam').value,
+      chan: chanName, status: $('status').textContent
+    } });
+  } catch (e) {}
+}
+if (bc) bc.onmessage = e => {
+  const m = e.data || {}, d = m.data || {};
+  if (!cityReady && m.cmd !== 'hello') return;
+  switch (m.cmd) {
+    case 'hello': break;
+    case 'shot': setTour(false); goShot(d.i); break;
+    case 'tour': setTour(!!d.on); if (d.on) goShot(cur + 1); break;
+    case 'focus': focusMesh(meshByName(d.n), PRETTY(d.n)); break;
+    case 'run': { const b = [...document.querySelectorAll('#cmdbtns button')].find(x => x.dataset.c === d.c); if (b) b.click(); break; }
+    case 'chan': $('chan').value = d.name || ''; connectChat(d.name); break;
+    case 'src': $(d.id).value = d.v; store.set(d.id, d.v); setVideo(d.id === 'srcGame' ? 'SCREEN_GAMEPLAY' : 'SCREEN_LIVECAM', d.v); break;
+    case 'findcams': findCams().then(postState); break;
+    case 'ad': { setAdImage(d.slot, d.data); const ads = store.get('ads', {}); ads[d.slot] = d.data;
+      setStatus(store.set('ads', ads) ? d.slot + ' updated and saved.' : d.slot + ' updated (storage full, resets on reload).'); break; }
+    case 'adreset': { const ads = store.get('ads', {}); delete ads[d.slot]; store.set('ads', ads); setAdImage(d.slot, null); setStatus(d.slot + ' reset.'); break; }
+    case 'adshow': if (adSlots[d.slot]) focusMesh(adSlots[d.slot], d.slot.replace(/_/g, ' ')); break;
+  }
+  setTimeout(postState, 120);
+};
+
 window.LSC = { sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
+}
+</script>
+<script>
+if (window.LSC_CONTROL) {
+  const $ = id => document.getElementById(id);
+  document.title = 'LSC Control';
+  ['c', 'load', 'toast', 'hint'].forEach(id => { const el = $(id); if (el) el.remove(); });
+  const st0 = document.createElement('style');
+  st0.textContent = `html,body{overflow:auto;height:auto}#panel{position:static;width:auto;height:auto;border:0;border-radius:0;margin:0;backdrop-filter:none;background:var(--bg);overflow:visible;padding:12px}
+    #panel h3{margin-top:14px}.wait{color:var(--pink)}`;
+  document.head.appendChild(st0);
+  const P = $('panel'); P.classList.remove('hide');
+  P.querySelector('.note').textContent = 'Control dock for the LSCworld scene. Everything here changes the city on stream.';
+  const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('lscCity') : null;
+  const send = (cmd, data) => { if (bc) try { bc.postMessage({ cmd, data: data || {} }); } catch (e) {} };
+  const status = t => { $('status').textContent = t; };
+  let st = null;
+  status('Waiting for the city in OBS... (LSCworld scene must be loaded)');
+  $('status').className = 'wait';
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function render() {
+    $('shots').innerHTML = st.shots.map((l, i) => `<button data-i="${i}" class="${i === st.cur ? 'on' : ''}">${i + 1} ${esc(l)}</button>`).join('');
+    $('tour').classList.toggle('on', st.tour);
+    $('focusBtns').innerHTML = st.focus.map(([l, n]) => `<button data-n="${n}" class="${n === st.focused ? 'on' : ''}">${esc(l)}</button>`).join('');
+    $('cmdbtns').innerHTML = st.commands.map(c => `<button data-c="${c}">${c}</button>`).join('');
+    if (document.activeElement !== $('chan')) $('chan').value = st.chan || '';
+    ['srcGame', 'srcCam'].forEach(id => { const sel = $(id);
+      sel.innerHTML = st.cams.map(o => `<option value="${esc(o.v)}">${esc(o.t)}</option>`).join('') || '<option value="">Placeholder</option>';
+      sel.value = id === 'srcGame' ? st.srcGame : st.srcCam; });
+    const keep = $('adSlot').value; $('adSlot').innerHTML = st.ads.map(a => `<option>${a}</option>`).join(''); if (keep) $('adSlot').value = keep;
+    if (st.status) status(st.status);
+    $('status').className = '';
+  }
+  if (bc) bc.onmessage = e => { const m = e.data || {};
+    if (m.cmd === 'state') { st = m.data; render(); }
+    else if (m.cmd === 'status' && m.data) { status(m.data.msg); $('status').className = ''; } };
+  $('shots').onclick = e => { const b = e.target.closest('button'); if (b) send('shot', { i: +b.dataset.i }); };
+  $('tour').onclick = () => send('tour', { on: !(st && st.tour) });
+  $('focusBtns').onclick = e => { const b = e.target.closest('button'); if (b) send('focus', { n: b.dataset.n }); };
+  $('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) send('run', { c: b.dataset.c }); };
+  $('chanGo').onclick = () => send('chan', { name: $('chan').value });
+  $('chan').addEventListener('keydown', e => { if (e.key === 'Enter') send('chan', { name: $('chan').value }); });
+  $('srcGame').onchange = e => send('src', { id: 'srcGame', v: e.target.value });
+  $('srcCam').onchange = e => send('src', { id: 'srcCam', v: e.target.value });
+  $('findCams').onclick = () => send('findcams');
+  $('adShow').onclick = () => send('adshow', { slot: $('adSlot').value });
+  $('adReset').onclick = () => send('adreset', { slot: $('adSlot').value });
+  $('adFile').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const img = new Image(), url = URL.createObjectURL(f);
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = 1280; c.height = 720; const x = c.getContext('2d');
+      const s = Math.max(1280 / img.width, 720 / img.height); x.drawImage(img, (1280 - img.width * s) / 2, (720 - img.height * s) / 2, img.width * s, img.height * s);
+      send('ad', { slot: $('adSlot').value, data: c.toDataURL('image/jpeg', 0.85) });
+      URL.revokeObjectURL(url); e.target.value = '';
+    };
+    img.src = url;
+  };
+  send('hello');
+  setInterval(() => send('hello'), st ? 15000 : 3000);
 }
 </script>
 </body></html>
