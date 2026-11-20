@@ -117,7 +117,8 @@ const moon = new THREE.DirectionalLight(0x8090ff, 0.35); moon.position.set(-60, 
 // Zero Cool: dark neon red only
 const clubLights = [[-23, 22.5, 8, 1.3], [-28, 22.5, 5, 0.8], [-26.5, 13.5, 4, 0.7], [-16, 31, 3.5, 0.5]].map(([x, y, z, i]) => {
   const L = new THREE.PointLight(0xff0a1e, i, 22, 2); L.position.copy(B(x, y, z)); L.userData.base = i; scene.add(L); return L; });
-[[-72, 17, 8, 0xff1020, 1.3], [-72, 28, 8, 0x2050ff, 1.3], [-77, 22.5, 5, 0xffc030, 0.9], [-48, 22.5, 6, 0xff1a2a, 1.6]].forEach(([x, y, z, c, i]) => {
+[[-72, 17, 8, 0xff1020, 1.3], [-72, 28, 8, 0x2050ff, 1.3], [-77, 22.5, 5, 0xffc030, 0.9], [-48, 22.5, 6, 0xff1a2a, 1.6],
+ [-70, -30, 8, 0x00e6c0, 1.3], [-62, -26, 8, 0xff28a6, 1.0], [-66, -12, 8, 0x73ccff, 1.2], [-48, -22.5, 6, 0x00e6c0, 1.6]].forEach(([x, y, z, c, i]) => {
   const L = new THREE.PointLight(c, i, 24, 2); L.position.copy(B(x, y, z)); L.userData.base = i; scene.add(L); clubLights.push(L); });
 
 // stars + moon
@@ -141,7 +142,7 @@ const citizens = [], cars = [], beams = [], adSlots = {}, screens = { GAMEPLAY: 
 let holoRing = null, holoText = null, spray = null;
 const neonMats = [];          // materials we can recolor with !lights
 const stripes = [];           // Zero Cool facade stripes for strobe
-const SHOT_LABELS = { CAM_WIDE: 'Gateway', CAM_STRIP: 'Strip', CAM_MEDIA: 'Tower', CAM_PARK: 'Park', CAM_CLUB: 'Club outside', CAM_ZC_DOOR: 'Zero Cool', CAM_ZC_FLOOR: 'Club floor', CAM_ZC_BAR: 'Green Room', CAM_FC_OUT: 'Fight Club outside', CAM_FC_STAGE: 'Fight stage', CAM_FC_FLOOR: 'Fight Club floor', CAM_FC_LOUNGE: 'K.O. Lounge', CAM_AERIAL: 'Aerial' };
+const SHOT_LABELS = { CAM_WIDE: 'Gateway', CAM_STRIP: 'Strip', CAM_MEDIA: 'Tower', CAM_PARK: 'Park', CAM_CLUB: 'Club outside', CAM_ZC_DOOR: 'Zero Cool', CAM_ZC_FLOOR: 'Club floor', CAM_ZC_BAR: 'Green Room', CAM_FC_OUT: 'Fight Club outside', CAM_FC_STAGE: 'Fight stage', CAM_FC_FLOOR: 'Fight Club floor', CAM_FC_LOUNGE: 'K.O. Lounge', CAM_BIT_OUT: 'B.I.T. outside', CAM_BIT_MAIN: 'Giant CRT', CAM_BIT_CRT: 'CRT stations', CAM_BIT_FLOOR: 'B.I.T. floor', CAM_BIT_Y2K: 'Y2K Lounge', CAM_AERIAL: 'Aerial' };
 const DYNAMIC = /^(CITIZEN_|CAR_|AD_SLOT_|SCREEN_|PARK_holo|ZC_beam|ZC_stripe|PARK_fountain_spray)/;
 
 function hasDynamicAncestor(o) { for (let p = o; p; p = p.parent) if (DYNAMIC.test(p.name)) return true; return false; }
@@ -176,8 +177,9 @@ loader.load('Lucid_State_City.glb', gltf => {
       if (m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b > 0 || m.emissiveMap)) {
         m.emissiveIntensity = Math.min(3.2, 0.55 + s * 0.28);
         if (/^Windows_/.test(m.name)) m.emissiveIntensity = 1.25;
-        if (/^(FC_P1_Red|FC_P2_Blue|FC_Yellow|KO_Tile|ZC_Red)/.test(m.name)) m.emissiveIntensity = 1.0;   // deep, saturated neon instead of washed-out white
-        if (/^(AD_SLOT|SCREEN_|FC_BRACKET)/.test(m.name)) { m.emissiveIntensity = 1.05; m.color.setRGB(0, 0, 0); m.roughness = 1; m.metalness = 0; }   // screens glow on their own, no light glare
+        if (/^(FC_P1_Red|FC_P2_Blue|FC_Yellow|KO_Tile|ZC_Red|BIT_Teal|BIT_Magenta|BIT_Yellow|BIT_Purple|Y2K_)/.test(m.name)) m.emissiveIntensity = 1.0;
+        if (/^BIT_Carpet/.test(m.name)) m.emissiveIntensity = 0.35;   // deep, saturated neon instead of washed-out white
+        if (/^(AD_SLOT|SCREEN_|FC_BRACKET|BIT_Retro)/.test(m.name)) { m.emissiveIntensity = 1.05; m.color.setRGB(0, 0, 0); m.roughness = 1; m.metalness = 0; }   // screens glow on their own, no light glare
       }
       if (/^Beam_/.test(m.name)) { m.transparent = true; m.opacity = 0.16; m.depthWrite = false; m.blending = THREE.AdditiveBlending; m.emissiveIntensity = 1.4; }
       if (/^Grass/.test(m.name)) m.color.multiplyScalar(0.45);
@@ -193,7 +195,7 @@ loader.load('Lucid_State_City.glb', gltf => {
     if (/^CITIZEN_\d+$/.test(n)) citizens.push(makeWalker(o));
     else if (/^CAR_\d+$/.test(n)) cars.push(makeCar(o));
     else if (/^AD_SLOT_\d+$/.test(n) && o.isMesh) adSlots[n] = o;
-    else if (/^SCREEN_(GAMEPLAY|LIVECAM|CHAT|COMMANDS)(_(ZC|FC)\d?)?$/.test(n) && o.isMesh) screens[n.split('_')[1]].push(o);
+    else if (/^SCREEN_(GAMEPLAY|LIVECAM|CHAT|COMMANDS)(_(ZC|FC|BIT)\d?)?$/.test(n) && o.isMesh) screens[n.split('_')[1]].push(o);
     else if (n === 'SCREEN_BRACKET_FC' && o.isMesh) extraScreens.push(o);
     else if (/^ZC_beam/.test(n)) beams.push({ o, rx: o.rotation.x, rz: o.rotation.z, ph: Math.random() * 6 });
     else if (n === 'PARK_holo_ring') holoRing = o;
@@ -284,8 +286,14 @@ for (let i = 0; i < 14; i++) FC_SPOTS.push(B(-74 + Math.random() * 6, 18.5 + Mat
 for (let i = 0; i < 8; i++) FC_SPOTS.push(B(-63.5 + Math.random() * 7, 29.5 + Math.random() * 4.5, 0.25));      // K.O. Lounge dance floor
 for (let i = 0; i < 5; i++) FC_SPOTS.push(B(-79 + i * 1.7, 32.6, 0.25));                                         // K.O. Lounge bar
 for (let i = 0; i < 6; i++) FC_SPOTS.push(B(-75 + i * 3, 11.2, 0.25));                                           // arcade row
-const SPOTS = { zc: CLUB_SPOTS, fc: FC_SPOTS };
-const zoneOf = p => (p.x < -12.2 && p.x > -34 && -p.z > 9.5 && -p.z < 35.5) ? 'zc' : (p.x < -52.6 && p.x > -82.5 && -p.z > 7.5 && -p.z < 37.5) ? 'fc' : null;
+const BIT_SPOTS = [];
+for (let i = 0; i < 10; i++) BIT_SPOTS.push(B(-75 + Math.random() * 5, -30 + Math.random() * 6, 0.25));          // crowd at the giant CRT
+for (let i = 0; i < 8; i++) BIT_SPOTS.push(B(-71 + Math.random() * 7, -14 + Math.random() * 4.2, 0.25));         // Y2K Lounge dance floor
+for (let i = 0; i < 6; i++) BIT_SPOTS.push(B(-66 + Math.random() * 8, -31 + Math.random() * 5, 0.25));           // around the CRT stations
+const SPOTS = { zc: CLUB_SPOTS, fc: FC_SPOTS, bit: BIT_SPOTS };
+const zoneOf = p => (p.x < -12.2 && p.x > -34 && -p.z > 9.5 && -p.z < 35.5) ? 'zc'
+  : (p.x < -52.6 && p.x > -82.5 && -p.z > 7.5 && -p.z < 37.5) ? 'fc'
+  : (p.x < -52.6 && p.x > -82.5 && -p.z > -37.5 && -p.z < -7.5) ? 'bit' : null;
 const isInClub = p => !!zoneOf(p);
 function stepTo(w, target, speed, dt) {
   const o = w.o, dx = target.x - o.position.x, dz = target.z - o.position.z, d = Math.hypot(dx, dz);
@@ -300,18 +308,15 @@ function sendTo(w, dest) {
   if (!w || w.state === 'entering' || (w.state === 'inside' && w.zone === dest)) return false;
   const P = (x, y) => B(x, y, 0.25), pts = [];
   const bx = w.o.position.x, by = -w.o.position.z, from = zoneOf(w.o.position);
-  let west = false;
-  if (from === 'zc') pts.push(P(-14.5, 22.5), P(-10.6, 22.5));
-  else if (from === 'fc') { pts.push(P(-55, 22.5), P(-50.5, 22.5), P(-47, 22.5)); west = true; }
-  else if (bx > 0) pts.push(P(10, by), P(-10.6, by));                     // cross the strip
-  else pts.push(P(-10.6, by));
-  if (dest === 'zc') {
-    if (west) pts.push(P(-47, 3), P(-10.6, 3));
-    pts.push(P(-10.6, 22.5), P(-14.5, 22.5));
-  } else {
-    if (!west) pts.push(P(-10.6, 3), P(-47, 3), P(-47, 22.5));
-    pts.push(P(-50.5, 22.5), P(-55, 22.5));
-  }
+  const DOORS = { zc: { y: 22.5, inX: -14.5, outX: -10.6, west: false }, fc: { y: 22.5, inX: -55, outX: -50.5, west: true }, bit: { y: -22.5, inX: -55, outX: -50.5, west: true } };
+  let side;                                                       // 'strip' = west sidewalk of the Strip, 'west' = side street x=-47
+  if (from) { const d = DOORS[from]; pts.push(P(d.inX, d.y), P(d.outX, d.y)); if (d.west) pts.push(P(-47, d.y)); side = d.west ? 'west' : 'strip'; }
+  else { if (bx > 0) pts.push(P(10, by)); pts.push(P(-10.6, by)); side = 'strip'; }
+  const D = DOORS[dest];
+  if (D.west && side === 'strip') pts.push(P(-10.6, 0), P(-47, 0));
+  if (!D.west && side === 'west') pts.push(P(-47, 0), P(-10.6, 0));
+  if (D.west) pts.push(P(-47, D.y));
+  pts.push(P(D.outX, D.y), P(D.inX, D.y));
   pts.push(SPOTS[dest][Math.random() * SPOTS[dest].length | 0].clone());
   w.path = pts; w.state = 'entering'; w.walk = false; w.dest = dest; w.goal = null;
   return true;
@@ -399,7 +404,7 @@ function updateWalkers(dt, t) {
 const chatLines = [];
 let chatCanvas, chatTex, cmdCanvas, cmdTex;
 const COMMANDS = [
-  ['!spawn', 'join the city as a citizen'], ['!club', 'walk into Zero Cool'], ['!fight', 'walk into Fight Club'], ['!dance', 'start a dance at Zero Cool'], ['!rain', 'make it rain on the city'],
+  ['!spawn', 'join the city as a citizen'], ['!club', 'walk into Zero Cool'], ['!fight', 'walk into Fight Club'], ['!bit', 'walk into Back In Time'], ['!dance', 'start a dance at Zero Cool'], ['!rain', 'make it rain on the city'],
   ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard']
 ];
 function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; return [c, t]; }
@@ -424,9 +429,9 @@ function drawCommands() {
   const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, '#05051a'); g.addColorStop(1, '#1e002d'); x.fillStyle = g; x.fillRect(0, 0, w, h);
   x.textAlign = 'center'; x.font = '120px Anton, Impact, sans-serif'; x.shadowColor = '#38e8ff'; x.shadowBlur = 24; x.fillStyle = '#fff';
   x.fillText('INTERACTIVE WORLD', w / 2, 150); x.shadowBlur = 0; x.textAlign = 'left';
-  COMMANDS.forEach(([c, d], i) => { const y = 238 + i * 59;
-    x.font = 'bold 50px Poppins, sans-serif'; x.fillStyle = '#ff50c8'; x.fillText(c, 140, y);
-    x.font = 'bold 40px Poppins, sans-serif'; x.fillStyle = '#e6e6ff'; x.fillText(d, 520, y); });
+  COMMANDS.forEach(([c, d], i) => { const y = 232 + i * 53;
+    x.font = 'bold 44px Poppins, sans-serif'; x.fillStyle = '#ff50c8'; x.fillText(c, 140, y);
+    x.font = 'bold 37px Poppins, sans-serif'; x.fillStyle = '#e6e6ff'; x.fillText(d, 520, y); });
   frame(x, w, h, '#38e8ff'); cmdTex.needsUpdate = true;
 }
 function drawChat() {
@@ -565,7 +570,9 @@ const FOCUS = [
   ['Zero Cool commands', 'SCREEN_COMMANDS_ZC'], ['Green Room screen', 'SCREEN_GAMEPLAY_ZC2'],
   ['Fight Club main', 'SCREEN_GAMEPLAY_FC1'], ['Fight Club cam', 'SCREEN_LIVECAM_FC'], ['Fight Club chat', 'SCREEN_CHAT_FC'],
   ['Fight Club commands', 'SCREEN_COMMANDS_FC'], ['Bracket board', 'SCREEN_BRACKET_FC'], ['Fight Club door screen', 'SCREEN_GAMEPLAY_FC2'],
-  ['Versus TV 1', 'SCREEN_GAMEPLAY_FC3'], ['Versus TV 2', 'SCREEN_GAMEPLAY_FC4'], ['Versus TV 3', 'SCREEN_GAMEPLAY_FC5']
+  ['Versus TV 1', 'SCREEN_GAMEPLAY_FC3'], ['Versus TV 2', 'SCREEN_GAMEPLAY_FC4'], ['Versus TV 3', 'SCREEN_GAMEPLAY_FC5'],
+  ['B.I.T. giant CRT', 'SCREEN_GAMEPLAY_BIT1'], ['CRT 1', 'SCREEN_GAMEPLAY_BIT2'], ['CRT 2', 'SCREEN_GAMEPLAY_BIT3'], ['CRT 3', 'SCREEN_GAMEPLAY_BIT4'],
+  ['B.I.T. door screen', 'SCREEN_GAMEPLAY_BIT5'], ['B.I.T. cam', 'SCREEN_LIVECAM_BIT'], ['B.I.T. chat', 'SCREEN_CHAT_BIT'], ['B.I.T. commands', 'SCREEN_COMMANDS_BIT']
 ];
 let focused = null;
 function focusMesh(m, label, instant) {
@@ -754,7 +761,7 @@ function startDance(t) {
 const cooldown = {};
 function runCommand(cmd, user, color) {
   const t = clock.getElapsedTime(), now = performance.now();
-  const cd = { '!spawn': 0, '!club': 0, '!fight': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000 }[cmd];
+  const cd = { '!spawn': 0, '!club': 0, '!fight': 0, '!bit': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000 }[cmd];
   if (cd === undefined) return;
   if (cd && cooldown[cmd] && now - cooldown[cmd] < cd) return;
   cooldown[cmd] = now;
@@ -770,6 +777,11 @@ function runCommand(cmd, user, color) {
     if (!w) { spawnCitizen(user, color); w = spawned.find(s => s.user === user); }
     if (sendTo(w, 'fc')) toast(user + ' is heading into Fight Club');
   }
+  if (cmd === '!bit') {
+    let w = spawned.find(s => s.user === user);
+    if (!w) { spawnCitizen(user, color); w = spawned.find(s => s.user === user); }
+    if (sendTo(w, 'bit')) toast(user + ' is going Back In Time');
+  }
   if (cmd === '!dance') { startDance(t); toast(user + ' started a dance at Zero Cool'); }
   if (cmd === '!rain') { rainUntil = t + 45; toast(user + ' made it rain'); }
   if (cmd === '!fireworks') { fwQueue += 7; toast(user + ' lit up the sky'); }
@@ -777,7 +789,7 @@ function runCommand(cmd, user, color) {
   if (cmd === '!ad') { chatLines.push({ user: 'LSC', color: '#38e8ff', text: 'Want a billboard in Lucid State City? Message Rassir to rent an ad slot.' }); drawChat(); toast('Billboards for rent: message Rassir'); }
 }
 $('cmdbtns').innerHTML = COMMANDS.map(([c]) => `<button data-c="${c}">${c}</button>`).join('');
-$('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) { const c = b.dataset.c; delete cooldown[c]; runCommand(c, c === '!spawn' ? 'Viewer' + (Math.random() * 900 + 100 | 0) : (c === '!club' || c === '!fight') ? (spawned.find(w => w.state === 'street') || { user: 'Viewer' + (Math.random() * 900 + 100 | 0) }).user : 'Rassir', ['#ff2d8f', '#38e8ff', '#7dff6a', '#ffd23f'][Math.random() * 4 | 0]); } };
+$('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) { const c = b.dataset.c; delete cooldown[c]; runCommand(c, c === '!spawn' ? 'Viewer' + (Math.random() * 900 + 100 | 0) : (c === '!club' || c === '!fight' || c === '!bit') ? (spawned.find(w => w.state === 'street') || { user: 'Viewer' + (Math.random() * 900 + 100 | 0) }).user : 'Rassir', ['#ff2d8f', '#38e8ff', '#7dff6a', '#ffd23f'][Math.random() * 4 | 0]); } };
 
 // ---------------------------------------------------------------- Twitch chat (read-only, anonymous)
 let ws = null, chanName = '', reconnectTimer = 0;
