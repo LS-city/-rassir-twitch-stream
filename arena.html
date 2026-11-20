@@ -96,6 +96,7 @@
   <label class="t">Viewer games</label>
   <div class="row">
     <button id="bossBtn">Summon boss</button>
+    <button id="bossClear">Clear boss</button>
     <button id="duelTest">Test duel</button>
     <button id="dropTest">Test item drop</button>
   </div>
@@ -2161,6 +2162,9 @@ function drawBossBar(){if(!boss)return;const c=bossG.userData.hc,x=c.getContext(
   x.fillStyle='#fff';x.font='bold 20px "Courier New",monospace';x.fillText(Math.max(0,Math.ceil(boss.hp))+' / '+boss.max+'   '+Math.max(0,Math.ceil(boss.until-now))+'s   type !attack',256,68);bossG.userData.hb.material.map.needsUpdate=true;}
 function startBoss(){if(isControl){remote('boss',{});return;}if(vertical||boss)return;const mx=Math.round(300+crowd.size*90);boss={hp:mx,max:mx,t0:now,until:now+150,dmg:{},nextSlam:now+9};
   bossG.visible=true;bossG.position.set(0,26,-8.2);if(typeof setShot==='function')setShot('wide');pushAlert('BOSS INCOMING!','THE GLITCH KING','Type !attack to fight it together!');winText='BOSS BATTLE!';winCol='#c77dff';winT=now;roundPhase='';drawBossBar();}
+function clearBoss(){if(isControl){remote('clearboss',{});setStatus('Boss cleared.');return;}if(!boss)return;
+  bolts.forEach(b=>scene.remove(b.m));bolts.length=0;dmgPops.forEach(d=>scene.remove(d.s));dmgPops.length=0;
+  boss.fled=now;camShake=0;if(winText==='BOSS BATTLE!')winT=-99;pushAlert('BOSS CLEARED','THE GLITCH KING','The boss has left the arena');setStatus('Boss cleared.');}
 function bossAttack(name,v){if(!boss||boss.hp<=0)return;const k=name.toLowerCase();if(now-(cool[k+'atk']||-99)<3)return;cool[k+'atk']=now;
   const dmg=Math.round(8+Math.random()*14+lvlOf(xpOf(name))*1.5);boss.hp-=dmg;boss.dmg[k]=(boss.dmg[k]||{name,d:0});boss.dmg[k].d+=dmg;addXP(name,2+dmg/10);
   const from=v?v.g.position.clone().setY(1.5):new THREE.Vector3((Math.random()-.5)*10,1.5,4);const bl=new THREE.Mesh(new THREE.SphereGeometry(0.18,8,6),B(v?v.col:'#ffffff'));bl.position.copy(from);scene.add(bl);bolts.push({m:bl,s:from,t0:now,dmg});
@@ -2260,6 +2264,7 @@ function viewerChat(name,col,msg,isMod,bits){
   else if(m==='!decline'&&duel&&duel.state==='pending'&&duel.b.toLowerCase()===k){pushAlert('DUEL',name,'declined the duel');duel=null;}
   else if(m==='!attack'||m==='!hit'){bossAttack(name,v);}
   else if(m==='!boss'&&isMod)startBoss();
+  else if(m==='!clearboss'&&isMod)clearBoss();
   else if(m.startsWith('!tag ')&&ok('t',60))sprayTag(name,raw.slice(5));
   else if(m==='!cleantags'&&isMod)clearTags();
   else if((m==='!drop'||m.startsWith('!drop '))&&ok('i',30)&&now-(cool._gdrop||-99)>5){cool._gdrop=now;dropItem(name,m.slice(6).trim());}
@@ -2270,7 +2275,7 @@ function viewerChat(name,col,msg,isMod,bits){
   else v.jump=now;
   if(bits){for(let n=0;n<Math.min(6,1+Math.floor(bits/100));n++)setTimeout(()=>burst((Math.random()-.5)*14,9+Math.random()*4,-6-Math.random()*6,90,6,['#ffd166','#ff4fd8','#3ff5ff','#ffffff'],false),n*450);}
 }
-$('bossBtn').onclick=()=>startBoss();$('tagClear').onclick=()=>clearTags();
+$('bossBtn').onclick=()=>startBoss();$('bossClear').onclick=()=>clearBoss();$('tagClear').onclick=()=>clearTags();
 $('dropTest').onclick=()=>dropItem('TestViewer','');$('tagTest').onclick=()=>sprayTag('TestViewer',['GG EZ','LSC 4 LIFE','RASSIR #1','HYPE!!','W STREAM'][Math.floor(Math.random()*5)]);
 $('duelTest').onclick=()=>{if(isControl){remote('testduel',{});return;}addViewer('DuelerA','#ff4fd8');addViewer('DuelerB','#3ff5ff');duel=null;startDuel('DuelerA','DuelerB');setTimeout(acceptDuel,2500);};
 $('qNext').onclick=()=>{if(isControl){remote('qnext',{});return;}nextFight();};
@@ -2757,7 +2762,7 @@ function applyRemote(cmd,d){
   else if(cmd==='qnext')nextFight();
   else if(cmd==='labels')applyLabels(d.labels,true);
   else if(cmd==='clip')makeClip(d.by);
-  else if(cmd==='boss')startBoss();else if(cmd==='cleantags')clearTags();else if(cmd==='tag')sprayTag(d.name,d.text);else if(cmd==='drop')dropItem(d.name,d.type);else if(cmd==='testduel')$('duelTest').onclick();
+  else if(cmd==='boss')startBoss();else if(cmd==='clearboss')clearBoss();else if(cmd==='cleantags')clearTags();else if(cmd==='tag')sprayTag(d.name,d.text);else if(cmd==='drop')dropItem(d.name,d.type);else if(cmd==='testduel')$('duelTest').onclick();
   else if(cmd==='pip')setPip(d.pos,d.size,true);
   else if(cmd==='expr')setExpr(d.e,true);
   else if(cmd==='trophies'){trophies=d.list||[];trophyOn=d.on!==false;store.set('trophies',trophies);store.set('trophyOn',trophyOn);renderTrophyList();applyTrophyVis();if(d.spot&&!isControl){trophyOn=true;applyTrophyVis();setShot('trophy');burst(7.9,7.5,-13.5,80,5,['#ffd23a','#ffffff','#fff1a8'],true);}}
