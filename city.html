@@ -30,6 +30,8 @@ input,select{width:100%}
 button{cursor:pointer;flex:1 1 auto}
 button:hover{border-color:var(--pink)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
 button.on{background:var(--pink);border-color:var(--pink);color:#fff}
+#focusBtns button{font-size:13px;padding:6px 8px}
+canvas#c.pick{cursor:pointer}
 #status{font-size:13px;color:var(--dim);margin-top:6px;min-height:1.4em}
 #toast{position:fixed;left:50%;bottom:6%;transform:translateX(-50%);font:400 34px/1.1 Anton,Impact,sans-serif;color:#fff;
   text-shadow:0 0 14px var(--pink),0 0 30px var(--pink);opacity:0;transition:opacity .4s;pointer-events:none;z-index:2;text-align:center;white-space:nowrap}
@@ -41,7 +43,7 @@ button.on{background:var(--pink);border-color:var(--pink);color:#fff}
 <canvas id="c"></canvas>
 <div id="load"><div><h1>LUCID STATE CITY</h1><p id="loadtxt">Loading the city…</p><div id="bar"><i></i></div></div></div>
 <div id="toast"></div>
-<div id="hint">H = panel · 1–9 shots · V = follow player · 0 = auto tour</div>
+<div id="hint">Click a screen to focus · H = panel · 1–9 shots · V = follow · 0 = tour</div>
 <div id="panel">
   <h2>LUCID STATE CITY</h2>
   <p class="note">Live stream world. Press <b>H</b> to hide this panel before going live.</p>
@@ -49,6 +51,10 @@ button.on{background:var(--pink);border-color:var(--pink);color:#fff}
   <h3>Camera</h3>
   <div class="row" id="shots"></div>
   <div class="row" style="margin-top:6px"><button id="tour" class="on">Auto tour</button></div>
+
+  <h3>Focus a screen</h3>
+  <div class="row" id="focusBtns"></div>
+  <p class="note" style="margin-top:6px">Or click any screen or billboard in the city. Esc goes back to the auto tour.</p>
 
   <h3>Viewer commands (test)</h3>
   <div class="row" id="cmdbtns"></div>
@@ -105,9 +111,12 @@ scene.fog = new THREE.FogExp2(0x120822, 0.0042);
 const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 2000);
 scene.add(new THREE.HemisphereLight(0x5a4aa8, 0x120818, 0.55));
 const moon = new THREE.DirectionalLight(0x8090ff, 0.35); moon.position.set(-60, 120, -80); scene.add(moon);
-[[-23, 22.5, 8, 0xc040ff, 1.6], [-26.5, 13.5, 4, 0x40ff70, 1.3], [-29, 22.5, 5, 0x30b0ff, 1.0], [-6, 24, 6, 0xff1a99, 3.5], [-4, -22.5, 16, 0x3399ff, 4], [6, 22, 5, 0x22ddff, 2.5], [-5, -67.5, 5, 0xff8833, 3],
+[[-6, 24, 6, 0xff1a99, 3.5], [-4, -22.5, 16, 0x3399ff, 4], [6, 22, 5, 0x22ddff, 2.5], [-5, -67.5, 5, 0xff8833, 3],
  [6, -67, 4, 0xff3322, 2.5], [8, 67.5, 5, 0xff33cc, 3], [22.5, -22.5, 4, 0x33aaff, 3], [0, -88, 12, 0x33eeff, 3]]
   .forEach(([x, y, z, c, i]) => { const L = new THREE.PointLight(c, i * 0.6, 40, 2); L.position.copy(B(x, y, z)); scene.add(L); });
+// Zero Cool: dark neon red only
+const clubLights = [[-23, 22.5, 8, 1.3], [-28, 22.5, 5, 0.8], [-26.5, 13.5, 4, 0.7], [-16, 31, 3.5, 0.5]].map(([x, y, z, i]) => {
+  const L = new THREE.PointLight(0xff0a1e, i, 22, 2); L.position.copy(B(x, y, z)); L.userData.base = i; scene.add(L); return L; });
 
 // stars + moon
 { const g = new THREE.BufferGeometry(), p = [];
@@ -126,12 +135,11 @@ addEventListener('resize', resize); resize();
 // ---------------------------------------------------------------- state
 const shots = [];             // {name,label,pos,quat,fov}
 const citizens = [], cars = [], beams = [], adSlots = {}, screens = { GAMEPLAY: [], LIVECAM: [], CHAT: [], COMMANDS: [] };
-const lasers = [], ledMats = []; let disco = null;
 let holoRing = null, holoText = null, spray = null;
 const neonMats = [];          // materials we can recolor with !lights
 const stripes = [];           // Zero Cool facade stripes for strobe
 const SHOT_LABELS = { CAM_WIDE: 'Gateway', CAM_STRIP: 'Strip', CAM_MEDIA: 'Tower', CAM_PARK: 'Park', CAM_CLUB: 'Club outside', CAM_ZC_DOOR: 'Zero Cool', CAM_ZC_FLOOR: 'Club floor', CAM_ZC_BAR: 'Green Room', CAM_AERIAL: 'Aerial' };
-const DYNAMIC = /^(CITIZEN_|CAR_|AD_SLOT_|SCREEN_|PARK_holo|ZC_beam|ZC_stripe|ZC_laser|ZC_disco_ball|PARK_fountain_spray)/;
+const DYNAMIC = /^(CITIZEN_|CAR_|AD_SLOT_|SCREEN_|PARK_holo|ZC_beam|ZC_stripe|PARK_fountain_spray)/;
 
 function hasDynamicAncestor(o) { for (let p = o; p; p = p.parent) if (DYNAMIC.test(p.name)) return true; return false; }
 
@@ -165,12 +173,12 @@ loader.load('Lucid_State_City.glb', gltf => {
       if (m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b > 0 || m.emissiveMap)) {
         m.emissiveIntensity = Math.min(3.2, 0.55 + s * 0.28);
         if (/^Windows_/.test(m.name)) m.emissiveIntensity = 1.25;
-        if (/^(AD_SLOT|SCREEN_)/.test(m.name)) m.emissiveIntensity = 1.05;
+        if (/^(AD_SLOT|SCREEN_)/.test(m.name)) { m.emissiveIntensity = 1.05; m.color.setRGB(0, 0, 0); m.roughness = 1; m.metalness = 0; }   // screens glow on their own, no light glare
       }
       if (/^Beam_/.test(m.name)) { m.transparent = true; m.opacity = 0.16; m.depthWrite = false; m.blending = THREE.AdditiveBlending; m.emissiveIntensity = 1.4; }
       if (/^Grass/.test(m.name)) m.color.multiplyScalar(0.45);
       if (/^Asphalt/.test(m.name)) { m.roughness = 0.5; m.metalness = 0.2; }
-      if (/^ZC_LED_/.test(m.name)) ledMats.push(m);
+      if (/^ZC_Wall|^ZC_Floor|^ZC_Dancefloor/.test(m.name)) { m.color.setRGB(0.004, 0.003, 0.004); }
       if (/^(Neon_|Glow_Jacket|Club_Door|Fairy|Fountain)/.test(m.name)) neonMats.push({ m, base: m.emissive.clone(), baseColor: m.color.clone() });
     });
   });
@@ -182,8 +190,6 @@ loader.load('Lucid_State_City.glb', gltf => {
     else if (/^CAR_\d+$/.test(n)) cars.push(makeCar(o));
     else if (/^AD_SLOT_\d+$/.test(n) && o.isMesh) adSlots[n] = o;
     else if (/^SCREEN_(GAMEPLAY|LIVECAM|CHAT|COMMANDS)(_ZC\d?)?$/.test(n) && o.isMesh) screens[n.split('_')[1]].push(o);
-    else if (/^ZC_laser/.test(n)) lasers.push({ o, ry: o.rotation.y, ph: Math.random() * 6 });
-    else if (n === 'ZC_disco_ball') disco = o;
     else if (/^ZC_beam/.test(n)) beams.push({ o, rx: o.rotation.x, rz: o.rotation.z, ph: Math.random() * 6 });
     else if (n === 'PARK_holo_ring') holoRing = o;
     else if (n === 'PARK_holo_LSC') holoText = o;
@@ -202,6 +208,7 @@ loader.load('Lucid_State_City.glb', gltf => {
   buildAdUI();
   restoreAds();
   buildShotUI();
+  buildFocusUI();
   $('load').style.display = 'none';
   goShot(0, true);
   setStatus(`City loaded: ${citizens.length} citizens, ${cars.length} cars, ${Object.keys(adSlots).length} ad slots.`);
@@ -369,7 +376,7 @@ const COMMANDS = [
   ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard']
 ];
 function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; return [c, t]; }
-function applyTex(mesh, tex) { if (!mesh) return; mesh.material = mesh.material.clone(); mesh.material.map = tex; mesh.material.emissiveMap = tex; mesh.material.emissive = new THREE.Color(0xffffff); mesh.material.emissiveIntensity = 1.0; mesh.material.needsUpdate = true; }
+function applyTex(mesh, tex) { if (!mesh) return; mesh.material = mesh.material.clone(); mesh.material.color.setRGB(0, 0, 0); mesh.material.roughness = 1; mesh.material.map = tex; mesh.material.emissiveMap = tex; mesh.material.emissive = new THREE.Color(0xffffff); mesh.material.emissiveIntensity = 1.0; mesh.material.needsUpdate = true; }
 const screenOrig = {};
 function setGroup(type, tex) {          // put one texture on every screen of a type (tower + Zero Cool + floating)
   const g = screens[type]; if (!g.length) return;
@@ -521,13 +528,64 @@ $('adFile').onchange = e => {
 };
 $('adReset').onclick = () => { const slot = $('adSlot').value, ads = store.get('ads', {}); delete ads[slot]; store.set('ads', ads); setAdImage(slot, null); setStatus(slot + ' reset.'); };
 $('adShow').onclick = () => {
-  const m = adSlots[$('adSlot').value]; if (!m) return;
-  const p = new THREE.Vector3(), q = new THREE.Quaternion(); m.getWorldPosition(p); m.getWorldQuaternion(q);
-  const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q);       // plane front
-  m.geometry.computeBoundingSphere(); const w = m.geometry.boundingSphere.radius;
-  const from = p.clone().add(n.multiplyScalar(Math.max(8, w * 2.2))).add(new THREE.Vector3(0, -1, 0));
-  flyTo({ name: 'AD', pos: from, quat: lookQuat(from, p), fov: 45 }, 2.2); setTour(false);
+  const m = adSlots[$('adSlot').value]; if (m) focusMesh(m, m.name.replace(/_/g, ' '));
 };
+
+// ---------------------------------------------------------------- focus on a screen (like the arena's camera panel)
+const FOCUS = [
+  ['Tower gameplay', 'SCREEN_GAMEPLAY'], ['Tower cam', 'SCREEN_LIVECAM'], ['Tower chat', 'SCREEN_CHAT'], ['Tower commands', 'SCREEN_COMMANDS'],
+  ['Zero Cool main', 'SCREEN_GAMEPLAY_ZC1'], ['Zero Cool cam', 'SCREEN_LIVECAM_ZC'], ['Zero Cool chat', 'SCREEN_CHAT_ZC'],
+  ['Zero Cool commands', 'SCREEN_COMMANDS_ZC'], ['Green Room screen', 'SCREEN_GAMEPLAY_ZC2']
+];
+let focused = null;
+function focusMesh(m, label, instant) {
+  if (!m) return;
+  const c = new THREE.Vector3(), q = new THREE.Quaternion(); m.getWorldPosition(c); m.getWorldQuaternion(q);
+  m.geometry.computeBoundingBox(); const bb = m.geometry.boundingBox, sc = new THREE.Vector3(); m.getWorldScale(sc);
+  const w = (bb.max.x - bb.min.x) * sc.x, h = (bb.max.y - bb.min.y) * sc.y;
+  const fov = 40, tf = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+  const d = Math.max((h / 2) / tf, (w / 2) / (tf * cam.aspect)) * 1.1;
+  const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+  const pos = c.clone().addScaledVector(n, d);
+  setTour(false);
+  focused = m;
+  const shot = { name: 'FOCUS', label, pos, quat: lookQuat(pos, c), fov, still: true };
+  if (instant) { cam.position.copy(pos); cam.quaternion.copy(shot.quat); cam.fov = fov; cam.updateProjectionMatrix(); hold = { s: shot, t: 0 }; fly = null; }
+  else flyTo(shot, 1.8);
+  document.querySelectorAll('#focusBtns button').forEach(b => b.classList.toggle('on', b.dataset.n === m.name));
+  document.querySelectorAll('#shots button').forEach(b => b.classList.remove('on'));
+  if (label) toast(label);
+}
+function meshByName(n) { return screens.GAMEPLAY.concat(screens.LIVECAM, screens.CHAT, screens.COMMANDS).find(m => m.name === n); }
+function buildFocusUI() {
+  $('focusBtns').innerHTML = FOCUS.filter(([, n]) => meshByName(n)).map(([l, n]) => `<button data-n="${n}">${l}</button>`).join('');
+  $('focusBtns').onclick = e => { const b = e.target.closest('button'); if (b) focusMesh(meshByName(b.dataset.n)); };
+}
+// click (or tap) a screen or billboard in the 3D view to focus it
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+function pickAt(ev) {
+  const r = canvas.getBoundingClientRect();
+  mouse.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(mouse, cam);
+  const targets = screens.GAMEPLAY.concat(screens.LIVECAM, screens.CHAT, screens.COMMANDS, Object.values(adSlots));
+  if (floatScreen && floatScreen.visible) targets.push(floatScreen.userData.plane);
+  // only count the first thing hit, so screens behind walls don't steal the click
+  const blockers = scene.children.filter(o => o.isMesh && !o.userData.noBlock);
+  const hits = ray.intersectObjects(targets.concat(blockers), false);
+  const h = hits[0];
+  return h && targets.includes(h.object) ? h.object : null;
+}
+const PRETTY = n => (FOCUS.find(([, k]) => k === n) || [n.replace(/_/g, ' ')])[0];
+let downAt = null;
+canvas.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
+  const m = pickAt(e); if (!m) return;
+  if (floatScreen && m === floatScreen.userData.plane) { setTour(false); goShot(shots.findIndex(s => s.follow)); return; }
+  focusMesh(m, PRETTY(m.name));
+});
+let hoverT = 0;
+canvas.addEventListener('pointermove', e => { const now = performance.now(); if (now - hoverT < 120) return; hoverT = now; canvas.classList.toggle('pick', !!pickAt(e)); });
 
 // ---------------------------------------------------------------- camera shots + auto tour
 function lookQuat(from, to) { const m = new THREE.Matrix4().lookAt(from, to, new THREE.Vector3(0, 1, 0)); return new THREE.Quaternion().setFromRotationMatrix(m); }
@@ -546,12 +604,17 @@ function prepFollow(s) {               // start the follow shot right behind the
 }
 function flyTo(s, dur = 3.2) {
   if (s.follow) prepFollow(s);
+  if (isInClub(cam.position) !== isInClub(s.pos)) {          // TV-style cut in/out of the club
+    cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix();
+    hold = { s, t: 0 }; fly = null; return;
+  }
   fly = { fromP: cam.position.clone(), fromQ: cam.quaternion.clone(), fromF: cam.fov, to: s, t: 0, dur };
   hold = null;
 }
 function goShot(i, instant) {
   cur = (i + shots.length) % shots.length; const s = shots[cur];
   document.querySelectorAll('#shots button').forEach((b, k) => b.classList.toggle('on', k === cur));
+  document.querySelectorAll('#focusBtns button').forEach(b => b.classList.remove('on')); focused = null;
   if (instant) { if (s.follow) prepFollow(s); cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); hold = { s, t: 0 }; fly = null; }
   else flyTo(s);
   tourT = 0;
@@ -585,9 +648,9 @@ function updateCamera(dt) {
   } else if (hold) {
     hold.t += dt;
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(hold.s.quat);
-    const drift = hold.s.walk ? hold.t * 1.4 : Math.sin(Math.min(hold.t / 18, 1) * Math.PI / 2) * 6;
+    const drift = hold.s.still ? 0 : hold.s.walk ? hold.t * 1.4 : Math.sin(Math.min(hold.t / 18, 1) * Math.PI / 2) * 6;
     cam.position.copy(hold.s.pos).addScaledVector(fwd, drift);
-    if (!hold.s.walk) cam.position.y += Math.sin(hold.t * 0.35) * 0.4;
+    if (!hold.s.walk && !hold.s.still) cam.position.y += Math.sin(hold.t * 0.35) * 0.4;
   }
   if (tourOn && !fly) { tourT += dt; if (tourT > 16) { let n = cur + 1; if (shots[n % shots.length].follow && !spawned.some(w => w.state === 'street')) n++; goShot(n); } }
 }
@@ -722,6 +785,7 @@ addEventListener('keydown', e => {
   if (k === 'h') setPanel(!$('panel').classList.contains('hide'));
   else if (k === '0') setTour(!tourOn);
   else if (/^[1-9]$/.test(k) && +k <= shots.length) { setTour(false); goShot(+k - 1); }
+  else if (k === 'escape') { setTour(true); goShot(cur + 1); }
   else if (k === 'v') { setTour(false); goShot(shots.findIndex(s => s.follow)); }
   else if (k === 'r') runCommand('!rain', 'Rassir');
   else if (k === 'f') runCommand('!fireworks', 'Rassir');
@@ -741,15 +805,14 @@ function loop() {
   if (spray) spray.scale.y = 1 + Math.sin(t * 3) * 0.12;
   beams.forEach(b => { b.o.rotation.x = b.rx + Math.sin(t * 0.5 + b.ph) * 0.35; b.o.rotation.z = b.rz + Math.cos(t * 0.37 + b.ph) * 0.35; });
   const party = t < danceUntil;
-  ledMats.forEach((m, i) => { m.emissiveIntensity = party ? (Math.sin(t * 9 + i * 1.7) > 0 ? 1.3 : 0.08) : 0.42 + 0.28 * Math.sin(t * 1.6 + i * 1.57); });
-  lasers.forEach(l => { l.o.rotation.y = l.ry + Math.sin(t * (party ? 2.2 : 0.8) + l.ph) * 0.35; });
-  if (disco) disco.rotation.y += dt * 0.8;
+  clubLights.forEach((L, i) => { L.intensity = party ? L.userData.base * (1.2 + Math.sin(t * 6 + i)) : L.userData.base * (0.9 + 0.1 * Math.sin(t * 0.8 + i)); });
   stripes.forEach((s, i) => { s.material.emissiveIntensity = party ? (Math.sin(t * 12 + i) > 0 ? 3.5 : 0.2) : s.userData.base * (0.8 + 0.2 * Math.sin(t * 2 + i * 0.6)); });
-  bloom.strength = party ? 1.15 : 0.9;
+  const focusOn = hold && hold.s.still && !fly;
+  bloom.strength += ((focusOn ? 0.18 : party ? 1.15 : 0.9) - bloom.strength) * Math.min(1, dt * 4);   // keep focused screens crisp
   composer.render();
 }
 loop();
-window.LSC = { goShot, runCommand, setTour, shots, spawned, get float() { return floatScreen; }, cam };
+window.LSC = { goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
 </script>
 </body></html>
