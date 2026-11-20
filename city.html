@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lucid State City Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: night-life broadcast, neon on black
+   IDEA: a live city you stream from
+   PICTURE: the full-screen 3D city itself
+   COLOUR and TYPE: black night, pink + cyan neon, Anton titles, Poppins controls
+   LAYOUT: city fills the window; a slim control panel on the left that H hides for OBS */
+:root{color-scheme:dark;--pink:#ff2d8f;--cyan:#38e8ff;--bg:#07040f;--ink:#ecebff;--dim:#9d97c9}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px/1.45 Poppins,system-ui,sans-serif;overflow:hidden}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#load{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);z-index:5;text-align:center}
+#load h1{font:400 clamp(34px,6vw,64px)/1.05 Anton,Impact,sans-serif;margin:0;color:#fff;text-shadow:0 0 18px var(--pink),0 0 40px var(--pink)}
+#load p{color:var(--cyan);margin:12px 0 0}
+#bar{width:min(360px,70vw);height:6px;background:#1c1530;border-radius:3px;margin:18px auto 0;overflow:hidden}
+#bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--pink),var(--cyan))}
+#panel{position:fixed;top:12px;left:12px;bottom:12px;width:300px;background:rgba(9,6,20,.9);border:1px solid #2c2050;border-radius:12px;
+  padding:14px;overflow-y:auto;z-index:3;backdrop-filter:blur(6px)}
+#panel.hide{display:none}
+#panel h2{font:400 26px/1.05 Anton,Impact,sans-serif;margin:0 0 2px;color:#fff;text-shadow:0 0 12px var(--pink)}
+#panel h3{font-size:13px;color:var(--cyan);margin:16px 0 6px;font-weight:700}
+#panel .note{color:var(--dim);font-size:13px;margin:0}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+input,select,button{font:inherit;font-size:14px;color:var(--ink);background:#150f2a;border:1px solid #3a2b66;border-radius:8px;padding:8px 10px;min-height:38px}
+input,select{width:100%}
+button{cursor:pointer;flex:1 1 auto}
+button:hover{border-color:var(--pink)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+button.on{background:var(--pink);border-color:var(--pink);color:#fff}
+#status{font-size:13px;color:var(--dim);margin-top:6px;min-height:1.4em}
+#toast{position:fixed;left:50%;bottom:6%;transform:translateX(-50%);font:400 34px/1.1 Anton,Impact,sans-serif;color:#fff;
+  text-shadow:0 0 14px var(--pink),0 0 30px var(--pink);opacity:0;transition:opacity .4s;pointer-events:none;z-index:2;text-align:center;white-space:nowrap}
+#hint{position:fixed;right:12px;bottom:10px;color:var(--dim);font-size:12px;z-index:2}
+#hint.hide{display:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="load"><div><h1>LUCID STATE CITY</h1><p id="loadtxt">Loading the city…</p><div id="bar"><i></i></div></div></div>
+<div id="toast"></div>
+<div id="hint">H = panel · 1–7 shots · 0 = auto tour</div>
+<div id="panel">
+  <h2>LUCID STATE CITY</h2>
+  <p class="note">Live stream world. Press <b>H</b> to hide this panel before going live.</p>
+
+  <h3>Camera</h3>
+  <div class="row" id="shots"></div>
+  <div class="row" style="margin-top:6px"><button id="tour" class="on">Auto tour</button></div>
+
+  <h3>Viewer commands (test)</h3>
+  <div class="row" id="cmdbtns"></div>
+
+  <h3>Twitch chat</h3>
+  <div class="row"><input id="chan" placeholder="your channel name" autocomplete="off"><button id="chanGo">Connect</button></div>
+
+  <h3>Tower screens</h3>
+  <label class="note" for="srcGame">Gameplay screen</label><select id="srcGame"><option value="">Placeholder</option></select>
+  <label class="note" for="srcCam">Live cam screen</label><select id="srcCam"><option value="">Placeholder</option></select>
+  <div class="row" style="margin-top:6px"><button id="findCams">Find cameras</button></div>
+
+  <h3>Billboards (ad slots)</h3>
+  <select id="adSlot"></select>
+  <div class="row" style="margin-top:6px"><input id="adFile" type="file" accept="image/*"></div>
+  <div class="row" style="margin-top:6px"><button id="adShow">Show this slot</button><button id="adReset">Reset slot</button></div>
+  <p class="note" style="margin-top:6px">Upload a 16:9 image for a slot. It's saved in this browser.</p>
+  <div id="status"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+{
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('lsc_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('lsc_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+};
+const params = new URLSearchParams(location.search);
+const setStatus = t => { $('status').textContent = t; };
+let toastT = 0;
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = 0, 3200); }
+// Blender (x,y,z) -> three (x, z, -y)
+const B = (x, y, z) => new THREE.Vector3(x, z, -y);
+
+// ---------------------------------------------------------------- renderer
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x07040f);
+scene.fog = new THREE.FogExp2(0x120822, 0.0042);
+const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 2000);
+scene.add(new THREE.HemisphereLight(0x5a4aa8, 0x120818, 0.55));
+const moon = new THREE.DirectionalLight(0x8090ff, 0.35); moon.position.set(-60, 120, -80); scene.add(moon);
+[[-6, 24, 6, 0xff1a99, 3.5], [-4, -22.5, 16, 0x3399ff, 4], [6, 22, 5, 0x22ddff, 2.5], [-5, -67.5, 5, 0xff8833, 3],
+ [6, -67, 4, 0xff3322, 2.5], [8, 67.5, 5, 0xff33cc, 3], [22.5, -22.5, 4, 0x33aaff, 3], [0, -88, 12, 0x33eeff, 3]]
+  .forEach(([x, y, z, c, i]) => { const L = new THREE.PointLight(c, i * 0.6, 40, 2); L.position.copy(B(x, y, z)); scene.add(L); });
+
+// stars + moon
+{ const g = new THREE.BufferGeometry(), p = [];
+  for (let i = 0; i < 1500; i++) { const a = Math.random() * Math.PI * 2, e = 0.15 + Math.random() * 1.2, r = 900;
+    p.push(Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r, Math.sin(a) * Math.cos(e) * r); }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xbfc8ff, size: 1.6, sizeAttenuation: false, fog: false }))); }
+
+const composer = new THREE.EffectComposer(renderer);
+composer.addPass(new THREE.RenderPass(scene, cam));
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(1920, 1080), 0.9, 0.55, 0.62);
+composer.addPass(bloom);
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); composer.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+// ---------------------------------------------------------------- state
+const shots = [];             // {name,label,pos,quat,fov}
+const citizens = [], cars = [], beams = [], adSlots = {}, screens = {};
+let holoRing = null, holoText = null, spray = null;
+const neonMats = [];          // materials we can recolor with !lights
+const stripes = [];           // PULSE stripes for strobe
+const SHOT_LABELS = { CAM_WIDE: 'Gateway', CAM_STRIP: 'Strip', CAM_MEDIA: 'Screens', CAM_PARK: 'Park', CAM_CLUB: 'PULSE', CAM_AERIAL: 'Aerial' };
+const DYNAMIC = /^(CITIZEN_|CAR_|AD_SLOT_|SCREEN_|PARK_holo|PULSE_beam|PULSE_stripe|PARK_fountain_spray)/;
+
+function hasDynamicAncestor(o) { for (let p = o; p; p = p.parent) if (DYNAMIC.test(p.name)) return true; return false; }
+
+// ---------------------------------------------------------------- load the Blender city
+const loader = new THREE.GLTFLoader();
+loader.load('Lucid_State_City.glb', gltf => {
+  const root = gltf.scene;
+  scene.add(root);
+  root.updateMatrixWorld(true);
+
+  // cameras from Blender
+  gltf.cameras.forEach(c => {
+    const n = (c.name || c.parent && c.parent.name || '').replace(/_Orientation$/, '');
+    const key = Object.keys(SHOT_LABELS).find(k => n.startsWith(k)); if (!key) return;
+    const pos = new THREE.Vector3(), quat = new THREE.Quaternion();
+    c.updateMatrixWorld(true); c.getWorldPosition(pos); c.getWorldQuaternion(quat);
+    shots.push({ name: key, label: SHOT_LABELS[key], pos, quat, fov: c.fov || 50 });
+  });
+  shots.sort((a, b) => Object.keys(SHOT_LABELS).indexOf(a.name) - Object.keys(SHOT_LABELS).indexOf(b.name));
+  addCustomShots();
+
+  // materials: emissive strength from Blender + collect neon materials
+  const seen = new Set();
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const ms = Array.isArray(o.material) ? o.material : [o.material];
+    ms.forEach(m => {
+      if (seen.has(m)) return; seen.add(m);
+      const ext = m.userData && m.userData.gltfExtensions && m.userData.gltfExtensions.KHR_materials_emissive_strength;
+      const s = ext ? ext.emissiveStrength : 1;
+      if (m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b > 0 || m.emissiveMap)) {
+        m.emissiveIntensity = Math.min(3.2, 0.55 + s * 0.28);
+        if (/^Windows_/.test(m.name)) m.emissiveIntensity = 1.25;
+        if (/^(AD_SLOT|SCREEN_)/.test(m.name)) m.emissiveIntensity = 1.05;
+      }
+      if (/^Beam_/.test(m.name)) { m.transparent = true; m.opacity = 0.16; m.depthWrite = false; m.blending = THREE.AdditiveBlending; m.emissiveIntensity = 1.4; }
+      if (/^Grass/.test(m.name)) m.color.multiplyScalar(0.45);
+      if (/^Asphalt/.test(m.name)) { m.roughness = 0.5; m.metalness = 0.2; }
+      if (/^(Neon_|Glow_Jacket|Club_Door|Fairy|Fountain)/.test(m.name)) neonMats.push({ m, base: m.emissive.clone(), baseColor: m.color.clone() });
+    });
+  });
+
+  // pick out the things that move, then merge everything static for speed
+  root.traverse(o => {
+    const n = o.name;
+    if (/^CITIZEN_\d+$/.test(n)) citizens.push(makeWalker(o));
+    else if (/^CAR_\d+$/.test(n)) cars.push(makeCar(o));
+    else if (/^AD_SLOT_\d+$/.test(n) && o.isMesh) adSlots[n] = o;
+    else if (/^SCREEN_[A-Z]+$/.test(n) && o.isMesh) screens[n] = o;
+    else if (/^PULSE_beam/.test(n)) beams.push({ o, rx: o.rotation.x, rz: o.rotation.z, ph: Math.random() * 6 });
+    else if (n === 'PARK_holo_ring') holoRing = o;
+    else if (n === 'PARK_holo_LSC') holoText = o;
+    else if (n === 'PARK_fountain_spray') spray = o;
+    else if (/^PULSE_stripe/.test(n) && o.isMesh) stripes.push(o);
+  });
+  // kiosk back faces share the slot material, keep them updated too
+  root.traverse(o => { const m = /^(AD_SLOT_\d+)_back$/.exec(o.name); if (m && adSlots[m[1]]) adSlots[m[1]].userData.back = o; });
+  mergeStatic(root);
+
+  // stripes need their own materials so they can strobe
+  stripes.forEach(s => { s.material = s.material.clone(); s.userData.base = s.material.emissiveIntensity; });
+
+  buildScreens();
+  if (document.fonts) document.fonts.ready.then(() => { drawChat(); drawCommands(); });
+  buildAdUI();
+  restoreAds();
+  buildShotUI();
+  $('load').style.display = 'none';
+  goShot(0, true);
+  setStatus(`City loaded: ${citizens.length} citizens, ${cars.length} cars, ${Object.keys(adSlots).length} ad slots.`);
+  if (params.get('channel')) { $('chan').value = params.get('channel'); connectChat(params.get('channel')); }
+  else if (store.get('chan', '')) { $('chan').value = store.get('chan', ''); connectChat(store.get('chan', '')); }
+}, e => { if (e.total) $('bar').firstChild.style.width = (100 * e.loaded / e.total).toFixed(0) + '%'; },
+  err => { $('loadtxt').textContent = 'Could not load Lucid_State_City.glb. Keep it in the same folder as this page.'; console.error(err); });
+
+function mergeStatic(root) {
+  const groups = new Map(), remove = [];
+  root.traverse(o => {
+    if (!o.isMesh || hasDynamicAncestor(o) || Array.isArray(o.material)) return;
+    const g = o.geometry, attrs = ['position', 'normal', 'uv'].filter(a => g.attributes[a]);
+    if (!g.index || !g.attributes.normal) return;
+    const key = o.material.uuid + '|' + attrs.join(',');
+    const ng = new THREE.BufferGeometry();
+    attrs.forEach(a => ng.setAttribute(a, g.attributes[a].clone()));
+    ng.setIndex(g.index.clone());
+    ng.applyMatrix4(o.matrixWorld);
+    if (!groups.has(key)) groups.set(key, { mat: o.material, geos: [] });
+    groups.get(key).geos.push(ng); remove.push(o);
+  });
+  remove.forEach(o => o.parent && o.parent.remove(o));
+  let n = 0;
+  groups.forEach(({ mat, geos }) => {
+    const merged = THREE.BufferGeometryUtils.mergeBufferGeometries(geos, false);
+    if (merged) { scene.add(new THREE.Mesh(merged, mat)); n++; }
+  });
+  console.log('merged static meshes into', n, 'draw groups');
+}
+
+// ---------------------------------------------------------------- citizens & cars
+function makeWalker(o) {
+  const p = o.position.clone(); // parent is root (identity-ish), positions are world
+  const onStrip = Math.abs(p.x) > 9.3 && Math.abs(p.x) < 12.2;
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  if (onStrip) o.rotation.y = dir > 0 ? Math.PI : 0;
+  return { o, y0: p.y, walk: onStrip, dir, speed: 0.9 + Math.random() * 0.7, ph: Math.random() * 10, dance: 0, x0: p.x };
+}
+function makeCar(o) {
+  const p = o.position;
+  const parked = Math.abs(p.x) > 7 && Math.abs(p.x) < 8.5;
+  const strip = Math.abs(p.x) < 8.5;
+  return { o, strip, speed: parked ? 0 : 7 + Math.random() * 6 };
+}
+const tmpV = new THREE.Vector3();
+function updateCars(dt) {
+  cars.forEach(c => {
+    if (!c.speed) return;
+    c.o.translateX(c.speed * dt);
+    const p = c.o.position;
+    if (c.strip) { if (p.z > 94) p.z -= 188; else if (p.z < -94) p.z += 188; }
+    else { if (p.x > 98) p.x -= 196; else if (p.x < -98) p.x += 196; }
+  });
+}
+
+// spawned viewer citizens
+const spawned = [];
+const bodyGeo = new THREE.CylinderGeometry(0.25, 0.21, 0.75, 8), headGeo = new THREE.SphereGeometry(0.16, 10, 8), legGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.85, 6);
+function nameSprite(text, color) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128; const x = c.getContext('2d');
+  x.font = 'bold 64px Poppins, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.shadowColor = color; x.shadowBlur = 18; x.fillStyle = '#fff'; x.fillText(text, 256, 64, 490);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false }));
+  sp.scale.set(2.6, 0.65, 1); sp.position.y = 2.45; return sp;
+}
+function spawnCitizen(user, color) {
+  if (spawned.find(s => s.user === user)) { toast(user + ' is already in the city'); return; }
+  if (spawned.length >= 40) { const old = spawned.shift(); scene.remove(old.o); }
+  const col = new THREE.Color(color || '#ff2d8f');
+  const g = new THREE.Group();
+  const jacket = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.9, roughness: 0.6 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x111118, roughness: 0.8 });
+  const skin = new THREE.MeshStandardMaterial({ color: [0x8c5c40, 0x553420, 0x2e1a0f, 0xa67a60][Math.random() * 4 | 0], roughness: 0.6 });
+  const b = new THREE.Mesh(bodyGeo, jacket); b.position.y = 1.2; g.add(b);
+  const h = new THREE.Mesh(headGeo, skin); h.position.y = 1.75; g.add(h);
+  [-0.12, 0.12].forEach(x => { const l = new THREE.Mesh(legGeo, dark); l.position.set(x, 0.43, 0); g.add(l); });
+  g.add(nameSprite(user, '#' + col.getHexString()));
+  const side = Math.random() < 0.5 ? -1 : 1, dir = Math.random() < 0.5 ? 1 : -1;
+  g.position.set(side * (10 + Math.random() * 1.6), 0.25, dir > 0 ? 80 : -80);
+  g.rotation.y = dir > 0 ? Math.PI : 0;
+  scene.add(g);
+  const w = { o: g, y0: 0.25, walk: true, dir, speed: 1.4, ph: Math.random() * 10, dance: 0, user, born: performance.now() };
+  spawned.push(w);
+  toast(user + ' just arrived in Lucid State City');
+}
+function updateWalkers(dt, t) {
+  const all = citizens.concat(spawned);
+  all.forEach(w => {
+    const o = w.o;
+    if (w.dance > t) {
+      o.position.y = w.y0 + Math.abs(Math.sin(t * 7 + w.ph)) * 0.45;
+      o.rotation.y += dt * 2.5;
+      return;
+    }
+    if (w.walk) {
+      o.position.z -= w.dir * w.speed * dt * -1;
+      if (o.position.z > 88) o.position.z = -88; else if (o.position.z < -88) o.position.z = 88;
+      // pause at cross streets so people don't stroll through traffic
+      o.position.y = w.y0 + Math.abs(Math.sin(t * 5.5 * w.speed + w.ph)) * 0.07;
+      o.rotation.y = (w.dir > 0 ? Math.PI : 0) + Math.sin(t * 2.75 * w.speed + w.ph) * 0.06;
+    } else {
+      o.position.y = w.y0 + Math.sin(t * 1.3 + w.ph) * 0.015;
+      o.rotation.y += Math.sin(t * 0.4 + w.ph) * dt * 0.15;
+    }
+  });
+  // spawned viewers leave after 5 minutes
+  for (let i = spawned.length - 1; i >= 0; i--) if (performance.now() - spawned[i].born > 300000) { scene.remove(spawned[i].o); spawned.splice(i, 1); }
+}
+
+// ---------------------------------------------------------------- screens (gameplay, cam, chat, commands)
+const chatLines = [];
+let chatCanvas, chatTex, cmdCanvas, cmdTex;
+const COMMANDS = [
+  ['!spawn', 'join the city as a citizen'], ['!dance', 'start a dance at PULSE'], ['!rain', 'make it rain on the city'],
+  ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard']
+];
+function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; return [c, t]; }
+function applyTex(mesh, tex) { if (!mesh) return; mesh.material = mesh.material.clone(); mesh.material.map = tex; mesh.material.emissiveMap = tex; mesh.material.emissive = new THREE.Color(0xffffff); mesh.material.emissiveIntensity = 1.0; mesh.material.needsUpdate = true; }
+function buildScreens() {
+  [chatCanvas, chatTex] = canvasTex(1280, 720); applyTex(screens.SCREEN_CHAT, chatTex); drawChat();
+  [cmdCanvas, cmdTex] = canvasTex(1280, 720); applyTex(screens.SCREEN_COMMANDS, cmdTex); drawCommands();
+}
+function frame(x, w, h, col) { x.strokeStyle = col; x.lineWidth = 10; x.strokeRect(8, 8, w - 16, h - 16); }
+function drawCommands() {
+  const x = cmdCanvas.getContext('2d'), w = 1280, h = 720;
+  const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, '#05051a'); g.addColorStop(1, '#1e002d'); x.fillStyle = g; x.fillRect(0, 0, w, h);
+  x.textAlign = 'center'; x.font = '120px Anton, Impact, sans-serif'; x.shadowColor = '#38e8ff'; x.shadowBlur = 24; x.fillStyle = '#fff';
+  x.fillText('INTERACTIVE WORLD', w / 2, 150); x.shadowBlur = 0; x.textAlign = 'left';
+  COMMANDS.forEach(([c, d], i) => { const y = 260 + i * 76;
+    x.font = 'bold 50px Poppins, sans-serif'; x.fillStyle = '#ff50c8'; x.fillText(c, 140, y);
+    x.font = 'bold 40px Poppins, sans-serif'; x.fillStyle = '#e6e6ff'; x.fillText(d, 520, y); });
+  frame(x, w, h, '#38e8ff'); cmdTex.needsUpdate = true;
+}
+function drawChat() {
+  const x = chatCanvas.getContext('2d'), w = 1280, h = 720;
+  x.fillStyle = '#0a0716'; x.fillRect(0, 0, w, h);
+  x.fillStyle = '#1a1033'; x.fillRect(0, 0, w, 96);
+  x.font = '64px Anton, Impact, sans-serif'; x.fillStyle = '#b478ff'; x.textAlign = 'left'; x.fillText('CHAT', 36, 72);
+  x.font = 'bold 30px Poppins, sans-serif'; x.fillStyle = '#9d97c9'; x.textAlign = 'right';
+  x.fillText(chanName ? '#' + chanName : 'type !spawn to join the city', w - 36, 64); x.textAlign = 'left';
+  let y = 150;
+  chatLines.slice(-9).forEach(m => {
+    x.font = 'bold 36px Poppins, sans-serif'; x.fillStyle = m.color || '#ff2d8f';
+    const nm = m.user + ':'; x.fillText(nm, 36, y, 380); const nw = Math.min(380, x.measureText(nm).width);
+    x.font = '34px Poppins, sans-serif'; x.fillStyle = '#ecebff';
+    let msg = m.text; while (x.measureText(msg).width > w - 90 - nw && msg.length > 3) msg = msg.slice(0, -2);
+    if (msg !== m.text) msg = msg.slice(0, -1) + '…';
+    x.fillText(msg, 48 + nw, y); y += 62;
+  });
+  frame(x, w, h, '#b478ff'); chatTex.needsUpdate = true;
+}
+
+// live video on the tower screens (OBS Virtual Camera / webcam)
+const streams = {};
+async function setVideo(screenName, deviceId) {
+  if (streams[screenName]) { streams[screenName].getTracks().forEach(t => t.stop()); delete streams[screenName]; }
+  const mesh = screens[screenName]; if (!mesh) return;
+  if (!mesh.userData.orig) mesh.userData.orig = mesh.material;
+  if (!deviceId) { mesh.material = mesh.userData.orig; return; }
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    streams[screenName] = st;
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = st; await v.play();
+    const t = new THREE.VideoTexture(v); t.flipY = false; t.encoding = THREE.sRGBEncoding;
+    applyTex(mesh, t);
+  } catch (e) { setStatus('That camera could not start here. In OBS, launch with --enable-media-stream.'); }
+}
+async function findCams() {
+  try { const st = await navigator.mediaDevices.getUserMedia({ video: true }); st.getTracks().forEach(t => t.stop()); } catch (e) { setStatus('Camera access was refused in this window.'); return; }
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  ['srcGame', 'srcCam'].forEach(id => {
+    const sel = $(id), keep = sel.value;
+    sel.innerHTML = '<option value="">Placeholder</option>' + devs.map(d => `<option value="${d.deviceId}">${(d.label || 'Camera').replace(/</g, '')}</option>`).join('');
+    sel.value = keep;
+  });
+  setStatus(devs.length + ' cameras found. Pick OBS Virtual Camera for gameplay.');
+  const sg = store.get('srcGame', ''), sc = store.get('srcCam', '');
+  if (sg && devs.find(d => d.deviceId === sg)) { $('srcGame').value = sg; setVideo('SCREEN_GAMEPLAY', sg); }
+  if (sc && devs.find(d => d.deviceId === sc)) { $('srcCam').value = sc; setVideo('SCREEN_LIVECAM', sc); }
+}
+$('findCams').onclick = findCams;
+$('srcGame').onchange = e => { store.set('srcGame', e.target.value); setVideo('SCREEN_GAMEPLAY', e.target.value); };
+$('srcCam').onchange = e => { store.set('srcCam', e.target.value); setVideo('SCREEN_LIVECAM', e.target.value); };
+if (store.get('srcGame', '') || store.get('srcCam', '')) setTimeout(() => { if (Object.keys(screens).length) findCams(); }, 2500);
+
+// ---------------------------------------------------------------- ad slots
+function buildAdUI() {
+  $('adSlot').innerHTML = Object.keys(adSlots).sort().map(k => `<option>${k}</option>`).join('');
+}
+function setAdImage(slot, dataUrl) {
+  const mesh = adSlots[slot]; if (!mesh) return;
+  if (!mesh.userData.orig) mesh.userData.orig = mesh.material;
+  if (!dataUrl) { mesh.material = mesh.userData.orig; if (mesh.userData.back) mesh.userData.back.material = mesh.userData.orig; return; }
+  new THREE.TextureLoader().load(dataUrl, t => {
+    t.flipY = false; t.encoding = THREE.sRGBEncoding;
+    applyTex(mesh, t); mesh.material.emissiveIntensity = 1.05;
+    if (mesh.userData.back) mesh.userData.back.material = mesh.material;
+  });
+}
+function restoreAds() { const ads = store.get('ads', {}); Object.entries(ads).forEach(([k, v]) => setAdImage(k, v)); }
+$('adFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = 1280; c.height = 720; const x = c.getContext('2d');
+    const s = Math.max(1280 / img.width, 720 / img.height); x.drawImage(img, (1280 - img.width * s) / 2, (720 - img.height * s) / 2, img.width * s, img.height * s);
+    const data = c.toDataURL('image/jpeg', 0.85), slot = $('adSlot').value;
+    setAdImage(slot, data);
+    const ads = store.get('ads', {}); ads[slot] = data;
+    setStatus(store.set('ads', ads) ? slot + ' updated and saved.' : slot + ' updated (browser storage is full, so it will reset on reload).');
+    URL.revokeObjectURL(url); e.target.value = '';
+  };
+  img.src = url;
+};
+$('adReset').onclick = () => { const slot = $('adSlot').value, ads = store.get('ads', {}); delete ads[slot]; store.set('ads', ads); setAdImage(slot, null); setStatus(slot + ' reset.'); };
+$('adShow').onclick = () => {
+  const m = adSlots[$('adSlot').value]; if (!m) return;
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(); m.getWorldPosition(p); m.getWorldQuaternion(q);
+  const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q);       // plane front
+  m.geometry.computeBoundingSphere(); const w = m.geometry.boundingSphere.radius;
+  const from = p.clone().add(n.multiplyScalar(Math.max(8, w * 2.2))).add(new THREE.Vector3(0, -1, 0));
+  flyTo({ name: 'AD', pos: from, quat: lookQuat(from, p), fov: 45 }, 2.2); setTour(false);
+};
+
+// ---------------------------------------------------------------- camera shots + auto tour
+function lookQuat(from, to) { const m = new THREE.Matrix4().lookAt(from, to, new THREE.Vector3(0, 1, 0)); return new THREE.Quaternion().setFromRotationMatrix(m); }
+function addCustomShots() {
+  const club = shots.find(s => s.name === 'CAM_CLUB');      // keep this shot on the sidewalk, out of traffic
+  if (club) { club.pos = B(9.8, 2, 3.2); club.quat = lookQuat(club.pos, B(-11, 24, 5)); }
+  const f1 = B(-8, -30, 2.2), t1 = B(4, 10, 3);
+  shots.push({ name: 'WALK', label: 'Street walk', pos: f1, quat: lookQuat(f1, t1), fov: 55, walk: true });
+}
+let fly = null, hold = null, cur = 0, tourOn = params.get('tour') !== '0', tourT = 0;
+function flyTo(s, dur = 3.2) {
+  fly = { fromP: cam.position.clone(), fromQ: cam.quaternion.clone(), fromF: cam.fov, to: s, t: 0, dur };
+  hold = null;
+}
+function goShot(i, instant) {
+  cur = (i + shots.length) % shots.length; const s = shots[cur];
+  document.querySelectorAll('#shots button').forEach((b, k) => b.classList.toggle('on', k === cur));
+  if (instant) { cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); hold = { s, t: 0 }; fly = null; }
+  else flyTo(s);
+  tourT = 0;
+}
+function setTour(on) { tourOn = on; $('tour').classList.toggle('on', on); tourT = 0; }
+function buildShotUI() {
+  $('shots').innerHTML = shots.map((s, i) => `<button data-i="${i}">${i + 1} ${s.label}</button>`).join('');
+  $('shots').onclick = e => { const b = e.target.closest('button'); if (b) { setTour(false); goShot(+b.dataset.i); } };
+}
+$('tour').onclick = () => setTour(!tourOn);
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+function updateCamera(dt) {
+  if (fly) {
+    fly.t += dt / fly.dur; const k = ease(Math.min(1, fly.t));
+    const mid = fly.fromP.clone().lerp(fly.to.pos, k);
+    mid.y += Math.sin(Math.PI * k) * Math.min(25, fly.fromP.distanceTo(fly.to.pos) * 0.15);   // arc up over buildings
+    cam.position.copy(mid);
+    cam.quaternion.slerpQuaternions(fly.fromQ, fly.to.quat, k);
+    cam.fov = fly.fromF + (fly.to.fov - fly.fromF) * k; cam.updateProjectionMatrix();
+    if (fly.t >= 1) { hold = { s: fly.to, t: 0 }; fly = null; }
+  } else if (hold) {
+    hold.t += dt;
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(hold.s.quat);
+    const drift = hold.s.walk ? hold.t * 1.4 : Math.sin(Math.min(hold.t / 18, 1) * Math.PI / 2) * 6;
+    cam.position.copy(hold.s.pos).addScaledVector(fwd, drift);
+    if (!hold.s.walk) cam.position.y += Math.sin(hold.t * 0.35) * 0.4;
+  }
+  if (tourOn && !fly) { tourT += dt; if (tourT > 16) goShot(cur + 1); }
+}
+
+// ---------------------------------------------------------------- viewer effects
+// rain
+let rain = null, rainUntil = 0;
+function makeRain() {
+  const n = 9000, g = new THREE.BufferGeometry(), p = new Float32Array(n * 6);
+  for (let i = 0; i < n; i++) { const x = (Math.random() - 0.5) * 200, y = Math.random() * 90, z = (Math.random() - 0.5) * 200;
+    p.set([x, y, z, x + 0.15, y - 1.6, z], i * 6); }
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x9fc8ff, transparent: true, opacity: 0.35 }));
+  rain.visible = false; scene.add(rain);
+}
+makeRain();
+function updateRain(dt, t) {
+  const on = t < rainUntil; rain.visible = on;
+  scene.fog.density += ((on ? 0.006 : 0.0042) - scene.fog.density) * Math.min(1, dt);
+  if (!on) return;
+  const a = rain.geometry.attributes.position.array;
+  for (let i = 0; i < a.length; i += 6) { a[i + 1] -= 60 * dt; a[i + 4] -= 60 * dt; if (a[i + 4] < 0) { a[i + 1] += 90; a[i + 4] += 90; } }
+  rain.geometry.attributes.position.needsUpdate = true;
+  rain.position.copy(cam.position).setY(0);
+}
+// fireworks over the park
+const bursts = [];
+const sparkGeo = new THREE.BufferGeometry();
+function firework(color) {
+  const n = 160, pos = new Float32Array(n * 3), vel = [];
+  const c = B(22.5 + (Math.random() - 0.5) * 26, -22.5 + (Math.random() - 0.5) * 26, 22 + Math.random() * 12);
+  for (let i = 0; i < n; i++) { pos.set([c.x, c.y, c.z], i * 3);
+    const v = new THREE.Vector3().randomDirection ? new THREE.Vector3().randomDirection() : new THREE.Vector3(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize();
+    vel.push(v.multiplyScalar(10 + Math.random() * 6)); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const col = new THREE.Color(color || ['#ff2d8f', '#38e8ff', '#b478ff', '#ffd23f', '#7dff6a'][Math.random() * 5 | 0]);
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: col, size: 0.9, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  scene.add(pts);
+  const flash = new THREE.PointLight(col, 6, 120, 1.5); flash.position.copy(c); scene.add(flash);
+  bursts.push({ pts, vel, life: 0, flash });
+}
+function updateFireworks(dt) {
+  for (let i = bursts.length - 1; i >= 0; i--) {
+    const b = bursts[i]; b.life += dt;
+    const a = b.pts.geometry.attributes.position.array;
+    b.vel.forEach((v, k) => { v.y -= 6 * dt; v.multiplyScalar(1 - 1.2 * dt); a[k * 3] += v.x * dt; a[k * 3 + 1] += v.y * dt; a[k * 3 + 2] += v.z * dt; });
+    b.pts.geometry.attributes.position.needsUpdate = true;
+    b.pts.material.opacity = Math.max(0, 1 - b.life / 2.6); b.flash.intensity = Math.max(0, 6 - b.life * 8);
+    if (b.life > 2.6) { scene.remove(b.pts); scene.remove(b.flash); b.pts.geometry.dispose(); bursts.splice(i, 1); }
+  }
+}
+let fwQueue = 0, fwT = 0;
+// neon colour themes
+const THEMES = [null, ['#38e8ff', '#2a7bff'], ['#7dff6a', '#00ffb0'], ['#ffd23f', '#ff7a1a'], ['#ff2d8f', '#b478ff'], ['#ff2020', '#ff9a3d']];
+let themeI = 0;
+function nextLights() {
+  themeI = (themeI + 1) % THEMES.length; const th = THEMES[themeI];
+  neonMats.forEach(({ m, base, baseColor }, i) => {
+    if (!th) { m.emissive.copy(base); m.color.copy(baseColor); return; }
+    const c = new THREE.Color(th[i % 2]); m.emissive.copy(c); m.color.copy(c);
+  });
+  return th ? 'new neon colors' : 'original neon colors';
+}
+let danceUntil = 0;
+function startDance(t) {
+  danceUntil = t + 25;
+  const club = B(-11, 20, 0);
+  citizens.concat(spawned).forEach(w => { if (w.o.position.distanceTo(club) < 26 || Math.random() < 0.25) w.dance = t + 18 + Math.random() * 6; });
+}
+
+// ---------------------------------------------------------------- commands
+const cooldown = {};
+function runCommand(cmd, user, color) {
+  const t = clock.getElapsedTime(), now = performance.now();
+  const cd = { '!spawn': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000 }[cmd];
+  if (cd === undefined) return;
+  if (cd && cooldown[cmd] && now - cooldown[cmd] < cd) return;
+  cooldown[cmd] = now;
+  user = user || 'Rassir';
+  if (cmd === '!spawn') spawnCitizen(user, color);
+  if (cmd === '!dance') { startDance(t); toast(user + ' started a dance at PULSE'); }
+  if (cmd === '!rain') { rainUntil = t + 45; toast(user + ' made it rain'); }
+  if (cmd === '!fireworks') { fwQueue += 7; toast(user + ' lit up the sky'); }
+  if (cmd === '!lights') toast(user + ' switched to ' + nextLights());
+  if (cmd === '!ad') { chatLines.push({ user: 'LSC', color: '#38e8ff', text: 'Want a billboard in Lucid State City? Message Rassir to rent an ad slot.' }); drawChat(); toast('Billboards for rent: message Rassir'); }
+}
+$('cmdbtns').innerHTML = COMMANDS.map(([c]) => `<button data-c="${c}">${c}</button>`).join('');
+$('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) { const c = b.dataset.c; delete cooldown[c]; runCommand(c, c === '!spawn' ? 'Viewer' + (Math.random() * 900 + 100 | 0) : 'Rassir', ['#ff2d8f', '#38e8ff', '#7dff6a', '#ffd23f'][Math.random() * 4 | 0]); } };
+
+// ---------------------------------------------------------------- Twitch chat (read-only, anonymous)
+let ws = null, chanName = '', reconnectTimer = 0;
+function connectChat(name) {
+  chanName = (name || '').trim().toLowerCase().replace(/^#/, '');
+  clearTimeout(reconnectTimer);
+  if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; }
+  if (!chanName) { setStatus('Chat disconnected.'); return; }
+  store.set('chan', chanName);
+  setStatus('Connecting to #' + chanName + '…');
+  try { ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443'); } catch (e) { setStatus('Chat can\'t connect from this preview. It works in OBS or a normal browser.'); return; }
+  const me = ws;
+  ws.onopen = () => { me.send('CAP REQ :twitch.tv/tags twitch.tv/commands'); me.send('PASS SCHMOOPIIE'); me.send('NICK justinfan' + (10000 + Math.random() * 80000 | 0)); me.send('JOIN #' + chanName); };
+  ws.onmessage = e => String(e.data).split('\r\n').forEach(handleLine);
+  ws.onerror = () => setStatus('Chat can\'t connect from this preview. It works in OBS or a normal browser.');
+  ws.onclose = () => { if (ws !== me) return; reconnectTimer = setTimeout(() => connectChat(chanName), 4000); };
+  drawChat && chatCanvas && drawChat();
+}
+function handleLine(line) {
+  if (!line) return;
+  if (line.startsWith('PING')) { ws && ws.send('PONG :tmi.twitch.tv'); return; }
+  if (/ 366 /.test(line)) setStatus('Connected to #' + chanName + ' chat.');
+  const m = /^(?:@([^ ]*) )?:([^!]+)![^ ]* PRIVMSG #[^ ]+ :(.*)$/.exec(line); if (!m) return;
+  const tags = {}; (m[1] || '').split(';').forEach(kv => { const i = kv.indexOf('='); tags[kv.slice(0, i)] = kv.slice(i + 1); });
+  const user = tags['display-name'] || m[2], color = tags.color || '#ff2d8f', text = m[3];
+  chatLines.push({ user, color, text }); if (chatLines.length > 40) chatLines.shift();
+  chatCanvas && drawChat();
+  const cmd = text.trim().split(/\s+/)[0].toLowerCase();
+  if (cmd.startsWith('!')) runCommand(cmd, user, color);
+}
+$('chanGo').onclick = () => connectChat($('chan').value);
+$('chan').addEventListener('keydown', e => { if (e.key === 'Enter') connectChat($('chan').value); });
+
+// ---------------------------------------------------------------- keys + panel
+function setPanel(hidden) { $('panel').classList.toggle('hide', hidden); $('hint').classList.toggle('hide', hidden); store.set('hidden', hidden); }
+setPanel(params.has('obs') ? true : store.get('hidden', false));
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const k = e.key.toLowerCase();
+  if (k === 'h') setPanel(!$('panel').classList.contains('hide'));
+  else if (k === '0') setTour(!tourOn);
+  else if (/^[1-9]$/.test(k) && +k <= shots.length) { setTour(false); goShot(+k - 1); }
+  else if (k === 'r') runCommand('!rain', 'Rassir');
+  else if (k === 'f') runCommand('!fireworks', 'Rassir');
+  else if (k === 'd') runCommand('!dance', 'Rassir');
+  else if (k === 'l') runCommand('!lights', 'Rassir');
+});
+
+// ---------------------------------------------------------------- loop
+const clock = new THREE.Clock();
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.getElapsedTime();
+  updateCamera(dt); updateCars(dt); updateWalkers(dt, t); updateRain(dt, t); updateFireworks(dt);
+  if (fwQueue > 0) { fwT -= dt; if (fwT <= 0) { firework(); fwQueue--; fwT = 0.35 + Math.random() * 0.5; } }
+  if (holoRing) { holoRing.rotation.z += dt * 0.6; }
+  if (holoText) { holoText.rotation.y += dt * 0.5; holoText.position.y += Math.sin(t * 1.2) * 0.004; }
+  if (spray) spray.scale.y = 1 + Math.sin(t * 3) * 0.12;
+  beams.forEach(b => { b.o.rotation.x = b.rx + Math.sin(t * 0.5 + b.ph) * 0.35; b.o.rotation.z = b.rz + Math.cos(t * 0.37 + b.ph) * 0.35; });
+  const party = t < danceUntil;
+  stripes.forEach((s, i) => { s.material.emissiveIntensity = party ? (Math.sin(t * 12 + i) > 0 ? 3.5 : 0.2) : s.userData.base * (0.8 + 0.2 * Math.sin(t * 2 + i * 0.6)); });
+  bloom.strength = party ? 1.15 : 0.9;
+  composer.render();
+}
+loop();
+window.LSC = { goShot, runCommand, setTour };
+}
+</script>
+</body></html>
