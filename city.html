@@ -41,7 +41,7 @@ button.on{background:var(--pink);border-color:var(--pink);color:#fff}
 <canvas id="c"></canvas>
 <div id="load"><div><h1>LUCID STATE CITY</h1><p id="loadtxt">Loading the city…</p><div id="bar"><i></i></div></div></div>
 <div id="toast"></div>
-<div id="hint">H = panel · 1–7 shots · 0 = auto tour</div>
+<div id="hint">H = panel · 1–9 shots · V = follow player · 0 = auto tour</div>
 <div id="panel">
   <h2>LUCID STATE CITY</h2>
   <p class="note">Live stream world. Press <b>H</b> to hide this panel before going live.</p>
@@ -105,7 +105,7 @@ scene.fog = new THREE.FogExp2(0x120822, 0.0042);
 const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 2000);
 scene.add(new THREE.HemisphereLight(0x5a4aa8, 0x120818, 0.55));
 const moon = new THREE.DirectionalLight(0x8090ff, 0.35); moon.position.set(-60, 120, -80); scene.add(moon);
-[[-6, 24, 6, 0xff1a99, 3.5], [-4, -22.5, 16, 0x3399ff, 4], [6, 22, 5, 0x22ddff, 2.5], [-5, -67.5, 5, 0xff8833, 3],
+[[-23, 22.5, 8, 0xc040ff, 1.6], [-26.5, 13.5, 4, 0x40ff70, 1.3], [-29, 22.5, 5, 0x30b0ff, 1.0], [-6, 24, 6, 0xff1a99, 3.5], [-4, -22.5, 16, 0x3399ff, 4], [6, 22, 5, 0x22ddff, 2.5], [-5, -67.5, 5, 0xff8833, 3],
  [6, -67, 4, 0xff3322, 2.5], [8, 67.5, 5, 0xff33cc, 3], [22.5, -22.5, 4, 0x33aaff, 3], [0, -88, 12, 0x33eeff, 3]]
   .forEach(([x, y, z, c, i]) => { const L = new THREE.PointLight(c, i * 0.6, 40, 2); L.position.copy(B(x, y, z)); scene.add(L); });
 
@@ -125,12 +125,13 @@ addEventListener('resize', resize); resize();
 
 // ---------------------------------------------------------------- state
 const shots = [];             // {name,label,pos,quat,fov}
-const citizens = [], cars = [], beams = [], adSlots = {}, screens = {};
+const citizens = [], cars = [], beams = [], adSlots = {}, screens = { GAMEPLAY: [], LIVECAM: [], CHAT: [], COMMANDS: [] };
+const lasers = [], ledMats = []; let disco = null;
 let holoRing = null, holoText = null, spray = null;
 const neonMats = [];          // materials we can recolor with !lights
-const stripes = [];           // PULSE stripes for strobe
-const SHOT_LABELS = { CAM_WIDE: 'Gateway', CAM_STRIP: 'Strip', CAM_MEDIA: 'Screens', CAM_PARK: 'Park', CAM_CLUB: 'PULSE', CAM_AERIAL: 'Aerial' };
-const DYNAMIC = /^(CITIZEN_|CAR_|AD_SLOT_|SCREEN_|PARK_holo|PULSE_beam|PULSE_stripe|PARK_fountain_spray)/;
+const stripes = [];           // Zero Cool facade stripes for strobe
+const SHOT_LABELS = { CAM_WIDE: 'Gateway', CAM_STRIP: 'Strip', CAM_MEDIA: 'Tower', CAM_PARK: 'Park', CAM_CLUB: 'Club outside', CAM_ZC_DOOR: 'Zero Cool', CAM_ZC_FLOOR: 'Club floor', CAM_ZC_BAR: 'Green Room', CAM_AERIAL: 'Aerial' };
+const DYNAMIC = /^(CITIZEN_|CAR_|AD_SLOT_|SCREEN_|PARK_holo|ZC_beam|ZC_stripe|ZC_laser|ZC_disco_ball|PARK_fountain_spray)/;
 
 function hasDynamicAncestor(o) { for (let p = o; p; p = p.parent) if (DYNAMIC.test(p.name)) return true; return false; }
 
@@ -169,6 +170,7 @@ loader.load('Lucid_State_City.glb', gltf => {
       if (/^Beam_/.test(m.name)) { m.transparent = true; m.opacity = 0.16; m.depthWrite = false; m.blending = THREE.AdditiveBlending; m.emissiveIntensity = 1.4; }
       if (/^Grass/.test(m.name)) m.color.multiplyScalar(0.45);
       if (/^Asphalt/.test(m.name)) { m.roughness = 0.5; m.metalness = 0.2; }
+      if (/^ZC_LED_/.test(m.name)) ledMats.push(m);
       if (/^(Neon_|Glow_Jacket|Club_Door|Fairy|Fountain)/.test(m.name)) neonMats.push({ m, base: m.emissive.clone(), baseColor: m.color.clone() });
     });
   });
@@ -179,12 +181,14 @@ loader.load('Lucid_State_City.glb', gltf => {
     if (/^CITIZEN_\d+$/.test(n)) citizens.push(makeWalker(o));
     else if (/^CAR_\d+$/.test(n)) cars.push(makeCar(o));
     else if (/^AD_SLOT_\d+$/.test(n) && o.isMesh) adSlots[n] = o;
-    else if (/^SCREEN_[A-Z]+$/.test(n) && o.isMesh) screens[n] = o;
-    else if (/^PULSE_beam/.test(n)) beams.push({ o, rx: o.rotation.x, rz: o.rotation.z, ph: Math.random() * 6 });
+    else if (/^SCREEN_(GAMEPLAY|LIVECAM|CHAT|COMMANDS)(_ZC\d?)?$/.test(n) && o.isMesh) screens[n.split('_')[1]].push(o);
+    else if (/^ZC_laser/.test(n)) lasers.push({ o, ry: o.rotation.y, ph: Math.random() * 6 });
+    else if (n === 'ZC_disco_ball') disco = o;
+    else if (/^ZC_beam/.test(n)) beams.push({ o, rx: o.rotation.x, rz: o.rotation.z, ph: Math.random() * 6 });
     else if (n === 'PARK_holo_ring') holoRing = o;
     else if (n === 'PARK_holo_LSC') holoText = o;
     else if (n === 'PARK_fountain_spray') spray = o;
-    else if (/^PULSE_stripe/.test(n) && o.isMesh) stripes.push(o);
+    else if (/^ZC_stripe/.test(n) && o.isMesh) stripes.push(o);
   });
   // kiosk back faces share the slot material, keep them updated too
   root.traverse(o => { const m = /^(AD_SLOT_\d+)_back$/.exec(o.name); if (m && adSlots[m[1]]) adSlots[m[1]].userData.back = o; });
@@ -232,6 +236,8 @@ function mergeStatic(root) {
 // ---------------------------------------------------------------- citizens & cars
 function makeWalker(o) {
   const p = o.position.clone(); // parent is root (identity-ish), positions are world
+  const role = o.userData && o.userData.role;
+  if (role) return { o, y0: p.y, walk: false, role, ph: Math.random() * 10, dance: 0, inside: true };
   const onStrip = Math.abs(p.x) > 9.3 && Math.abs(p.x) < 12.2;
   const dir = Math.random() < 0.5 ? 1 : -1;
   if (onStrip) o.rotation.y = dir > 0 ? Math.PI : 0;
@@ -252,6 +258,32 @@ function updateCars(dt) {
     if (c.strip) { if (p.z > 94) p.z -= 188; else if (p.z < -94) p.z += 188; }
     else { if (p.x > 98) p.x -= 196; else if (p.x < -98) p.x += 196; }
   });
+}
+
+// Zero Cool navigation (three coords)
+const DOOR_OUT = B(-10.6, 22.5, 0.25), DOOR_IN = B(-14.5, 22.5, 0.25);
+const CLUB_SPOTS = [];
+for (let i = 0; i < 18; i++) CLUB_SPOTS.push(B(-27.5 + Math.random() * 9.5, 22.5 + (Math.random() - 0.5) * 9.4, 0.25));   // dance floor
+for (let i = 0; i < 6; i++) CLUB_SPOTS.push(B(-31 + i * 1.6, 14.6, 0.25));                                              // Green Room bar
+for (let i = 0; i < 5; i++) CLUB_SPOTS.push(B(-19 + i * 1.1, 31.2, 0.25));                                              // lounge
+const CLUB_CENTER = B(-23, 22.5, 0);
+const isInClub = p => p.x < -12.2 && p.x > -34 && -p.z > 9.5 && -p.z < 35.5;
+function stepTo(w, target, speed, dt) {
+  const o = w.o, dx = target.x - o.position.x, dz = target.z - o.position.z, d = Math.hypot(dx, dz);
+  if (d < 0.25) return true;
+  const st = Math.min(d, speed * dt);
+  o.position.x += dx / d * st; o.position.z += dz / d * st;
+  o.rotation.y = Math.atan2(dx, dz);
+  return false;
+}
+function sendToClub(w) {
+  if (!w || w.state === 'inside' || w.state === 'entering') return false;
+  const side = w.o.position.x < 0 ? -1 : 1;
+  w.path = [];
+  if (side > 0) w.path.push(new THREE.Vector3(10, 0.25, w.o.position.z), new THREE.Vector3(-10.6, 0.25, w.o.position.z));   // cross the strip
+  w.path.push(new THREE.Vector3(-10.6, 0.25, DOOR_OUT.z), DOOR_IN.clone(), CLUB_SPOTS[Math.random() * CLUB_SPOTS.length | 0].clone());
+  w.state = 'entering'; w.walk = false;
+  return true;
 }
 
 // spawned viewer citizens
@@ -277,17 +309,38 @@ function spawnCitizen(user, color) {
   [-0.12, 0.12].forEach(x => { const l = new THREE.Mesh(legGeo, dark); l.position.set(x, 0.43, 0); g.add(l); });
   g.add(nameSprite(user, '#' + col.getHexString()));
   const side = Math.random() < 0.5 ? -1 : 1, dir = Math.random() < 0.5 ? 1 : -1;
-  g.position.set(side * (10 + Math.random() * 1.6), 0.25, dir > 0 ? 80 : -80);
+  g.position.set(side * (10 + Math.random() * 1.6), 0.25, dir > 0 ? -70 : 70);
   g.rotation.y = dir > 0 ? Math.PI : 0;
   scene.add(g);
-  const w = { o: g, y0: 0.25, walk: true, dir, speed: 1.4, ph: Math.random() * 10, dance: 0, user, born: performance.now() };
+  const w = { o: g, y0: 0.25, walk: true, dir, speed: 1.4, ph: Math.random() * 10, dance: 0, user, born: performance.now(), state: 'street' };
   spawned.push(w);
+  featured = w; featuredT = 0;
   toast(user + ' just arrived in Lucid State City');
 }
 function updateWalkers(dt, t) {
   const all = citizens.concat(spawned);
+  const party = t < danceUntil;
   all.forEach(w => {
     const o = w.o;
+    if (w.state === 'street' && performance.now() - w.born > 90000) sendToClub(w);   // viewers head into Zero Cool after 90s
+    if (w.state === 'entering') {
+      if (stepTo(w, w.path[0], 2.0, dt)) { w.path.shift(); if (!w.path.length) { w.state = 'inside'; w.idleT = 4 + Math.random() * 8; } }
+      o.position.y = w.y0 + Math.abs(Math.sin(t * 8 + w.ph)) * 0.07;
+      return;
+    }
+    if (w.state === 'inside') {
+      if (party || w.dance > t) { o.position.y = w.y0 + Math.abs(Math.sin(t * 7 + w.ph)) * 0.45; o.rotation.y += dt * 2.5; return; }
+      w.idleT -= dt;
+      if (w.idleT < 0) { if (!w.goal) w.goal = CLUB_SPOTS[Math.random() * CLUB_SPOTS.length | 0].clone(); if (stepTo(w, w.goal, 1.2, dt)) { w.goal = null; w.idleT = 5 + Math.random() * 10; } }
+      o.position.y = w.y0 + Math.abs(Math.sin(t * 4 + w.ph)) * 0.12;
+      return;
+    }
+    if (w.role) {
+      if (w.role === 'dancer' || party) { o.position.y = w.y0 + Math.abs(Math.sin(t * (party ? 7 : 4.2) + w.ph)) * (party ? 0.45 : 0.18); o.rotation.y += dt * (party ? 2.5 : 0.6) * Math.sin(w.ph + t * 0.3); }
+      else if (w.role === 'dj') { o.position.y = w.y0 + Math.abs(Math.sin(t * 4.2)) * 0.08; }
+      else { o.position.y = w.y0 + Math.sin(t * 1.3 + w.ph) * 0.015; }
+      return;
+    }
     if (w.dance > t) {
       o.position.y = w.y0 + Math.abs(Math.sin(t * 7 + w.ph)) * 0.45;
       o.rotation.y += dt * 2.5;
@@ -305,21 +358,31 @@ function updateWalkers(dt, t) {
     }
   });
   // spawned viewers leave after 5 minutes
-  for (let i = spawned.length - 1; i >= 0; i--) if (performance.now() - spawned[i].born > 300000) { scene.remove(spawned[i].o); spawned.splice(i, 1); }
+  for (let i = spawned.length - 1; i >= 0; i--) if (performance.now() - spawned[i].born > 600000) { scene.remove(spawned[i].o); spawned.splice(i, 1); }
 }
 
 // ---------------------------------------------------------------- screens (gameplay, cam, chat, commands)
 const chatLines = [];
 let chatCanvas, chatTex, cmdCanvas, cmdTex;
 const COMMANDS = [
-  ['!spawn', 'join the city as a citizen'], ['!dance', 'start a dance at PULSE'], ['!rain', 'make it rain on the city'],
+  ['!spawn', 'join the city as a citizen'], ['!club', 'walk into Zero Cool'], ['!dance', 'start a dance at Zero Cool'], ['!rain', 'make it rain on the city'],
   ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard']
 ];
 function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; return [c, t]; }
 function applyTex(mesh, tex) { if (!mesh) return; mesh.material = mesh.material.clone(); mesh.material.map = tex; mesh.material.emissiveMap = tex; mesh.material.emissive = new THREE.Color(0xffffff); mesh.material.emissiveIntensity = 1.0; mesh.material.needsUpdate = true; }
+const screenOrig = {};
+function setGroup(type, tex) {          // put one texture on every screen of a type (tower + Zero Cool + floating)
+  const g = screens[type]; if (!g.length) return;
+  if (!screenOrig[type]) screenOrig[type] = g[0].material;
+  let m = screenOrig[type];
+  if (tex) { m = screenOrig[type].clone(); m.map = tex; m.emissiveMap = tex; m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 1.0; m.needsUpdate = true; }
+  g.forEach(s => s.material = m);
+  if (type === 'GAMEPLAY' && floatScreen) floatScreen.userData.plane.material = m;
+}
 function buildScreens() {
-  [chatCanvas, chatTex] = canvasTex(1280, 720); applyTex(screens.SCREEN_CHAT, chatTex); drawChat();
-  [cmdCanvas, cmdTex] = canvasTex(1280, 720); applyTex(screens.SCREEN_COMMANDS, cmdTex); drawCommands();
+  [chatCanvas, chatTex] = canvasTex(1280, 720); setGroup('CHAT', chatTex); drawChat();
+  [cmdCanvas, cmdTex] = canvasTex(1280, 720); setGroup('COMMANDS', cmdTex); drawCommands();
+  buildFloatScreen();
 }
 function frame(x, w, h, col) { x.strokeStyle = col; x.lineWidth = 10; x.strokeRect(8, 8, w - 16, h - 16); }
 function drawCommands() {
@@ -327,7 +390,7 @@ function drawCommands() {
   const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, '#05051a'); g.addColorStop(1, '#1e002d'); x.fillStyle = g; x.fillRect(0, 0, w, h);
   x.textAlign = 'center'; x.font = '120px Anton, Impact, sans-serif'; x.shadowColor = '#38e8ff'; x.shadowBlur = 24; x.fillStyle = '#fff';
   x.fillText('INTERACTIVE WORLD', w / 2, 150); x.shadowBlur = 0; x.textAlign = 'left';
-  COMMANDS.forEach(([c, d], i) => { const y = 260 + i * 76;
+  COMMANDS.forEach(([c, d], i) => { const y = 248 + i * 66;
     x.font = 'bold 50px Poppins, sans-serif'; x.fillStyle = '#ff50c8'; x.fillText(c, 140, y);
     x.font = 'bold 40px Poppins, sans-serif'; x.fillStyle = '#e6e6ff'; x.fillText(d, 520, y); });
   frame(x, w, h, '#38e8ff'); cmdTex.needsUpdate = true;
@@ -354,16 +417,16 @@ function drawChat() {
 // live video on the tower screens (OBS Virtual Camera / webcam)
 const streams = {};
 async function setVideo(screenName, deviceId) {
+  const type = screenName.replace('SCREEN_', '');
   if (streams[screenName]) { streams[screenName].getTracks().forEach(t => t.stop()); delete streams[screenName]; }
-  const mesh = screens[screenName]; if (!mesh) return;
-  if (!mesh.userData.orig) mesh.userData.orig = mesh.material;
-  if (!deviceId) { mesh.material = mesh.userData.orig; return; }
+  if (!screens[type] || !screens[type].length) return;
+  if (!deviceId) { setGroup(type, null); return; }
   try {
     const st = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
     streams[screenName] = st;
     const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = st; await v.play();
     const t = new THREE.VideoTexture(v); t.flipY = false; t.encoding = THREE.sRGBEncoding;
-    applyTex(mesh, t);
+    setGroup(type, t);
   } catch (e) { setStatus('That camera could not start here. In OBS, launch with --enable-media-stream.'); }
 }
 async function findCams() {
@@ -382,7 +445,50 @@ async function findCams() {
 $('findCams').onclick = findCams;
 $('srcGame').onchange = e => { store.set('srcGame', e.target.value); setVideo('SCREEN_GAMEPLAY', e.target.value); };
 $('srcCam').onchange = e => { store.set('srcCam', e.target.value); setVideo('SCREEN_LIVECAM', e.target.value); };
-if (store.get('srcGame', '') || store.get('srcCam', '')) setTimeout(() => { if (Object.keys(screens).length) findCams(); }, 2500);
+if (store.get('srcGame', '') || store.get('srcCam', '')) setTimeout(() => { if (screens.GAMEPLAY.length) findCams(); }, 2500);
+
+// ---------------------------------------------------------------- floating gameplay screen that follows players on the street
+let floatScreen = null, featured = null, featuredT = 0, followTarget = null;
+function buildFloatScreen() {
+  const w = 4.8, h = 2.7, g = new THREE.Group();
+  const geo = new THREE.PlaneGeometry(w, h), uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));     // glTF-style textures (flipY off)
+  const plane = new THREE.Mesh(geo, screens.GAMEPLAY[0] ? screens.GAMEPLAY[0].material : new THREE.MeshBasicMaterial());
+  plane.material.side = THREE.DoubleSide;
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.3, h + 0.3), new THREE.MeshBasicMaterial({ color: 0x38e8ff, side: THREE.DoubleSide }));
+  glow.position.z = -0.03; g.add(glow); g.add(plane);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.3, h + 0.3), new THREE.MeshBasicMaterial({ color: 0x0a0716 }));
+  back.position.z = -0.06; back.rotation.y = Math.PI; g.add(back);
+  g.userData.plane = plane; g.visible = false; scene.add(g); floatScreen = g;
+}
+function pickFeatured(dt) {
+  // the newest viewer who is still out on the street; rotate every 25s if several
+  const street = spawned.filter(w => w.state === 'street');
+  featuredT += dt;
+  if (!street.includes(featured) || (featuredT > 25 && street.length > 1)) {
+    const i = street.indexOf(featured);
+    featured = street.length ? street[(i + 1) % street.length] : null; featuredT = 0;
+  }
+  return featured;
+}
+function updateFloat(dt, t) {
+  if (!floatScreen) return;
+  const f = pickFeatured(dt);
+  const onFollow = hold && hold.s.follow;
+  let target = f;
+  if (!target && onFollow) {             // nobody spawned yet: follow a citizen walking the strip
+    if (!followTarget || !followTarget.walk) followTarget = citizens.filter(w => w.walk)[Math.random() * 60 | 0] || citizens[0];
+    target = followTarget;
+  }
+  floatScreen.visible = !!target && !isInClub(target.o.position);
+  if (!floatScreen.visible) return;
+  const p = target.o.position, side = p.x > 0 ? -1 : 1;                 // float over the street side
+  const goal = new THREE.Vector3(p.x + side * 3.2, 3.4 + Math.sin(t * 1.5) * 0.12, p.z + (target.dir || 1) * 6);
+  if (floatScreen.position.distanceTo(goal) > 12) floatScreen.position.copy(goal); else floatScreen.position.lerp(goal, Math.min(1, dt * 4));
+  const look = new THREE.Vector3(cam.position.x, floatScreen.position.y, cam.position.z);
+  floatScreen.lookAt(look);
+  floatScreen.userData.target = target;
+}
 
 // ---------------------------------------------------------------- ad slots
 function buildAdUI() {
@@ -426,20 +532,27 @@ $('adShow').onclick = () => {
 // ---------------------------------------------------------------- camera shots + auto tour
 function lookQuat(from, to) { const m = new THREE.Matrix4().lookAt(from, to, new THREE.Vector3(0, 1, 0)); return new THREE.Quaternion().setFromRotationMatrix(m); }
 function addCustomShots() {
-  const club = shots.find(s => s.name === 'CAM_CLUB');      // keep this shot on the sidewalk, out of traffic
-  if (club) { club.pos = B(9.8, 2, 3.2); club.quat = lookQuat(club.pos, B(-11, 24, 5)); }
+
   const f1 = B(-8, -30, 2.2), t1 = B(4, 10, 3);
   shots.push({ name: 'WALK', label: 'Street walk', pos: f1, quat: lookQuat(f1, t1), fov: 55, walk: true });
+  shots.push({ name: 'FOLLOW', label: 'Follow player', pos: f1.clone(), quat: lookQuat(f1, t1), fov: 50, follow: true });
 }
 let fly = null, hold = null, cur = 0, tourOn = params.get('tour') !== '0', tourT = 0;
+function prepFollow(s) {               // start the follow shot right behind the player
+    updateFloat(0.016, 0);
+    const tg = floatScreen && floatScreen.userData.target;
+    if (tg) { const p = tg.o.position, dir = tg.dir || 1, side = p.x > 0 ? -1 : 1;
+      s.pos = new THREE.Vector3(p.x + side * 1.8, 3.0, p.z - dir * 8); s.quat = lookQuat(s.pos, new THREE.Vector3(p.x + side * 1.4, 2.4, p.z + dir * 5)); }
+}
 function flyTo(s, dur = 3.2) {
+  if (s.follow) prepFollow(s);
   fly = { fromP: cam.position.clone(), fromQ: cam.quaternion.clone(), fromF: cam.fov, to: s, t: 0, dur };
   hold = null;
 }
 function goShot(i, instant) {
   cur = (i + shots.length) % shots.length; const s = shots[cur];
   document.querySelectorAll('#shots button').forEach((b, k) => b.classList.toggle('on', k === cur));
-  if (instant) { cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); hold = { s, t: 0 }; fly = null; }
+  if (instant) { if (s.follow) prepFollow(s); cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); hold = { s, t: 0 }; fly = null; }
   else flyTo(s);
   tourT = 0;
 }
@@ -459,6 +572,16 @@ function updateCamera(dt) {
     cam.quaternion.slerpQuaternions(fly.fromQ, fly.to.quat, k);
     cam.fov = fly.fromF + (fly.to.fov - fly.fromF) * k; cam.updateProjectionMatrix();
     if (fly.t >= 1) { hold = { s: fly.to, t: 0 }; fly = null; }
+  } else if (hold && hold.s.follow) {
+    hold.t += dt;
+    const tg = floatScreen && floatScreen.userData.target;
+    if (tg) {
+      const p = tg.o.position, dir = tg.dir || 1, side = p.x > 0 ? -1 : 1;
+      const want = new THREE.Vector3(p.x + side * 1.8, 3.0, p.z - dir * 8);
+      cam.position.lerp(want, Math.min(1, dt * 2));
+      const look = new THREE.Vector3(p.x + side * 1.4, 2.4, p.z + dir * 5);
+      const q = lookQuat(cam.position, look); cam.quaternion.slerp(q, Math.min(1, dt * 3));
+    }
   } else if (hold) {
     hold.t += dt;
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(hold.s.quat);
@@ -466,7 +589,7 @@ function updateCamera(dt) {
     cam.position.copy(hold.s.pos).addScaledVector(fwd, drift);
     if (!hold.s.walk) cam.position.y += Math.sin(hold.t * 0.35) * 0.4;
   }
-  if (tourOn && !fly) { tourT += dt; if (tourT > 16) goShot(cur + 1); }
+  if (tourOn && !fly) { tourT += dt; if (tourT > 16) { let n = cur + 1; if (shots[n % shots.length].follow && !spawned.some(w => w.state === 'street')) n++; goShot(n); } }
 }
 
 // ---------------------------------------------------------------- viewer effects
@@ -531,28 +654,32 @@ function nextLights() {
 let danceUntil = 0;
 function startDance(t) {
   danceUntil = t + 25;
-  const club = B(-11, 20, 0);
-  citizens.concat(spawned).forEach(w => { if (w.o.position.distanceTo(club) < 26 || Math.random() < 0.25) w.dance = t + 18 + Math.random() * 6; });
+  citizens.concat(spawned).forEach(w => { if (w.o.position.distanceTo(CLUB_CENTER) < 26 || Math.random() < 0.2) w.dance = t + 18 + Math.random() * 6; });
 }
 
 // ---------------------------------------------------------------- commands
 const cooldown = {};
 function runCommand(cmd, user, color) {
   const t = clock.getElapsedTime(), now = performance.now();
-  const cd = { '!spawn': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000 }[cmd];
+  const cd = { '!spawn': 0, '!club': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000 }[cmd];
   if (cd === undefined) return;
   if (cd && cooldown[cmd] && now - cooldown[cmd] < cd) return;
   cooldown[cmd] = now;
   user = user || 'Rassir';
   if (cmd === '!spawn') spawnCitizen(user, color);
-  if (cmd === '!dance') { startDance(t); toast(user + ' started a dance at PULSE'); }
+  if (cmd === '!club') {
+    let w = spawned.find(s => s.user === user);
+    if (!w) { spawnCitizen(user, color); w = spawned.find(s => s.user === user); }
+    if (sendToClub(w)) toast(user + ' is heading into Zero Cool');
+  }
+  if (cmd === '!dance') { startDance(t); toast(user + ' started a dance at Zero Cool'); }
   if (cmd === '!rain') { rainUntil = t + 45; toast(user + ' made it rain'); }
   if (cmd === '!fireworks') { fwQueue += 7; toast(user + ' lit up the sky'); }
   if (cmd === '!lights') toast(user + ' switched to ' + nextLights());
   if (cmd === '!ad') { chatLines.push({ user: 'LSC', color: '#38e8ff', text: 'Want a billboard in Lucid State City? Message Rassir to rent an ad slot.' }); drawChat(); toast('Billboards for rent: message Rassir'); }
 }
 $('cmdbtns').innerHTML = COMMANDS.map(([c]) => `<button data-c="${c}">${c}</button>`).join('');
-$('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) { const c = b.dataset.c; delete cooldown[c]; runCommand(c, c === '!spawn' ? 'Viewer' + (Math.random() * 900 + 100 | 0) : 'Rassir', ['#ff2d8f', '#38e8ff', '#7dff6a', '#ffd23f'][Math.random() * 4 | 0]); } };
+$('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) { const c = b.dataset.c; delete cooldown[c]; runCommand(c, c === '!spawn' ? 'Viewer' + (Math.random() * 900 + 100 | 0) : c === '!club' ? (spawned.find(w => w.state === 'street') || { user: 'Viewer' + (Math.random() * 900 + 100 | 0) }).user : 'Rassir', ['#ff2d8f', '#38e8ff', '#7dff6a', '#ffd23f'][Math.random() * 4 | 0]); } };
 
 // ---------------------------------------------------------------- Twitch chat (read-only, anonymous)
 let ws = null, chanName = '', reconnectTimer = 0;
@@ -595,6 +722,7 @@ addEventListener('keydown', e => {
   if (k === 'h') setPanel(!$('panel').classList.contains('hide'));
   else if (k === '0') setTour(!tourOn);
   else if (/^[1-9]$/.test(k) && +k <= shots.length) { setTour(false); goShot(+k - 1); }
+  else if (k === 'v') { setTour(false); goShot(shots.findIndex(s => s.follow)); }
   else if (k === 'r') runCommand('!rain', 'Rassir');
   else if (k === 'f') runCommand('!fireworks', 'Rassir');
   else if (k === 'd') runCommand('!dance', 'Rassir');
@@ -606,19 +734,22 @@ const clock = new THREE.Clock();
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.getElapsedTime();
-  updateCamera(dt); updateCars(dt); updateWalkers(dt, t); updateRain(dt, t); updateFireworks(dt);
+  updateWalkers(dt, t); updateFloat(dt, t); updateCamera(dt); updateCars(dt); updateRain(dt, t); updateFireworks(dt);
   if (fwQueue > 0) { fwT -= dt; if (fwT <= 0) { firework(); fwQueue--; fwT = 0.35 + Math.random() * 0.5; } }
   if (holoRing) { holoRing.rotation.z += dt * 0.6; }
   if (holoText) { holoText.rotation.y += dt * 0.5; holoText.position.y += Math.sin(t * 1.2) * 0.004; }
   if (spray) spray.scale.y = 1 + Math.sin(t * 3) * 0.12;
   beams.forEach(b => { b.o.rotation.x = b.rx + Math.sin(t * 0.5 + b.ph) * 0.35; b.o.rotation.z = b.rz + Math.cos(t * 0.37 + b.ph) * 0.35; });
   const party = t < danceUntil;
+  ledMats.forEach((m, i) => { m.emissiveIntensity = party ? (Math.sin(t * 9 + i * 1.7) > 0 ? 1.3 : 0.08) : 0.42 + 0.28 * Math.sin(t * 1.6 + i * 1.57); });
+  lasers.forEach(l => { l.o.rotation.y = l.ry + Math.sin(t * (party ? 2.2 : 0.8) + l.ph) * 0.35; });
+  if (disco) disco.rotation.y += dt * 0.8;
   stripes.forEach((s, i) => { s.material.emissiveIntensity = party ? (Math.sin(t * 12 + i) > 0 ? 3.5 : 0.2) : s.userData.base * (0.8 + 0.2 * Math.sin(t * 2 + i * 0.6)); });
   bloom.strength = party ? 1.15 : 0.9;
   composer.render();
 }
 loop();
-window.LSC = { goShot, runCommand, setTour };
+window.LSC = { goShot, runCommand, setTour, shots, spawned, get float() { return floatScreen; }, cam };
 }
 </script>
 </body></html>
