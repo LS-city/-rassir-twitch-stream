@@ -470,7 +470,9 @@ async function setVideo(screenName, deviceId) {
   } catch (e) { setStatus('That camera could not start here. In OBS, launch with --enable-media-stream.'); }
 }
 async function findCams() {
-  try { const st = await navigator.mediaDevices.getUserMedia({ video: true }); st.getTracks().forEach(t => t.stop()); } catch (e) { setStatus('Camera access was refused in this window.'); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('Cameras are off in this browser. In OBS, start it from the shortcut with --enable-media-stream.'); return false; }
+  try { const st = await navigator.mediaDevices.getUserMedia({ video: true }); st.getTracks().forEach(t => t.stop()); }
+  catch (e) { setStatus('Camera error: ' + e.name + (e.message ? ' (' + e.message + ')' : '')); return false; }
   const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
   ['srcGame', 'srcCam'].forEach(id => {
     const sel = $(id), keep = sel.value;
@@ -485,7 +487,7 @@ async function findCams() {
 $('findCams').onclick = findCams;
 async function cycleSource(id) {
   const sel = $(id);
-  if (sel.options.length <= 1) await findCams();
+  if (sel.options.length <= 1 && (await findCams()) === false) return;
   if (sel.options.length <= 1) { setStatus('No cameras found yet.'); return; }
   sel.selectedIndex = (sel.selectedIndex + 1) % sel.options.length;
   sel.onchange({ target: sel });
