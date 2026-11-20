@@ -96,6 +96,12 @@
     <button id="clipBtn">Clip it (K)</button>
     <button id="raidTest">Test raid welcome</button>
   </div>
+  <label class="t">Stream show (intro / BRB / outro)</label>
+  <div class="row"><select id="showLen" style="flex:1"><option value="60">1 min countdown</option><option value="180">3 min countdown</option><option value="300">5 min countdown</option><option value="600">10 min countdown</option></select><button id="showStart">Start intro</button></div>
+  <div class="row"><button id="showBrb">BRB</button><button id="showLive">Back live</button><button id="showOutro">End stream</button></div>
+  <div class="row"><label class="ck"><input type="checkbox" id="scAuto"> Switch OBS scenes automatically</label></div>
+  <div class="hint" style="margin:2px 0">Intro / BRB / main scene names in OBS:</div>
+  <div class="row" style="margin-top:0"><input id="scIntro" style="flex:1;min-width:0"><input id="scBrb" style="flex:1;min-width:0"><input id="scMain" style="flex:1;min-width:0"></div>
   <label class="t">Viewer games</label>
   <div class="row">
     <button id="bossBtn">Summon boss</button>
@@ -2254,7 +2260,7 @@ function interTick(t,dt){duelTick();bossTick(t,dt);graffitiTick(t);dropsTick(t,d
 (store.get('graffiti',[])||[]).forEach(gf=>sprayTag(gf.name,gf.text,true));graffiti.forEach(gf=>gf.t0=now-5);
 // --- chat hook ---
 function viewerChat(name,col,msg,isMod,bits){
-  const v=addViewer(name,col);v.last=now;directorViewer(name);const raw=msg.trim(),m=raw.toLowerCase();const k=name.toLowerCase();
+  const v=addViewer(name,col);v.last=now;directorViewer(name);if(SHOW.mode==='intro'||SHOW.mode==='brb')addCityName(name,col);const raw=msg.trim(),m=raw.toLowerCase();const k=name.toLowerCase();
   if(now-(cool[k+'xp']||-99)>30){cool[k+'xp']=now;addXP(name,2);}
   const ok=(cmd,s)=>{const id=k+cmd;if(isMod)return true;if(now-(cool[id]||-99)<s)return false;cool[id]=now;return true;};
   if(m==='!join'||m==='!fightme')joinQueue(name);
@@ -2365,6 +2371,7 @@ function loop(){
   if(meShot){goalP.copy(meShot.p);goalT.copy(meShot.t);}
   const k=1-Math.exp(-dt*(S.screen?3:2.2));curP.lerp(goalP,k);curT.lerp(goalT,k);
   const bob=S.screen?0:1;
+  if(showTick(t)){curP.copy(showP);curT.copy(showT);}
   camera.position.set(curP.x+Math.sin(t*0.7)*0.05*bob,curP.y+Math.sin(t*0.9)*0.04*bob,curP.z);
   camera.lookAt(curT);
 
@@ -2389,7 +2396,7 @@ function loop(){
   stageGlow.material.opacity=0.12+flash*0.3;
   padRing.material.color.set(wa<3.5?winCol:(ra<3.2?T.a1:T.a2));
   if(antenna.visible)beacon.visible=Math.floor(t*1.2)%2===0;
-  themeTick(t,dt);crowdTick(t,dt);
+  themeTick(t,dt);showFog();crowdTick(t,dt);
   ['chat','alerts'].forEach((id,i)=>{const s=screens[id];s.g.position.y=s.baseY+Math.sin(t*1.2+i)*0.12;});
   screens.alerts.glowMat.opacity=0.3+alertFlash*0.5;
   if(screens.cam.dot)screens.cam.dot.visible=Math.floor(t*2)%2===0;
@@ -2774,6 +2781,101 @@ function directorTick(t){if(!opts.director||isControl||meShot)return;
   if(boss&&!boss.dead&&!boss.fled){dirCut(shot==='wide'?'stage':'wide',7,1);return;}
   let k,h;do{[k,h]=DIR_IDLE[dir.idx=(dir.idx+1)%DIR_IDLE.length];}while(k==='cam'&&!(screens.cam.video||screens.cam.avatar));
   dirCut(k,h,0);}
+// ---------- Stream show: walk-in intro, BRB and outro ----------
+const showG=new THREE.Group();showG.visible=false;scene.add(showG);
+{const n=1800,pos=new Float32Array(n*3);for(let i=0;i<n;i++){const u=Math.random()*2-1,a=Math.random()*Math.PI*2,r=Math.sqrt(1-u*u);pos.set([Math.cos(a)*r*520,Math.abs(u)*420+60,Math.sin(a)*r*520],i*3);}
+  const gm=new THREE.BufferGeometry();gm.setAttribute('position',new THREE.BufferAttribute(pos,3));showG.add(new THREE.Points(gm,new THREE.PointsMaterial({color:0xffffff,size:1.6,sizeAttenuation:false,fog:false})));}
+const showPlanet=new THREE.Mesh(new THREE.SphereGeometry(70,40,24),new THREE.MeshBasicMaterial({map:canvasTex(512,256,(x,w,h)=>{for(let y=0;y<h;y+=4){const v=0.5+0.5*Math.sin(y*0.07);x.fillStyle='rgb('+Math.round(80+v*60)+','+Math.round(40+v*40)+','+Math.round(140+v*80)+')';x.fillRect(0,y,w,4);}}),fog:false}));
+showPlanet.position.set(-330,215,-420);showG.add(showPlanet);
+const showRing=new THREE.Mesh(new THREE.RingGeometry(95,135,64),new THREE.MeshBasicMaterial({color:0xffc8f0,transparent:true,opacity:0.45,side:THREE.DoubleSide,fog:false}));showRing.position.copy(showPlanet.position);showRing.rotation.set(1.2,0.3,0.2);showG.add(showRing);
+const showClouds=[];for(let i=0;i<28;i++){const c=new THREE.Sprite(new THREE.SpriteMaterial({map:softTex,color:0xb8b0ff,transparent:true,opacity:0.3,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));const s=30+Math.random()*40;c.scale.set(s,s*0.45,1);
+  c.position.set((Math.random()-.5)*260,90+Math.random()*70,(Math.random()-.5)*260+60);showG.add(c);showClouds.push(c);}
+// the city under the rooftop
+const cityG=new THREE.Group();showG.add(cityG);const GROUND=-46;
+const winTex=canvasTex(64,128,(x)=>{x.fillStyle='#08070f';x.fillRect(0,0,64,128);for(let r=0;r<16;r++)for(let c=0;c<4;c++){if(Math.random()<0.55){x.fillStyle=['#ffd890','#9fe8ff','#ff9ad8','#ffffff'][(r+c)%4];x.globalAlpha=0.5+Math.random()*0.5;x.fillRect(4+c*15,4+r*8,9,5);x.globalAlpha=1;}}});
+winTex.wrapS=winTex.wrapT=THREE.RepeatWrapping;
+const cityBlds=[];
+function addBld(x,z,w,d,h){const t=winTex.clone();t.needsUpdate=true;t.repeat.set(Math.max(1,w/4),Math.max(1,h/8));const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),[0,1,2,3,4,5].map(i=>i===2||i===3?B(0x0a0812):new THREE.MeshBasicMaterial({map:t})));
+  m.position.set(x,GROUND+h/2,z);cityG.add(m);cityBlds.push(m);return m;}
+addBld(0,-4,30,30,-GROUND-0.4);// the arena's own tower
+for(let gx=-5;gx<=5;gx++)for(let gz=-2;gz<=10;gz++){const x=gx*16,z=gz*16;if(Math.abs(x)<9&&z>12)continue;if(Math.abs(x)<20&&Math.abs(z+4)<22)continue;
+  const h=18+Math.random()*44-(Math.abs(x)<30&&z>0?8:0);addBld(x+(Math.random()-.5)*3,z+(Math.random()-.5)*3,8+Math.random()*4,8+Math.random()*4,h);}
+const road=new THREE.Mesh(new THREE.PlaneGeometry(400,400),new THREE.MeshBasicMaterial({map:canvasTex(256,256,(x)=>{x.fillStyle='#14121c';x.fillRect(0,0,256,256);x.fillStyle='#2a2838';for(let i=0;i<256;i+=64){x.fillRect(i,0,6,256);x.fillRect(0,i,256,6);}x.fillStyle='#ffd23a';for(let i=0;i<256;i+=16){x.fillRect(31,i,2,8);x.fillRect(i,31,8,2);}})}));
+road.material.map.wrapS=road.material.map.wrapT=THREE.RepeatWrapping;road.material.map.repeat.set(25,25);road.rotation.x=-Math.PI/2;road.position.set(0,GROUND,60);cityG.add(road);
+const cars=[];for(let i=0;i<22;i++){const c=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.9,3.2),B([0xff3b5a,0x3fd8ff,0xffd23a,0xffffff][i%4]));const lane=i%2?2:-2;c.userData={lane,o:Math.random()*200,v:(i%2?1:-1)*(16+Math.random()*10)};cityG.add(c);cars.push(c);
+  const gl=flameSprite(i%2?0xff5a5a:0xffffff,0,0.2,(i%2?1:-1)*1.8,3,2);c.add(gl);}
+// chatters' names on the avenue
+const nameSigns=[];const SIGN_SLOTS=[];for(let k=0;k<24;k++){const side=k%2?1:-1;SIGN_SLOTS.push([side*8.6,GROUND+10+(k%3)*7,140-Math.floor(k/2)*10,side]);}
+function addCityName(name,col){if(nameSigns.find(s=>s.name===name))return;if(nameSigns.length>=SIGN_SLOTS.length){const o=nameSigns.shift();cityG.remove(o.m);}
+  const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d');x.fillStyle='rgba(5,4,12,.85)';x.fillRect(0,0,512,128);x.strokeStyle=col;x.lineWidth=8;x.strokeRect(4,4,504,120);
+  let fs=70;x.font='bold '+fs+'px "Courier New",monospace';while(x.measureText(name).width>470&&fs>24){fs-=4;x.font='bold '+fs+'px "Courier New",monospace';}x.textAlign='center';x.textBaseline='middle';x.shadowColor=col;x.shadowBlur=18;x.fillStyle=col;x.fillText(name,256,66);
+  const used=new Set(nameSigns.map(s=>s.slot));let slot=0;while(used.has(slot))slot++;const [sx,sy,sz,side]=SIGN_SLOTS[slot];
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(9,2.25),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),side:THREE.DoubleSide,fog:false}));m.position.set(sx,sy,sz);m.rotation.y=-side*Math.PI/2;cityG.add(m);nameSigns.push({name,m,slot});}
+// overlay text
+const showOv=document.createElement('div');showOv.style.cssText='position:fixed;left:0;right:0;top:6%;text-align:center;pointer-events:none;z-index:5;font-family:"Courier New",monospace;color:#fff;display:none;text-shadow:0 0 18px rgba(0,0,0,.9)';
+showOv.innerHTML='<div id="sovT" style="font:bold 5.2vw Impact,\'Arial Black\',sans-serif;letter-spacing:.06em"></div><div id="sovC" style="font:bold 7vw \'Courier New\',monospace;margin-top:.2em"></div><div id="sovS" style="font:bold 1.7vw \'Courier New\',monospace;opacity:.9;margin-top:.4em"></div>';
+document.body.appendChild(showOv);
+// state
+const SHOW={mode:'live',t0:0,end:0,len:store.get('introLen',180),last:null};
+let introScene=store.get('introScene','sststartsoon'),brbScene=store.get('brbScene','sstbreak'),mainScene=store.get('mainScene','Neon Harvest'),autoScene=store.get('autoScene',true);
+const showP=new THREE.Vector3(),showT=new THREE.Vector3(),wideP=new THREE.Vector3(0,6.2,16),wideT=new THREE.Vector3(0,6.4,-8);
+function obsScene(n){if(!autoScene||!inOBS||!n||!window.obsstudio||!window.obsstudio.setCurrentScene)return;try{window.obsstudio.setCurrentScene(n);}catch(e){}}
+function startShow(mode,len,fromObs){
+  if(isControl){remote('show',{mode,len});return;}
+  const prev=SHOW.mode;SHOW.mode=mode;SHOW.t0=now;
+  if(mode==='intro'){SHOW.len=len||SHOW.len;SHOW.end=now+SHOW.len;store.set('introLen',SHOW.len);if(!fromObs)obsScene(introScene);}
+  if(mode==='brb'&&!fromObs)obsScene(brbScene);
+  if(mode==='live'){if(prev==='intro'){landLive();}else if(prev==='brb'){SHOW.mode='return';SHOW.t0=now;}if(!fromObs)obsScene(mainScene);}
+  if(mode==='outro'){SHOW.tops=topXP(5).map(e=>e.name);if(!SHOW.tops.length)SHOW.tops=[...crowd.values()].slice(0,5).map(v=>v.name);}
+  setStatus({intro:'Intro running',brb:'BRB mode',outro:'Outro running',live:'Live'}[mode]||'');}
+function landLive(){SHOW.mode='live';showG.visible=false;showOv.style.display='none';restoreShowWorld();
+  winText="WE'RE LIVE!";winCol=T.a1;winT=now;roundPhase='';burst(0,8,-6,160,7,['#ffd23a','#ff4fd8','#3ff5ff','#ffffff'],true);
+  for(let k=0;k<5;k++)setTimeout(()=>burst((Math.random()-.5)*18,10+Math.random()*4,-8,90,6,['#ffd166','#ff4fd8','#3ff5ff','#ffffff'],false),k*300);
+  avReact('excited','wave',6);crowd.forEach(v=>v.jump=now);}
+function restoreShowWorld(){Object.keys(screens).forEach(id=>{screens[id].g.visible=id==='trophy'?trophyOn:true;});if(decor[T.decor])decor[T.decor].visible=true;camera.far=200;camera.updateProjectionMatrix();scene.fog.near=T.near||30;scene.fog.far=T.far||120;}
+const ease=x=>x<0?0:x>1?1:x*x*(3-2*x);
+function V3(x,y,z){return new THREE.Vector3(x,y,z);}
+function showTick(t){
+  if(SHOW.mode==='live'){if(showG.visible){showG.visible=false;showOv.style.display='none';restoreShowWorld();}return false;}
+  showG.visible=true;camera.far=1400;camera.updateProjectionMatrix();
+  cars.forEach(c=>{const u=c.userData;const z=((u.o+t*u.v)%300+300)%300-60;c.position.set(u.lane,GROUND+0.5,z);c.rotation.y=u.v>0?Math.PI:0;});
+  showClouds.forEach((c,i)=>{c.position.x+=Math.sin(i)*0.02;const d=c.position.distanceTo(camera.position);c.material.opacity=0.3*Math.max(0,Math.min(1,(d-50)/90));});
+  const fmt=s=>{s=Math.max(0,Math.ceil(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+  const T1=$('sovT'),T2=$('sovC'),T3=$('sovS');showOv.style.display='block';
+  const scr=Object.keys(screens);
+  if(SHOW.mode==='intro'){const R=SHOW.end-now;
+    T1.textContent=R>12?'STARTING SOON':'';T2.textContent=R>12?fmt(R):'';T3.textContent=R>12?'Chat now to get your name on the city!  Type !checkin for XP':'';
+    T1.style.color=T.a1;
+    if(R>45){const a=t*0.02;showP.set(Math.sin(a)*40,210,230);showT.set(-70+Math.sin(a)*20,170,-200);}
+    else if(R>32){const k=ease((45-R)/13);showP.copy(V3(Math.sin(t*0.02)*40,210,230)).lerp(V3(0,40,175),k);showT.copy(V3(-70,170,-200)).lerp(V3(0,GROUND+8,90),ease(k*1.3));}
+    else if(R>12){const k=(32-R)/20;const z=175-k*150;showP.set(Math.sin(k*9)*2.5,GROUND+11+Math.sin(k*5)*2,z);showT.set(Math.sin(k*9+0.6)*2,GROUND+9,z-25);}
+    else if(R>4){const k=ease((12-R)/8);showP.set(0,GROUND+11+k*(6-GROUND-11+6),25-k*3);showT.copy(V3(0,GROUND+11,-4)).lerp(V3(0,4,-6),ease((12-R-4)/4));}
+    else{const k=ease((4-R)/4);showP.copy(V3(0,12,22)).lerp(wideP,k);showT.copy(V3(0,4,-6)).lerp(wideT,k);}
+    scr.forEach((id,i)=>{screens[id].g.visible=(R<10-i*0.8)&&(id!=='trophy'||trophyOn);});
+    if(decor[T.decor])decor[T.decor].visible=R<14;
+    if(R<=0)startShow('live',0,false);
+    return true;}
+  if(SHOW.mode==='brb'){const a=now-SHOW.t0;T1.textContent='BE RIGHT BACK';T1.style.color=T.a2;T2.textContent=fmt(a);T3.textContent='Hang out in chat - !tag, !drop and !duel still work';
+    const k=ease(a/8);const o=t*0.04;const orbitP=V3(Math.sin(o)*90,70,40+Math.cos(o)*90);showP.copy(wideP).lerp(orbitP,k);showT.copy(wideT).lerp(V3(0,GROUND+10,40),k);return true;}
+  if(SHOW.mode==='return'){const a=now-SHOW.t0;const k=ease(a/5);showOv.style.display='none';const o=SHOW.t0*0.04;showP.copy(V3(Math.sin(o)*90,70,40+Math.cos(o)*90)).lerp(wideP,k);showT.copy(V3(0,GROUND+10,40)).lerp(wideT,k);
+    if(a>5){SHOW.mode='live';landLive();}return true;}
+  if(SHOW.mode==='outro'){const a=now-SHOW.t0;T1.textContent='THANKS FOR WATCHING';T1.style.color=T.a1;T2.textContent='';T3.innerHTML='TOP CHATTERS<br>'+(SHOW.tops||[]).join('  -  ');T3.style.fontSize='2.2vw';
+    const k=ease(a/22);const o=t*0.02;showP.copy(wideP).lerp(V3(Math.sin(o)*70,320,80+Math.cos(o)*70),k);showT.copy(wideT).lerp(V3(0,GROUND,30),Math.min(1,k*1.4));return true;}
+  return false;}
+function showFog(){if(SHOW.mode==='live')return;scene.fog.near=200;scene.fog.far=1300;}
+// OBS scene changes drive the show too
+window.addEventListener('obsSceneChanged',e=>{if(isControl)return;const n=e.detail&&e.detail.name;if(!n)return;
+  if(n===introScene&&SHOW.mode!=='intro')startShow('intro',SHOW.len,true);
+  else if(n===brbScene&&SHOW.mode!=='brb')startShow('brb',0,true);
+  else if(n===mainScene&&SHOW.mode==='intro'){SHOW.end=Math.min(SHOW.end,now+4);}
+  else if(n===mainScene&&SHOW.mode==='brb')startShow('live',0,true);});
+// dock controls
+$('showStart').onclick=()=>startShow('intro',+$('showLen').value);
+$('showBrb').onclick=()=>startShow('brb');$('showLive').onclick=()=>startShow('live');$('showOutro').onclick=()=>startShow('outro');
+$('showLen').value=String(SHOW.len);$('scIntro').value=introScene;$('scBrb').value=brbScene;$('scMain').value=mainScene;$('scAuto').checked=autoScene;
+const saveSc=()=>{introScene=$('scIntro').value.trim();brbScene=$('scBrb').value.trim();mainScene=$('scMain').value.trim();autoScene=$('scAuto').checked;
+  store.set('introScene',introScene);store.set('brbScene',brbScene);store.set('mainScene',mainScene);store.set('autoScene',autoScene);remote('scenes',{introScene,brbScene,mainScene,autoScene});};
+['scIntro','scBrb','scMain'].forEach(id=>$(id).onchange=saveSc);$('scAuto').onchange=saveSc;
 let lastAvTheme='';
 function avatarTick(t,dt){
   if(lastAvTheme!==theme){lastAvTheme=theme;AV.drawBackdrop(T.a1,T.a2,'#'+new THREE.Color(T.bg).offsetHSL(0,0,0.06).getHexString());AV.rim.color.set(T.a1);}
@@ -2811,6 +2913,8 @@ function applyRemote(cmd,d){
   else if(cmd==='boss')startBoss();else if(cmd==='clearboss')clearBoss();else if(cmd==='cleantags')clearTags();else if(cmd==='tag')sprayTag(d.name,d.text);else if(cmd==='drop')dropItem(d.name,d.type);else if(cmd==='testduel')$('duelTest').onclick();
   else if(cmd==='pip')setPip(d.pos,d.size,true);
   else if(cmd==='expr')setExpr(d.e,true);
+  else if(cmd==='show')startShow(d.mode,d.len);
+  else if(cmd==='scenes'){introScene=d.introScene;brbScene=d.brbScene;mainScene=d.mainScene;autoScene=d.autoScene;['introScene','brbScene','mainScene','autoScene'].forEach(k=>store.set(k,d[k]));}
   else if(cmd==='avspot')setAvSpot(d.v,true);
   else if(cmd==='trophies'){trophies=d.list||[];trophyOn=d.on!==false;store.set('trophies',trophies);store.set('trophyOn',trophyOn);renderTrophyList();applyTrophyVis();if(d.spot&&!isControl){trophyOn=true;applyTrophyVis();dirCut('trophy',6,5);if(!opts.director)setShot('trophy');avReact('excited',null,4);burst(7.9,7.5,-13.5,80,5,['#ffd23a','#ffffff','#fff1a8'],true);}}
   else if(cmd==='raid')raidWelcome(d.name,d.n);
