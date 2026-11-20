@@ -471,9 +471,11 @@ async function setVideo(screenName, deviceId) {
 }
 async function findCams() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('Cameras are off in this browser. In OBS, start it from the shortcut with --enable-media-stream.'); return false; }
+  let camErr = null;     // a busy webcam (e.g. used by the arena) must not stop us listing the others
   try { const st = await navigator.mediaDevices.getUserMedia({ video: true }); st.getTracks().forEach(t => t.stop()); }
-  catch (e) { setStatus('Camera error: ' + e.name + (e.message ? ' (' + e.message + ')' : '')); return false; }
+  catch (e) { camErr = e; }
   const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  if (!devs.length) { setStatus(camErr ? 'Camera error: ' + camErr.name : 'No cameras found.'); return false; }
   ['srcGame', 'srcCam'].forEach(id => {
     const sel = $(id), keep = sel.value;
     sel.innerHTML = '<option value="">Placeholder</option>' + devs.map(d => `<option value="${d.deviceId}">${(d.label || 'Camera').replace(/</g, '')}</option>`).join('');
