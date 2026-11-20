@@ -31,6 +31,10 @@ button{cursor:pointer;flex:1 1 auto}
 button:hover{border-color:var(--pink)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
 button.on{background:var(--pink);border-color:var(--pink);color:#fff}
 #focusBtns button{font-size:13px;padding:6px 8px}
+#showOv{position:fixed;left:0;right:0;top:7%;text-align:center;pointer-events:none;z-index:2;display:none;color:#fff}
+#sovT{font:400 clamp(30px,6vw,110px)/1 Anton,Impact,sans-serif;letter-spacing:.04em;text-shadow:0 0 22px currentColor,0 0 60px currentColor}
+#sovC{font:400 clamp(40px,8.5vw,160px)/1.05 Anton,Impact,sans-serif;color:#fff;text-shadow:0 0 30px #ff2d8f}
+#sovS{font:700 clamp(14px,1.8vw,34px)/1.4 Poppins,sans-serif;color:#ecebff;margin-top:.4em;text-shadow:0 2px 10px #000}
 canvas#c.pick{cursor:pointer}
 #status{font-size:13px;color:var(--dim);margin-top:6px;min-height:1.4em}
 #toast{position:fixed;left:50%;bottom:6%;transform:translateX(-50%);font:400 34px/1.1 Anton,Impact,sans-serif;color:#fff;
@@ -43,6 +47,7 @@ canvas#c.pick{cursor:pointer}
 <canvas id="c"></canvas>
 <div id="load"><div><h1>LUCID STATE CITY</h1><p id="loadtxt">Loading the city…</p><div id="bar"><i></i></div></div></div>
 <div id="toast"></div>
+<div id="showOv"><div id="sovT"></div><div id="sovC"></div><div id="sovS"></div></div>
 <div id="hint">Click a screen to focus · H = panel · G/C = game/cam source · V = follow · 0 = tour</div>
 <div id="panel">
   <h2>LUCID STATE CITY</h2>
@@ -51,6 +56,15 @@ canvas#c.pick{cursor:pointer}
   <h3>Camera</h3>
   <div class="row" id="shots"></div>
   <div class="row" style="margin-top:6px"><button id="tour" class="on">Auto tour</button></div>
+
+  <h3>Show</h3>
+  <div class="row"><select id="showLen" style="flex:1 1 90px;width:auto"><option value="60">1 min</option><option value="120">2 min</option><option value="180" selected>3 min</option><option value="300">5 min</option><option value="600">10 min</option></select><button id="showIntro">Start intro</button></div>
+  <div class="row" style="margin-top:6px" id="showBtns"><button id="showBrb">BRB</button><button id="showLive">We're live</button><button id="showOutro">Outro</button></div>
+  <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><label class="note" style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="musOn" style="width:18px;min-height:18px"> Techno music</label><input type="range" id="musVol" min="0" max="100" style="flex:1;min-height:30px;padding:0"></div>
+  <details style="margin-top:6px"><summary class="note" style="cursor:pointer">OBS scenes for the show</summary>
+    <div class="row" style="margin-top:6px"><input id="scIntro" placeholder="Intro scene" title="Intro scene"><input id="scBrb" placeholder="BRB scene" title="BRB scene"><input id="scOutro" placeholder="Outro scene" title="Outro scene"><input id="scMain" placeholder="Main scene" title="Main (live) scene"></div>
+    <label class="note" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="scAuto" style="width:18px;min-height:18px"> Switch OBS scenes automatically</label>
+  </details>
 
   <h3>Focus a screen</h3>
   <div class="row" id="focusBtns"></div>
@@ -736,7 +750,7 @@ function makeRain() {
 makeRain();
 function updateRain(dt, t) {
   const on = t < rainUntil; rain.visible = on;
-  scene.fog.density += ((on ? 0.006 : 0.0042) - scene.fog.density) * Math.min(1, dt);
+  scene.fog.density += ((on ? 0.006 : SHOW.mode !== 'live' ? 0.0022 : 0.0042) - scene.fog.density) * Math.min(1, dt);
   if (!on) return;
   const a = rain.geometry.attributes.position.array;
   for (let i = 0; i < a.length; i += 6) { a[i + 1] -= 60 * dt; a[i + 4] -= 60 * dt; if (a[i + 4] < 0) { a[i + 1] += 90; a[i + 4] += 90; } }
@@ -846,6 +860,7 @@ function handleLine(line) {
   const tags = {}; (m[1] || '').split(';').forEach(kv => { const i = kv.indexOf('='); tags[kv.slice(0, i)] = kv.slice(i + 1); });
   const user = tags['display-name'] || m[2], color = tags.color || '#ff2d8f', text = m[3];
   chatLines.push({ user, color, text }); if (chatLines.length > 40) chatLines.shift();
+  chatCount[user] = (chatCount[user] || 0) + 1;
   chatCanvas && drawChat();
   const cmd = text.trim().split(/\s+/)[0].toLowerCase();
   if (cmd.startsWith('!')) runCommand(cmd, user, color);
@@ -876,7 +891,7 @@ const clock = new THREE.Clock();
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.getElapsedTime();
-  updateWalkers(dt, t); updateFloat(dt, t); updateCamera(dt); updateCars(dt); updateRain(dt, t); updateFireworks(dt);
+  updateWalkers(dt, t); updateFloat(dt, t); if (!showTick(dt, t)) updateCamera(dt); updateCars(dt); updateRain(dt, t); updateFireworks(dt);
   if (fwQueue > 0) { fwT -= dt; if (fwT <= 0) { firework(); fwQueue--; fwT = 0.35 + Math.random() * 0.5; } }
   if (holoRing) { holoRing.rotation.z += dt * 0.6; }
   if (holoText) { holoText.rotation.y += dt * 0.5; holoText.position.y += Math.sin(t * 1.2) * 0.004; }
@@ -889,9 +904,250 @@ function loop() {
   bloom.strength += ((focusOn ? 0.18 : party ? 1.15 : 0.9) - bloom.strength) * Math.min(1, dt * 4);   // keep focused screens crisp
   composer.render();
 }
-loop();
 
 // ---------------------------------------------------------------- LSC Control dock (same page with ?control=1 inside an OBS Custom Browser Dock)
+// ---------------------------------------------------------------- SHOW: intro / BRB / outro (like the Rooftop Arena), with its own techno score
+var chatCount = {};
+const SHOW = { mode: 'live', t0: 0, end: 0, len: +store.get('introLen', 180), tops: [], from: null, fromQ: null };
+const SC_DEF = { intro: 'LSCintro', brb: 'LSCbrb', outro: 'LSCoutro', main: 'LSCworld' };
+let showScenes = Object.assign({}, SC_DEF, store.get('showScenes', {})), autoScene = store.get('autoScene', true);
+const nowS = () => performance.now() / 1000;
+const inOBS = !!window.obsstudio;
+function obsScene(n) { if (!autoScene || !n || !window.obsstudio || !window.obsstudio.setCurrentScene) return; try { window.obsstudio.setCurrentScene(n); } catch (e) {} }
+function topChatters(n) { const list = Object.entries(chatCount).sort((a, b) => b[1] - a[1]).slice(0, n).map(e => e[0]); return list.length ? list : spawned.slice(-n).map(w => w.user); }
+function startShow(mode, len, fromObs) {
+  const prev = SHOW.mode; SHOW.mode = mode; SHOW.t0 = nowS(); musInit();
+  SHOW.from = cam.position.clone(); SHOW.fromQ = cam.quaternion.clone(); SHOW.fromF = cam.fov;
+  if (mode !== 'live') { tourOn = false; $('tour').classList.remove('on'); fly = null; }
+  if (mode === 'intro') { SHOW.len = +len || SHOW.len; SHOW.end = SHOW.t0 + SHOW.len; store.set('introLen', SHOW.len); if (!fromObs) obsScene(showScenes.intro); }
+  if (mode === 'brb' && !fromObs) obsScene(showScenes.brb);
+  if (mode === 'outro') { SHOW.tops = topChatters(5); if (!fromObs) obsScene(showScenes.outro); }
+  if (mode === 'live') {
+    if (prev === 'intro') { SHOW.mode = 'intro'; SHOW.end = Math.min(SHOW.end, nowS() + 4); }       // fly the last 4 seconds, then drop
+    else if (prev === 'brb' || prev === 'outro') { SHOW.mode = 'return'; }
+    if (!fromObs) obsScene(showScenes.main);
+  }
+  setStatus({ intro: 'Intro running', brb: 'BRB mode', outro: 'Outro running', live: 'Going live', return: 'Back to the city' }[SHOW.mode] || '');
+  postState();
+}
+function landLive() {
+  SHOW.mode = 'live'; MUS.landT = nowS(); $('showOv').style.display = 'none';
+  goShot(0, true); setTour(true);
+  fwQueue += 10; toast("WE'RE LIVE!");
+  citizens.concat(spawned).forEach(w => { if (Math.random() < 0.4) w.dance = clock.getElapsedTime() + 5; });
+  setStatus('Live'); postState();
+}
+const sEase = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+const fmtT = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+function camAt(pos, target, fov) { cam.position.copy(pos); cam.quaternion.copy(lookQuat(pos, target)); if (fov && Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); } }
+function showTick(dt, t) {
+  const ov = $('showOv'), T1 = $('sovT'), T2 = $('sovC'), T3 = $('sovS');
+  if (SHOW.mode === 'live') { if (ov.style.display !== 'none') ov.style.display = 'none'; return false; }
+  const n = nowS();
+  if (SHOW.mode === 'intro') {
+    const R = SHOW.end - n, ts = n * 0.05;
+    ov.style.display = R > 12 ? 'block' : 'none';
+    T1.textContent = 'STARTING SOON'; T1.style.color = '#ff2d8f'; T2.textContent = fmtT(R);
+    T3.textContent = 'Lucid State City  ·  type !spawn in chat to join the city';
+    const orbit = a => B(Math.sin(a) * 235, Math.cos(a) * 235, 165);
+    if (R > 45) { camAt(orbit(ts), B(0, 0, 8), 45); SHOW.diveFrom = null; }
+    else if (R > 30) {                                   // dive in from the sky to the north end of the Strip
+      if (!SHOW.diveFrom) SHOW.diveFrom = cam.position.clone();
+      const k = sEase((45 - R) / 15);
+      const p = SHOW.diveFrom.clone().lerp(B(0, 112, 26), k); p.y += Math.sin(k * Math.PI) * 30;
+      camAt(p, B(0, 0, 8).lerp(B(0, 60, 6), k), 45 + k * 13);
+    } else if (R > 12) {                                 // street run: down the Neon Strip at walking-sign height
+      const k = (30 - R) / 18, y = 112 - k * 180, z = 26 - Math.min(1, k * 4) * 19;
+      const sway = Math.sin(k * 9) * 1.6;
+      camAt(B(sway, y, z + Math.sin(k * 14) * 0.4), B(sway * 0.6, y - 30, 5.5), 58);
+    } else if (R > 4) {                                  // climb over the gateway and swing around
+      const k = sEase((12 - R) / 8);
+      const p = B(0, -68, 7).lerp(B(0, -112, 30), k); p.x += Math.sin(k * Math.PI) * 26;
+      const yaw = Math.PI * k;                          // look south (0) -> east -> north (PI)
+      const tgt = p.clone().add(new THREE.Vector3(Math.sin(yaw) * 30, -6, Math.cos(yaw) * 30));
+      camAt(p, tgt, 58 - k * 20);
+    } else {                                             // settle into the opening shot
+      const s0 = shots[0], k = sEase((4 - R) / 4);
+      if (!SHOW.holdFrom) { SHOW.holdFrom = cam.position.clone(); SHOW.holdQ = cam.quaternion.clone(); SHOW.holdF = cam.fov; }
+      cam.position.copy(SHOW.holdFrom).lerp(s0.pos, k);
+      cam.quaternion.slerpQuaternions(SHOW.holdQ, s0.quat, k); cam.fov = SHOW.holdF + (s0.fov - SHOW.holdF) * k; cam.updateProjectionMatrix();
+      if (R <= 0) { SHOW.holdFrom = null; landLive(); }
+    }
+    if (R > 4) SHOW.holdFrom = null;
+    return true;
+  }
+  if (!SHOW.from) { SHOW.from = cam.position.clone(); SHOW.fromQ = cam.quaternion.clone(); SHOW.fromF = cam.fov; }
+  if (SHOW.mode === 'brb' || SHOW.mode === 'outro') {
+    const a = n - SHOW.t0, brb = SHOW.mode === 'brb';
+    ov.style.display = 'block';
+    if (brb) { T1.textContent = 'BE RIGHT BACK'; T1.style.color = '#38e8ff'; T2.textContent = fmtT(a); T3.textContent = 'The city keeps going  ·  !spawn  !club  !fight  !bit  !dance  !fireworks'; }
+    else { T1.textContent = 'THANKS FOR WATCHING'; T1.style.color = '#ff2d8f'; T2.textContent = '';
+      T3.innerHTML = SHOW.tops.length ? 'TOP CHATTERS<br>' + SHOW.tops.map(x => String(x).replace(/[<>&]/g, '')).join('  ·  ') : 'See you next time in Lucid State City'; }
+    const k = sEase(a / (brb ? 7 : 20)), o = n * (brb ? 0.035 : 0.02);
+    const target = brb ? B(Math.sin(o) * 150, Math.cos(o) * 150, 70) : B(Math.sin(o) * 190, Math.cos(o) * 190, 280);
+    const look = brb ? B(0, 0, 6) : B(0, 0, 0);
+    const lq = lookQuat(target, look);
+    cam.position.copy(SHOW.from).lerp(target, k);
+    cam.quaternion.slerpQuaternions(SHOW.fromQ, lq, Math.min(1, k * 1.2));
+    if (k >= 1) cam.quaternion.copy(lookQuat(cam.position, look));
+    cam.fov = SHOW.fromF + (45 - SHOW.fromF) * k; cam.updateProjectionMatrix();
+    return true;
+  }
+  if (SHOW.mode === 'return') {
+    const a = n - SHOW.t0, k = sEase(a / 5), s0 = shots[0];
+    ov.style.display = 'none';
+    cam.position.copy(SHOW.from).lerp(s0.pos, k); cam.quaternion.slerpQuaternions(SHOW.fromQ, s0.quat, k);
+    cam.fov = SHOW.fromF + (s0.fov - SHOW.fromF) * k; cam.updateProjectionMatrix();
+    if (a >= 5) landLive();
+    return true;
+  }
+  return false;
+}
+// OBS scene switches drive the show too (needs Page permissions: Advanced access)
+window.addEventListener('obsSceneChanged', e => {
+  const nm = e.detail && e.detail.name; if (!nm) return;
+  if (nm === showScenes.intro && SHOW.mode !== 'intro') startShow('intro', SHOW.len, true);
+  else if (nm === showScenes.brb && SHOW.mode !== 'brb') startShow('brb', 0, true);
+  else if (nm === showScenes.outro && SHOW.mode !== 'outro') startShow('outro', 0, true);
+  else if (nm === showScenes.main && SHOW.mode !== 'live' && SHOW.mode !== 'return') startShow('live', 0, true);
+});
+
+// ---------------------------------------------------------------- original techno score (WebAudio, 128 BPM, A minor)
+const MUS = { ctx: null, on: store.get('musOn', true), vol: +store.get('musVol', 70) / 100, step: 0, next: 0, lastSec: 'off', landT: -99 };
+const TBPM = 128, TSPB = 60 / TBPM / 4, mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+function musInit() {
+  if (MUS.ctx) { if (MUS.ctx.state === 'suspended') MUS.ctx.resume(); return; }
+  try { musBuild(new (window.AudioContext || window.webkitAudioContext)()); MUS.next = MUS.ctx.currentTime + 0.1; setInterval(musSched, 25); }
+  catch (e) { console.warn('music', e); }
+}
+function musBuild(c) {
+  {
+    MUS.ctx = c;
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -20; comp.knee.value = 6; comp.ratio.value = 12; comp.attack.value = 0.003; comp.release.value = 0.12; comp.connect(c.destination);
+    MUS.master = c.createGain(); MUS.master.gain.value = 0; MUS.master.connect(comp);
+    const len = c.sampleRate * 1.8, ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+    MUS.verb = c.createConvolver(); MUS.verb.buffer = ir; const vg = c.createGain(); vg.gain.value = 0.4; MUS.verb.connect(vg); vg.connect(MUS.master);
+    MUS.dly = c.createDelay(1); MUS.dly.delayTime.value = TSPB * 3; const fb = c.createGain(); fb.gain.value = 0.42;
+    const dhp = c.createBiquadFilter(); dhp.type = 'highpass'; dhp.frequency.value = 500; const dlp = c.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 3200;
+    MUS.dly.connect(dhp); dhp.connect(dlp); dlp.connect(fb); fb.connect(MUS.dly); const dg = c.createGain(); dg.gain.value = 0.5; dlp.connect(dg); dg.connect(MUS.master); dg.connect(MUS.verb);
+    const nb = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), nd = nb.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1; MUS.noise = nb;
+  }
+}
+// render a preview of the score offline (used to make an audio file of each section)
+async function musPreview(plan) {
+  const sr = 44100, total = plan.reduce((a, p) => a + p.bars * 16 * TSPB, 0) + 2;
+  const c = new OfflineAudioContext(2, Math.ceil(sr * total), sr); const keep = MUS.ctx; musBuild(c); MUS.master.gain.value = 0.42;
+  let t = 0.05, s = 0;
+  for (const p of plan) { SHOW.mode = p.mode || 'live'; for (let i = 0; i < p.bars * 16; i++) { if (p.sec === 'climb' || p.sec === 'dive') SHOW.end = nowS() + (p.sec === 'climb' ? 12 - 8 * i / (p.bars * 16) : 45 - 15 * i / (p.bars * 16)); musStep(p.sec, s, t); s++; t += TSPB; } if (p.impact) tImpact(t); }
+  const buf = await c.startRendering(); MUS.ctx = keep; SHOW.mode = 'live';
+  const L = buf.getChannelData(0), Rr = buf.getChannelData(1), n = L.length, out = new DataView(new ArrayBuffer(44 + n * 4));
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) out.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, 'RIFF'); out.setUint32(4, 36 + n * 4, true); w(8, 'WAVEfmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 2, true);
+  out.setUint32(24, sr, true); out.setUint32(28, sr * 4, true); out.setUint16(32, 4, true); out.setUint16(34, 16, true); w(36, 'data'); out.setUint32(40, n * 4, true);
+  for (let i = 0; i < n; i++) { out.setInt16(44 + i * 4, Math.max(-1, Math.min(1, L[i])) * 32767, true); out.setInt16(46 + i * 4, Math.max(-1, Math.min(1, Rr[i])) * 32767, true); }
+  let bin = ''; const u8 = new Uint8Array(out.buffer); for (let i = 0; i < u8.length; i += 32768) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 32768));
+  return btoa(bin);
+}
+function mOut(node, wet, dly) { node.connect(MUS.master); if (wet) { const g = MUS.ctx.createGain(); g.gain.value = wet; node.connect(g); g.connect(MUS.verb); } if (dly) { const g = MUS.ctx.createGain(); g.gain.value = dly; node.connect(g); g.connect(MUS.dly); } }
+function tKick(t, lvl) { const c = MUS.ctx, o = c.createOscillator(), g = c.createGain(); o.type = 'sine';
+  o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.09); o.frequency.exponentialRampToValueAtTime(40, t + 0.4);
+  g.gain.setValueAtTime(lvl, t); g.gain.setTargetAtTime(0.0001, t + 0.12, 0.09); o.connect(g); mOut(g); o.start(t); o.stop(t + 0.6);
+  tNoise(t, 0.02, 'highpass', 4000, 0.7, lvl * 0.25, 0.012, 0); }
+function tNoise(t, len, type, freq, q, lvl, dec, wet, dly) { const c = MUS.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  s.buffer = MUS.noise; s.playbackRate.value = 0.8 + Math.random() * 0.4; f.type = type; f.frequency.value = freq; f.Q.value = q;
+  g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dec); s.connect(f); f.connect(g); mOut(g, wet, dly); s.start(t, Math.random()); s.stop(t + len); }
+function tClap(t, lvl) { [0, 0.011, 0.022].forEach((o, i) => tNoise(t + o, 0.25, 'bandpass', 1250, 1.4, lvl * (i === 2 ? 1 : 0.6), i === 2 ? 0.2 : 0.02, 0.5)); }
+function tHat(t, lvl, open) { tNoise(t, 0.4, 'highpass', open ? 7000 : 9000, 0.8, lvl, open ? 0.22 : 0.035, open ? 0.2 : 0.05); }
+function tRumble(t, lvl) { const c = MUS.ctx, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = mtof(33);
+  f.type = 'lowpass'; f.frequency.value = 160; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(lvl, t + 0.03); g.gain.setTargetAtTime(0.0001, t + 0.08, 0.06);
+  o.connect(f); f.connect(g); mOut(g, 0.15); o.start(t); o.stop(t + 0.4); }
+function tBass(n, t, lvl, cut) { const c = MUS.ctx, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(); o.type = 'sawtooth'; o.frequency.value = mtof(n);
+  f.type = 'lowpass'; f.Q.value = 3; f.frequency.setValueAtTime(cut, t); f.frequency.exponentialRampToValueAtTime(90, t + TSPB * 0.9);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(lvl, t + 0.004); g.gain.setTargetAtTime(0.0001, t + TSPB * 0.6, 0.02); o.connect(f); f.connect(g); mOut(g); o.start(t); o.stop(t + TSPB * 1.5); }
+let acidPrev = 0;
+function tAcid(n, t, lvl, cut, res, accent, slide) { const c = MUS.ctx, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(); o.type = 'sawtooth';
+  const fr = mtof(n); if (slide && acidPrev) { o.frequency.setValueAtTime(acidPrev, t); o.frequency.exponentialRampToValueAtTime(fr, t + TSPB * 0.6); } else o.frequency.value = fr; acidPrev = fr;
+  f.type = 'lowpass'; f.Q.value = res; const pk = cut * (accent ? 3.2 : 1.9);
+  f.frequency.setValueAtTime(pk, t); f.frequency.exponentialRampToValueAtTime(Math.max(120, cut * 0.45), t + TSPB * (accent ? 1.4 : 0.9));
+  const L = lvl * (accent ? 1.35 : 1); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(L, t + 0.003); g.gain.setTargetAtTime(0.0001, t + TSPB * (slide ? 1.0 : 0.7), 0.025);
+  o.connect(f); f.connect(g); mOut(g, 0.12, 0.28); o.start(t); o.stop(t + TSPB * 2); }
+function tStab(chord, t, lvl, cut) { const c = MUS.ctx, f = c.createBiquadFilter(), g = c.createGain(); f.type = 'lowpass'; f.frequency.setValueAtTime(cut, t); f.frequency.exponentialRampToValueAtTime(cut * 0.3, t + 0.25); f.Q.value = 2;
+  g.gain.setValueAtTime(lvl, t); g.gain.setTargetAtTime(0.0001, t + 0.05, 0.07); f.connect(g); mOut(g, 0.35, 0.55);
+  chord.forEach(nn => [-9, 9].forEach(dt => { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(nn); o.detune.value = dt; o.connect(f); o.start(t); o.stop(t + 0.5); })); }
+function tPad(chord, t, len, lvl, cut) { const c = MUS.ctx, f = c.createBiquadFilter(), g = c.createGain(); f.type = 'lowpass'; f.frequency.value = cut; f.Q.value = 0.8;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(lvl, t + len * 0.3); g.gain.setTargetAtTime(0.0001, t + len * 0.8, len * 0.15); f.connect(g); mOut(g, 0.8);
+  chord.forEach(nn => [-11, 0, 11].forEach(dt => { const o = c.createOscillator(); o.type = dt ? 'sawtooth' : 'triangle'; o.frequency.value = mtof(nn); o.detune.value = dt; o.connect(f); o.start(t); o.stop(t + len * 1.4); })); }
+function tRiser(t, len, lvl) { const c = MUS.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); s.buffer = MUS.noise; s.loop = true;
+  f.type = 'bandpass'; f.Q.value = 4; f.frequency.setValueAtTime(250, t); f.frequency.exponentialRampToValueAtTime(9000, t + len);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(lvl, t + len); g.gain.setTargetAtTime(0.0001, t + len, 0.04); s.connect(f); f.connect(g); mOut(g, 0.6); s.start(t); s.stop(t + len + 0.4); }
+function tImpact(t) { tKick(t, 1.2); tNoise(t, 3, 'highpass', 2500, 0.4, 0.4, 2.4, 1); const c = MUS.ctx, o = c.createOscillator(), g = c.createGain(); o.type = 'sine';
+  o.frequency.setValueAtTime(65, t); o.frequency.exponentialRampToValueAtTime(28, t + 2); g.gain.setValueAtTime(0.8, t); g.gain.exponentialRampToValueAtTime(0.001, t + 2.2); o.connect(g); mOut(g, 0.5); o.start(t); o.stop(t + 2.3); }
+const ACID = [0, 0, 12, 0, 3, 0, 15, 0, 0, 7, 0, 10, 12, 0, 3, 5], ACC = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0], SLD = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0];
+const ROOTS = [0, 0, -4, -2];                                       // A  A  F  G
+const CH = r => [57 + r, 60 + r, 64 + r + (r === -2 ? -1 : 0)];      // Am, Am, F, G (with B)
+function musSection() {
+  const m = SHOW.mode, n = nowS();
+  if (m === 'intro') { const R = SHOW.end - n; return R > 45 ? 'space' : R > 30 ? 'dive' : R > 12 ? 'street' : R > 4 ? 'climb' : 'hold'; }
+  if (m === 'live') return n - MUS.landT < 9 ? 'land' : 'off';
+  if (m === 'return') return 'land';
+  return m === 'brb' ? 'brb' : m === 'outro' ? 'outro' : 'off';
+}
+function musSched() {
+  const c = MUS.ctx; if (!c) return; if (c.state === 'suspended') c.resume();
+  const sec = musSection(), n = nowS();
+  if (sec !== MUS.lastSec) {
+    const t0 = Math.max(c.currentTime, MUS.next);
+    if (sec === 'dive') tRiser(t0, 14, 0.18);
+    if (sec === 'climb') tRiser(t0, 8, 0.3);
+    if (sec === 'land' && (MUS.lastSec === 'hold' || MUS.lastSec === 'climb' || MUS.lastSec === 'brb' || MUS.lastSec === 'outro')) { tImpact(t0); MUS.step = 0; MUS.next = t0; }
+    if (MUS.lastSec === 'off' && sec !== 'off') { MUS.step = 0; MUS.next = c.currentTime + 0.05; }
+    MUS.lastSec = sec;
+  }
+  let tgt = MUS.on ? MUS.vol * 0.42 : 0;
+  if (sec === 'off') tgt = 0;
+  if (sec === 'land' && SHOW.mode === 'live') tgt *= Math.max(0, 1 - (n - MUS.landT - 3) / 6);
+  if (sec === 'outro') tgt *= Math.max(0.25, 1 - (n - SHOW.t0 - 60) / 60);
+  MUS.master.gain.setTargetAtTime(tgt, c.currentTime, sec === 'off' ? 0.7 : 0.15);
+  if (sec === 'off') { MUS.next = c.currentTime + 0.05; return; }
+  while (MUS.next < c.currentTime + 0.15) { musStep(sec, MUS.step, MUS.next); MUS.step++; MUS.next += TSPB; }
+}
+function musStep(sec, s, t) {
+  const b = s % 16, bar = Math.floor(s / 16) % 4, r = ROOTS[bar], R = SHOW.mode === 'intro' ? SHOW.end - nowS() : 0;
+  const lfo = 0.5 + 0.5 * Math.sin(s / 64 * Math.PI);
+  const cut = { space: 260 + lfo * 120, dive: 300 + Math.min(1, (45 - R) / 15) * 1200, street: 1300 + lfo * 900, climb: 1800 + Math.min(1, (12 - R) / 8) * 3200,
+    hold: 4200, land: 2600, brb: 420 + lfo * 380, outro: 500 + lfo * 200 }[sec] || 900;
+  const res = sec === 'brb' || sec === 'outro' ? 9 : 14;
+  if (b === 0 && (sec === 'space' || sec === 'brb' || sec === 'outro' || sec === 'hold') && bar % 2 === 0) tPad(CH(r).map(x => x - 12), t, TSPB * 32, sec === 'hold' ? 0.05 : sec === 'outro' ? 0.075 : 0.035, sec === 'hold' ? 2400 : sec === 'outro' ? 1300 : 900);
+  // acid line (always there, the filter tells the story)
+  if (sec !== 'outro' || b % 2 === 0) tAcid(45 + r + ACID[b], t, sec === 'space' ? 0.035 : sec === 'outro' ? 0.075 : 0.05, cut, res, ACC[b], SLD[b]);
+  if (sec === 'space') { if (b === 8) tHat(t, 0.025, true); return; }
+  if (sec === 'outro') { if (b === 6 && bar % 2 === 1) tStab(CH(r), t, 0.09, 1800); if (b % 4 === 2) tHat(t, 0.045, true); if (b === 0 && bar === 0) tRumble(t, 0.25); return; }
+  if (sec === 'hold') { if (b % 2 === 0) tHat(t, 0.05, false); return; }
+  const kickOn = sec === 'dive' ? Math.min(1, (45 - R) / 15) > 0.45 : sec === 'climb' ? Math.min(1, (12 - R) / 8) < 0.8 : true;
+  const kl = sec === 'brb' ? 0.65 : sec === 'dive' ? 0.6 : 0.95;
+  if (b % 4 === 0 && kickOn) tKick(t, kl);
+  if (b % 4 === 1 && kickOn) tRumble(t, sec === 'brb' ? 0.22 : 0.3);
+  if (b % 4 !== 0 && sec !== 'dive') tBass(33 + r + (b % 4 === 2 ? 12 : 0), t, sec === 'brb' ? 0.09 : 0.13, sec === 'brb' ? 260 : 420 + cut * 0.08);
+  if (b % 4 === 2) tHat(t, sec === 'brb' ? 0.05 : 0.09, true); else if (sec !== 'dive') tHat(t, b % 2 ? 0.03 : 0.05, false);
+  if ((b === 4 || b === 12) && sec !== 'dive') tClap(t, sec === 'brb' ? 0.14 : 0.24);
+  if ((sec === 'street' || sec === 'land') && (b === 6 || b === 14) && bar % 2 === 1) tStab(CH(r), t, 0.06, 2400);
+  if (sec === 'brb' && b === 10 && bar === 3) tStab(CH(r), t, 0.04, 1200);
+  if (sec === 'climb') { const k = Math.min(1, (12 - R) / 8); if (k > 0.35 && b % (k > 0.7 ? 1 : 2) === 0) tClap(t, 0.06 + k * 0.16); }
+}
+// panel wiring
+$('showLen').value = String(SHOW.len);
+$('showIntro').onclick = () => startShow('intro', +$('showLen').value);
+$('showBrb').onclick = () => startShow('brb'); $('showLive').onclick = () => startShow('live'); $('showOutro').onclick = () => startShow('outro');
+$('musOn').checked = MUS.on; $('musVol').value = Math.round(MUS.vol * 100);
+function setMusic(on, vol) { MUS.on = !!on; MUS.vol = Math.max(0, Math.min(1, vol)); store.set('musOn', MUS.on); store.set('musVol', Math.round(MUS.vol * 100)); $('musOn').checked = MUS.on; $('musVol').value = Math.round(MUS.vol * 100); postState(); }
+$('musOn').onchange = () => setMusic($('musOn').checked, +$('musVol').value / 100); $('musVol').oninput = () => setMusic($('musOn').checked, +$('musVol').value / 100);
+function setScenes(sc, auto) { showScenes = Object.assign({}, SC_DEF, sc); autoScene = !!auto; store.set('showScenes', showScenes); store.set('autoScene', autoScene);
+  $('scIntro').value = showScenes.intro; $('scBrb').value = showScenes.brb; $('scOutro').value = showScenes.outro; $('scMain').value = showScenes.main; $('scAuto').checked = autoScene; postState(); }
+setScenes(showScenes, autoScene);
+['scIntro', 'scBrb', 'scOutro', 'scMain', 'scAuto'].forEach(id => $(id).onchange = () => setScenes({ intro: $('scIntro').value.trim(), brb: $('scBrb').value.trim(), outro: $('scOutro').value.trim(), main: $('scMain').value.trim() }, $('scAuto').checked));
+
 var cityReady = false;
 function postState() {
   if (!bc || !cityReady) return;
@@ -901,7 +1157,8 @@ function postState() {
       focus: FOCUS.filter(([, n]) => meshByName(n)), focused: focused ? focused.name : '',
       commands: COMMANDS.map(c => c[0]), ads: Object.keys(adSlots).sort(),
       cams: [...$('srcGame').options].map(o => ({ v: o.value, t: o.text })), srcGame: $('srcGame').value, srcCam: $('srcCam').value,
-      chan: chanName, status: $('status').textContent
+      chan: chanName, status: $('status').textContent,
+      show: SHOW.mode, showLen: SHOW.len, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -910,7 +1167,7 @@ if (bc) bc.onmessage = e => {
   if (!cityReady && m.cmd !== 'hello') return;
   switch (m.cmd) {
     case 'hello': break;
-    case 'shot': setTour(false); goShot(d.i); break;
+    case 'shot': if (SHOW.mode !== 'live') { SHOW.mode = 'live'; } setTour(false); goShot(d.i); break;
     case 'tour': setTour(!!d.on); if (d.on) goShot(cur + 1); break;
     case 'focus': focusMesh(meshByName(d.n), PRETTY(d.n)); break;
     case 'run': { const b = [...document.querySelectorAll('#cmdbtns button')].find(x => x.dataset.c === d.c); if (b) b.click(); break; }
@@ -921,11 +1178,15 @@ if (bc) bc.onmessage = e => {
       setStatus(store.set('ads', ads) ? d.slot + ' updated and saved.' : d.slot + ' updated (storage full, resets on reload).'); break; }
     case 'adreset': { const ads = store.get('ads', {}); delete ads[d.slot]; store.set('ads', ads); setAdImage(d.slot, null); setStatus(d.slot + ' reset.'); break; }
     case 'adshow': if (adSlots[d.slot]) focusMesh(adSlots[d.slot], d.slot.replace(/_/g, ' ')); break;
+    case 'show': startShow(d.mode, d.len); break;
+    case 'music': setMusic(d.on, d.vol); break;
+    case 'scenes': setScenes(d.scenes, d.auto); break;
   }
   setTimeout(postState, 120);
 };
 
-window.LSC = { sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
+loop();
+window.LSC = { musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
 </script>
 <script>
@@ -958,6 +1219,13 @@ if (window.LSC_CONTROL) {
     const keep = $('adSlot').value; $('adSlot').innerHTML = st.ads.map(a => `<option>${a}</option>`).join(''); if (keep) $('adSlot').value = keep;
     if (st.status) status(st.status);
     $('status').className = '';
+    if (document.activeElement !== $('showLen')) $('showLen').value = String(st.showLen);
+    $('showIntro').classList.toggle('on', st.show === 'intro'); $('showBrb').classList.toggle('on', st.show === 'brb');
+    $('showOutro').classList.toggle('on', st.show === 'outro'); $('showLive').classList.toggle('on', st.show === 'live' || st.show === 'return');
+    if (document.activeElement !== $('musVol')) { $('musOn').checked = st.musOn; $('musVol').value = st.musVol; }
+    const sc = st.scenes || {};
+    [['scIntro', 'intro'], ['scBrb', 'brb'], ['scOutro', 'outro'], ['scMain', 'main']].forEach(([id, k]) => { if (document.activeElement !== $(id)) $(id).value = sc[k] || ''; });
+    $('scAuto').checked = !!st.autoScene;
   }
   if (bc) bc.onmessage = e => { const m = e.data || {};
     if (m.cmd === 'state') { st = m.data; render(); }
@@ -973,6 +1241,12 @@ if (window.LSC_CONTROL) {
   $('findCams').onclick = () => send('findcams');
   $('adShow').onclick = () => send('adshow', { slot: $('adSlot').value });
   $('adReset').onclick = () => send('adreset', { slot: $('adSlot').value });
+  $('showIntro').onclick = () => send('show', { mode: 'intro', len: +$('showLen').value });
+  $('showBrb').onclick = () => send('show', { mode: 'brb' }); $('showLive').onclick = () => send('show', { mode: 'live' }); $('showOutro').onclick = () => send('show', { mode: 'outro' });
+  const musSend = () => send('music', { on: $('musOn').checked, vol: +$('musVol').value / 100 });
+  $('musOn').onchange = musSend; $('musVol').onchange = musSend;
+  const scSend = () => send('scenes', { scenes: { intro: $('scIntro').value.trim(), brb: $('scBrb').value.trim(), outro: $('scOutro').value.trim(), main: $('scMain').value.trim() }, auto: $('scAuto').checked });
+  ['scIntro', 'scBrb', 'scOutro', 'scMain', 'scAuto'].forEach(id => $(id).onchange = scSend);
   $('adFile').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
     const img = new Image(), url = URL.createObjectURL(f);
