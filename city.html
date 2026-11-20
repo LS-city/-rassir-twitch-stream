@@ -176,6 +176,7 @@ loader.load('Lucid_State_City.glb', gltf => {
       if (m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b > 0 || m.emissiveMap)) {
         m.emissiveIntensity = Math.min(3.2, 0.55 + s * 0.28);
         if (/^Windows_/.test(m.name)) m.emissiveIntensity = 1.25;
+        if (/^(FC_P1_Red|FC_P2_Blue|FC_Yellow|KO_Tile|ZC_Red)/.test(m.name)) m.emissiveIntensity = 1.0;   // deep, saturated neon instead of washed-out white
         if (/^(AD_SLOT|SCREEN_|FC_BRACKET)/.test(m.name)) { m.emissiveIntensity = 1.05; m.color.setRGB(0, 0, 0); m.roughness = 1; m.metalness = 0; }   // screens glow on their own, no light glare
       }
       if (/^Beam_/.test(m.name)) { m.transparent = true; m.opacity = 0.16; m.depthWrite = false; m.blending = THREE.AdditiveBlending; m.emissiveIntensity = 1.4; }
