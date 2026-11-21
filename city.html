@@ -114,6 +114,8 @@ canvas#c.pick{cursor:pointer}
     <div class="row" style="margin-top:6px"><button id="paNext">Pop up next ad (cycle)</button></div>
     <div class="row" style="margin-top:6px;flex-wrap:nowrap"><select id="paDur" title="How long it stays"><option value="6">6 s</option><option value="10" selected>10 s</option><option value="15">15 s</option><option value="20">20 s</option></select><select id="paPos" title="Where it pops up"><option value="br">Bottom right</option><option value="bl">Bottom left</option><option value="tr">Top right</option><option value="c">Center</option></select></div>
     <div class="row" style="margin-top:6px"><select id="paAuto" title="Pop ads on their own"><option value="0">Auto pop-ups: off</option><option value="3">Auto: every 3 min</option><option value="5">Auto: every 5 min</option><option value="10">Auto: every 10 min</option><option value="15">Auto: every 15 min</option></select></div>
+    <h3>Walk there (3rd person, from the city gate)</h3>
+    <div id="walkTo" class="chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     <div id="placeTiles"></div>
     <div id="placeDetail"></div>
     <label class="note" for="gpipMode" style="display:block;margin-top:14px">Gameplay corner screen</label>
@@ -830,6 +832,7 @@ function addCustomShots() {
   shots.push({ name: 'WALK', label: 'Street walk', pos: f1, quat: lookQuat(f1, t1), fov: 55, walk: true });
   shots.push({ name: 'FOLLOW', label: 'Follow player', pos: f1.clone(), quat: lookQuat(f1, t1), fov: 50, follow: true });
   { const hp = new THREE.Vector3(-61.5, 5.2, -31.6), ht = new THREE.Vector3(-53, 6.6, -31.6); shots.push({ name: 'HALL', label: 'Hall of Champions', pos: hp, quat: lookQuat(hp, ht), fov: 48 }); }
+  DESTS.forEach(([n, path]) => shots.push({ name: 'GOTO', label: 'Walk to ' + n, dest: n, path, pos: f1.clone(), quat: lookQuat(f1, t1), fov: 52, follow: true, goto: true }));
   shots.push({ name: 'ORBIT', label: 'Orbit', pos: f1.clone(), quat: lookQuat(f1, t1), fov: 50, orbit: true });
 }
 // ---- walking route through the city and into every club (three coords: x, z) ----
@@ -855,13 +858,31 @@ const ROUTE = [
   [10.5, 100], [0, 112]
 ];
 const V3 = a => new THREE.Vector3(a[0], a[1], a[2]);
+// 3rd-person "walk to" trips: every one starts at the city gate
+const GATE = [[-7.5, 116], [-7.5, 100]];
+const TO_ZC = [[-7.5, -22.5], [-10.6, -22.5], [-14.5, -22.5]], TO_FC = [[-7.5, 0], [-10.6, 0], [-47, 0], [-47, -22.5], [-50.5, -22.5], [-55, -22.5]], TO_BIT = [[-7.5, 0], [-10.6, 0], [-47, 0], [-47, 22.5], [-50.5, 22.5], [-55, 22.5]];
+const DESTS = [
+  ['Media Tower', GATE.concat([[-7.5, 30, { look: [-11, 5.5, 20] }]])],
+  ['the Park', GATE.concat([[-7.5, 40], [0, 34], [10.5, 30], [13, 22, { look: [24, 3.5, 23] }]])],
+  ['Zero Cool', GATE.concat(TO_ZC, [[-23, -22.5, { spin: 1 }]])],
+  ['the Green Room', GATE.concat(TO_ZC, [[-20, -20], [-25.5, -17.5, { look: [-27, 2.2, -14.6] }]])],
+  ['Fight Club', GATE.concat(TO_FC, [[-63, -22.5, { look: [-77, 3.2, -22.5] }]])],
+  ['the K.O. Lounge', GATE.concat(TO_FC, [[-58, -26], [-60, -31, { spin: 1 }]])],
+  ['the Hall of Champions', GATE.concat(TO_FC, [[-58, -26], [-58.5, -31.6, { look: [-53, 6.4, -31.6] }]])],
+  ['B.I.T.', GATE.concat(TO_BIT, [[-62, 23, { look: [-80, 4.5, 27] }]])],
+  ['the Y2K Lounge', GATE.concat(TO_BIT, [[-60, 18], [-66, 12, { spin: 1 }]])],
+  ['the Market', GATE.concat([[-7.5, -36], [0, -40], [10.5, -44], [11.5, -60, { look: [17, 2, -66] }]])]
+];
 function nearestNode(p) { let bi = 0, bd = 1e9; ROUTE.forEach((n, i) => { const d = Math.hypot(n[0] - p.x, n[1] - p.z); if (d < bd) { bd = d; bi = i; } }); return bi; }
 function makeRW(p, i) { return { p: new THREE.Vector3(p.x, 0, p.z), i, wait: 0, look: null, spin: false, head: 0, t: 0 }; }
 function stepRW(r, dt, speed) {
-  r.t += dt;
-  if (r.wait > 0) { r.wait -= dt; if (r.wait <= 0) { r.i = (r.i + 1) % ROUTE.length; r.look = null; r.spin = false; } return; }
-  const n = ROUTE[r.i], dx = n[0] - r.p.x, dz = n[1] - r.p.z, d = Math.hypot(dx, dz);
-  if (d < 0.3) { const o = n[2] || {}; if (o.wait || o.spin) { r.wait = o.wait || o.spin; r.look = o.look ? V3(o.look) : null; r.spin = !!o.spin; } else r.i = (r.i + 1) % ROUTE.length; return; }
+  r.t += dt; const R = r.route || ROUTE;
+  const next = () => { if (r.route && r.i >= R.length - 1) { r.done = true; return; } r.i = (r.i + 1) % R.length; r.look = null; r.spin = false; };
+  if (r.done) return;
+  if (r.wait > 0) { r.wait -= dt; if (r.wait <= 0) next(); return; }
+  const n = R[r.i], dx = n[0] - r.p.x, dz = n[1] - r.p.z, d = Math.hypot(dx, dz);
+  if (d < 0.3) { const o = n[2] || {}; if (r.route && r.i >= R.length - 1) { r.done = true; r.look = o.look ? V3(o.look) : null; r.spin = !!o.spin; return; }
+    if (o.wait || o.spin) { r.wait = o.wait || o.spin; r.look = o.look ? V3(o.look) : null; r.spin = !!o.spin; } else next(); return; }
   const st = Math.min(d, speed * dt); r.p.x += dx / d * st; r.p.z += dz / d * st; r.dist = (r.dist || 0) + st;
   r.head = Math.atan2(dx, dz);
 }
@@ -894,7 +915,11 @@ function orbitFromCam() {
 }
 let fly = null, hold = null, cur = 0, tourOn = params.get('tour') !== '0', tourT = 0;
 function prepFollow(s) {               // start the follow shot right behind the guide (a viewer if one joined, otherwise a citizen)
-  pickGuide(); if (guide) { const p = guide.o.position, f = new THREE.Vector3(Math.sin(camHead), 0, Math.cos(camHead));
+  pickGuide();
+  if (s.goto && guide) {                // "walk to": the guide starts at the city gate and heads for the chosen place
+    const p0 = s.path[0]; guide.o.position.set(p0[0], guide.y0, p0[1]); guideRW = makeRW(guide.o.position, 1); guideRW.route = s.path;
+    camHead = Math.atan2(s.path[1][0] - p0[0], s.path[1][1] - p0[1]); guide.o.rotation.y = camHead; guideRW.head = camHead; toast('Walking to ' + s.dest);
+  } if (guide) { const p = guide.o.position, f = new THREE.Vector3(Math.sin(camHead), 0, Math.cos(camHead));
     s.pos = p.clone().addScaledVector(f, -4.2).setY(2.9); s.quat = lookQuat(s.pos, p.clone().addScaledVector(f, 3).setY(1.5)); return; }
     updateFloat(0.016, 0);
     const tg = floatScreen && floatScreen.userData.target;
@@ -958,7 +983,17 @@ function updateCamera(dt) {
     hold.t += dt;
     if (!guide || !guide.guided) pickGuide();
     if (guide) {
-      const r = guideRW, o = guide.o; stepRW(r, dt, 1.7);
+      const r = guideRW, o = guide.o, wasDone = r.done; stepRW(r, dt, hold.s.goto ? 2.6 : 1.7);
+      if (hold.s.goto && r.done && !wasDone) toast('Welcome to ' + hold.s.dest.replace(/^the /, 'the '));
+      if (hold.s.goto && r.done) {         // arrived: the camera slowly circles the guide while they take it in
+        const face = r.look ? Math.atan2(r.look.x - o.position.x, r.look.z - o.position.z) : (r.spin ? r.head + r.t * 0.6 : o.rotation.y);
+        o.rotation.y = angLerp(o.rotation.y, face, Math.min(1, dt * 3)); o.position.set(r.p.x, guide.y0, r.p.z);
+        hold.arr = (hold.arr === undefined ? camHead + Math.PI : hold.arr) + dt * 0.18;
+        const inside = !!zoneOf(o.position), R2 = inside ? 3.6 : 5.2, want = new THREE.Vector3(o.position.x - Math.sin(hold.arr) * R2, inside ? 2.4 : 2.9, o.position.z - Math.cos(hold.arr) * R2);
+        cam.position.lerp(want, Math.min(1, dt * 1.5));
+        const lookAt = r.look ? r.look.clone().lerp(o.position.clone().setY(1.6), 0.6) : o.position.clone().setY(1.5);
+        cam.quaternion.slerp(lookQuat(cam.position, lookAt), Math.min(1, dt * 2.5)); return;
+      }
       o.position.x = r.p.x; o.position.z = r.p.z; o.position.y = guide.y0 + (r.wait > 0 ? 0 : Math.abs(Math.sin(r.t * 7 + guide.ph)) * 0.07);
       let face = r.head; if (r.look) face = Math.atan2(r.look.x - r.p.x, r.look.z - r.p.z); else if (r.spin) face = r.head + r.t * 0.8;
       o.rotation.y = angLerp(o.rotation.y, face, Math.min(1, dt * 5)); if (!r.wait) r.head = r.head;
@@ -982,7 +1017,7 @@ function updateCamera(dt) {
     cam.position.copy(hold.s.pos).addScaledVector(fwd, drift);
     if (!hold.s.walk && !hold.s.still) cam.position.y += Math.sin(hold.t * 0.35) * 0.4;
   }
-  if (tourOn && !fly) { tourT += dt; if (tourT > 16) { let n = cur + 1; goShot(n); } }
+  if (tourOn && !fly) { tourT += dt; if (tourT > 16) { let n = cur + 1; while (shots[n % shots.length].goto) n++; goShot(n); } }
 }
 
 // ---------------------------------------------------------------- viewer effects
@@ -1924,6 +1959,7 @@ if (bc) bc.onmessage = e => {
 };
 
 loop();
+window.__grw = (i) => { if (guideRW && guideRW.route) { const n = guideRW.route[i]; guideRW.i = i; guideRW.p.set(n[0], 0, n[1]); } };
 window.__rw = i => { const r = walkRW || (walkRW = makeRW(new THREE.Vector3(), 0)); r.i = i; r.p.set(ROUTE[i][0], 0, ROUTE[i][1]); r.wait = 0; r.look = null; r.spin = false; };
 window.LSC = { musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
@@ -2053,7 +2089,7 @@ if (window.LSC_CONTROL) {
   const S0=()=>shotBtns();
   const scrBtns=()=>[...$('focusBtns').querySelectorAll('button')].map(b=>({b,l:b.textContent}));
   function lists(){const S=shotBtns(),F=scrBtns();const used=new Set();
-    S.filter(x=>x.l==='Orbit').forEach(x=>used.add(x.b));
+    S.filter(x=>x.l==='Orbit'||x.l.startsWith('Walk to ')).forEach(x=>used.add(x.b));
     const out=PLACES.map(p=>{const sh=p.shots.map(l=>S.find(x=>x.l===l)).filter(Boolean),sc=p.screens.map(l=>F.find(x=>x.l===l)).filter(Boolean);sh.concat(sc).forEach(x=>used.add(x.b));return {...p,sh,sc};});
     const more={k:'more',n:'More',c:'#5a5a7a',sh:S.filter(x=>!used.has(x.b)),sc:F.filter(x=>!used.has(x.b))};if(more.sh.length||more.sc.length)out.push(more);return out;}
   function render(){const L=lists();if(!L.some(p=>p.sh.length||p.sc.length))return;
@@ -2065,6 +2101,8 @@ if (window.LSC_CONTROL) {
     const chip=(x,kind,i)=>`<button data-${kind}="${i}" class="${x.b.classList.contains('on')?'on':''}">${SHORT[x.l]||x.l}</button>`;
     setH('placeDetail',(P.sh.length?`<h4>Camera views</h4><div class="chips">${P.sh.map((x,i)=>chip(x,'v',i)).join('')}</div>`:'')+(P.sc.length?`<h4>Zoom to a screen</h4><div class="chips">${P.sc.map((x,i)=>chip(x,'s',i)).join('')}</div>`:''));
     const on=[...shotBtns(),...scrBtns()].find(x=>x.b.classList.contains('on'));const tour=$('tour').classList.contains('on');
+    const W=S0().filter(x=>x.l.startsWith('Walk to '));const wh=W.map((x,i)=>`<button data-w="${i}" class="${x.b.classList.contains('on')?'on':''}" style="flex:0 1 auto;font-size:13px;padding:6px 10px;min-height:34px">${x.l.replace('Walk to the ','Walk to ')}</button>`).join('');
+    if($('walkTo')._h!==wh){$('walkTo')._h=wh;$('walkTo').innerHTML=wh;}$('walkTo').onclick=e=>{const b=e.target.closest('button');if(!b)return;const w=S0().filter(x=>x.l.startsWith('Walk to '))[+b.dataset.w];if(w)w.b.click();setTimeout(render,200);};
     const ob=S0().find(x=>x.l==='Orbit');$('orbitBig').classList.toggle('on',!!(ob&&ob.b.classList.contains('on')));
     $('tourBig').classList.toggle('on',tour);$('tourBig').textContent=tour?'Auto tour: ON':'Auto tour: OFF';
     $('nowShow').textContent=tour?'The camera is touring the city on its own.':on?'On stream now: '+on.l:'Pick a place below.';
