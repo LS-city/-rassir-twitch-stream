@@ -109,8 +109,9 @@ canvas#c.pick{cursor:pointer}
     <div class="row"><button id="tourBig" class="big">Auto tour</button><button id="orbitBig" class="big">Orbit</button></div>
     <p class="note" id="nowShow" style="margin-top:6px"></p>
     <h3>Pop-up ads <span class="note" style="font-weight:500">(P = next ad)</span></h3>
-    <div class="row"><button id="paNext" class="big">Pop up next ad</button></div>
+    <div class="row" style="flex-wrap:nowrap"><select id="paPick" style="flex:3" title="Pick which ad slot to pop up"></select><button id="paGo" class="big" style="flex:2">Pop it up</button></div>
     <div id="paGrid"></div>
+    <div class="row" style="margin-top:6px"><button id="paNext">Pop up next ad (cycle)</button></div>
     <div class="row" style="margin-top:6px;flex-wrap:nowrap"><select id="paDur" title="How long it stays"><option value="6">6 s</option><option value="10" selected>10 s</option><option value="15">15 s</option><option value="20">20 s</option></select><select id="paPos" title="Where it pops up"><option value="br">Bottom right</option><option value="bl">Bottom left</option><option value="tr">Top right</option><option value="c">Center</option></select></div>
     <div class="row" style="margin-top:6px"><select id="paAuto" title="Pop ads on their own"><option value="0">Auto pop-ups: off</option><option value="3">Auto: every 3 min</option><option value="5">Auto: every 5 min</option><option value="10">Auto: every 10 min</option><option value="15">Auto: every 15 min</option></select></div>
     <div id="placeTiles"></div>
@@ -1220,7 +1221,8 @@ const PA = { dur: store.get('paDur', 10), pos: store.get('paPos', 'br'), auto: s
 $('paDur').value = PA.dur; $('paPos').value = PA.pos; $('paAuto').value = PA.auto;
 function adList() { const ads = store.get('ads', {}); return Object.keys(adSlots).sort().filter(k => ads[k]); }
 function makeThumb(slot) { const d = store.get('ads', {})[slot]; if (!d) { delete PA.thumbs[slot]; renderPaGrid(); return; } renderPaGrid(); const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = 160; c.height = 90; const x = c.getContext('2d'); x.fillStyle = '#07040f'; x.fillRect(0, 0, 160, 90); const k = Math.min(160 / im.width, 90 / im.height); x.drawImage(im, (160 - im.width * k) / 2, (90 - im.height * k) / 2, im.width * k, im.height * k); PA.thumbs[slot] = c.toDataURL('image/jpeg', 0.7); renderPaGrid(); postState(); }; im.src = d; }
-function renderPaGrid() { const L = adList(); $('paGrid').innerHTML = L.length ? L.map(k => `<button data-s="${k}" title="Pop up ${k}" class="${PA.showing === k ? 'on' : ''}">${PA.thumbs[k] ? `<img src="${PA.thumbs[k]}" alt="">` : ''}<span>${k.replace('AD_SLOT_', '#')}</span></button>`).join('') : '<p class="note" style="grid-column:1/-1">Upload ads in Setup → Billboards first.</p>'; }
+function paPickOptions(all, filled) { const keep = $('paPick').value; $('paPick').innerHTML = all.map(k => `<option value="${k}">${k.replace('AD_SLOT_', 'Slot ')}${filled.includes(k) ? '  ✓ ad ready' : '  (empty)'}</option>`).join(''); if (keep) $('paPick').value = keep; else if (filled[0]) $('paPick').value = filled[0]; }
+function renderPaGrid() { paPickOptions(Object.keys(adSlots).sort(), adList()); const L = adList(); $('paGrid').innerHTML = L.length ? L.map(k => `<button data-s="${k}" title="Pop up ${k}" class="${PA.showing === k ? 'on' : ''}">${PA.thumbs[k] ? `<img src="${PA.thumbs[k]}" alt="">` : ''}<span>${k.replace('AD_SLOT_', '#')}</span></button>`).join('') : '<p class="note" style="grid-column:1/-1">Upload ads in Setup → Billboards first.</p>'; }
 function popAd(slot) {
   const L = adList(); if (!L.length) { setStatus('No ads yet: upload one in Setup → Billboards.'); return; }
   if (!slot || !L.includes(slot)) { PA.last = (PA.last + 1) % L.length; slot = L[PA.last]; } else PA.last = L.indexOf(slot);
@@ -1236,6 +1238,7 @@ function popAd(slot) {
 }
 function paSet(d) { if (d.dur) { PA.dur = +d.dur; store.set('paDur', PA.dur); $('paDur').value = PA.dur; } if (d.pos) { PA.pos = d.pos; store.set('paPos', PA.pos); $('paPos').value = PA.pos; } if (d.auto !== undefined) { PA.auto = +d.auto; store.set('paAuto', PA.auto); $('paAuto').value = PA.auto; PA.autoT = 0; } postState(); }
 $('paNext').onclick = () => popAd();
+$('paGo').onclick = () => { const k = $('paPick').value; if (!adList().includes(k)) { setStatus(k.replace('AD_SLOT_', 'Slot ') + ' has no ad yet: upload one in Setup → Billboards.'); return; } popAd(k); };
 $('paGrid').onclick = e => { const b = e.target.closest('button'); if (b) popAd(b.dataset.s); };
 $('paDur').onchange = e => paSet({ dur: e.target.value }); $('paPos').onchange = e => paSet({ pos: e.target.value }); $('paAuto').onchange = e => paSet({ auto: e.target.value });
 setInterval(() => { if (!PA.auto || SHOW.mode !== 'live' || PA.showing) return; PA.autoT += 1; if (PA.autoT >= PA.auto * 60) popAd(); }, 1000);
@@ -1974,6 +1977,7 @@ if (window.LSC_CONTROL) {
     if (st.gpip && document.activeElement !== $('gpipMode')) $('gpipMode').value = st.gpip;
     if (st.pa) { const P = st.pa, h = P.list.length ? P.list.map(k => `<button data-s="${k}" title="Pop up ${k}" class="${P.showing === k ? 'on' : ''}">${P.thumbs[k] ? `<img src="${P.thumbs[k]}" alt="">` : ''}<span>${k.replace('AD_SLOT_', '#')}</span></button>`).join('') : '<p class="note" style="grid-column:1/-1">Upload ads in Setup → Billboards first.</p>';
       if ($('paGrid')._h !== h) { $('paGrid')._h = h; $('paGrid').innerHTML = h; }
+      if (document.activeElement !== $('paPick')) { const keep = $('paPick').value; $('paPick').innerHTML = st.ads.map(k => `<option value="${k}">${k.replace('AD_SLOT_', 'Slot ')}${P.list.includes(k) ? '  ✓ ad ready' : '  (empty)'}</option>`).join(''); if (keep) $('paPick').value = keep; else if (P.list[0]) $('paPick').value = P.list[0]; }
       ['paDur', 'paPos', 'paAuto'].forEach((id, i) => { if (document.activeElement !== $(id)) $(id).value = String([P.dur, P.pos, P.auto][i]); }); }
     if (st.champs) { const key = JSON.stringify(st.champs); if (key !== $('chList')._k) { $('chList')._k = key; $('chList').innerHTML = st.champs.length ? '' : '<p class="note">No champions yet.</p>';
       st.champs.forEach((c, i) => { const row = document.createElement('div'); row.className = 'chrow'; row.innerHTML = `<span><b>${esc(c.name)}</b> · ${esc(CHT[c.type] || c.type)} · ${esc(c.award || '')}<br><i>${esc(c.game || '')}</i></span><button data-i="${i}">✕</button>`; $('chList').appendChild(row); }); } }
@@ -2003,6 +2007,7 @@ if (window.LSC_CONTROL) {
   $('avSpot').onchange = () => send('avspot', { v: $('avSpot').value });
   $('gpipMode').onchange = () => send('gpip', { v: $('gpipMode').value });
   $('paNext').onclick = () => send('popad', {});
+  $('paGo').onclick = () => { const k = $('paPick').value, P = st && st.pa; if (P && !P.list.includes(k)) { status(k.replace('AD_SLOT_', 'Slot ') + ' has no ad yet: upload one in Setup → Billboards.'); return; } send('popad', { slot: k }); };
   $('paGrid').onclick = e => { const b = e.target.closest('button'); if (b) send('popad', { slot: b.dataset.s }); };
   $('paDur').onchange = e => send('popset', { dur: e.target.value }); $('paPos').onchange = e => send('popset', { pos: e.target.value }); $('paAuto').onchange = e => send('popset', { auto: e.target.value });
   addEventListener('keydown', e => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return; if (e.key.toLowerCase() === 'p') send('popad', {}); });
