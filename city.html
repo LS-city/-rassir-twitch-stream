@@ -144,6 +144,7 @@ canvas#c.pick{cursor:pointer}
   <section data-tab="avatar" hidden>  <h3>Tower screens</h3>
   <label class="note" for="srcGame">Gameplay screen</label><select id="srcGame"><option value="">Placeholder</option></select>
   <label class="note" for="srcCam">Live cam screen</label><select id="srcCam"><option value="">Placeholder</option><option value="avatar">3D Avatar (talks with your mic)</option></select>
+  <label class="note" for="camBg">Live cam background (webcam and 3D avatar)</label><select id="camBg"><option value="lsc">Lucid State City picture</option><option value="off">Off (your real room / plain)</option></select>
   <div class="row" style="margin-top:6px"><button id="findCams">Find cameras</button></div>
   <p class="note" style="margin-top:6px">In OBS Interact: press G to switch the gameplay source, C for the cam.</p>
 
@@ -572,8 +573,14 @@ function drawChat() {
 
 // live video on the tower screens (OBS Virtual Camera / webcam)
 const streams = {};
+const segs = {};
+function camTexture(screenName, v) {           // live cam gets the Lucid State City background (person cut out); everything else is plain video
+  if (screenName === 'SCREEN_LIVECAM' && camBgOn()) { const st = makeSegCam(v, () => { if (st.tex) st.tex.needsUpdate = true; }); st.tex = new THREE.CanvasTexture(st.canvas); segs[screenName] = st; return st.tex; }
+  return new THREE.VideoTexture(v);
+}
 async function setVideo(screenName, deviceId) {
   const type = screenName.replace('SCREEN_', '');
+  if (segs[screenName]) { segs[screenName].stop(); delete segs[screenName]; }
   if (streams[screenName]) { streams[screenName].getTracks().forEach(t => t.stop()); delete streams[screenName]; }
   if (!screens[type] || !screens[type].length) return;
   if (!deviceId) { setGroup(type, null); return; }
@@ -582,7 +589,7 @@ async function setVideo(screenName, deviceId) {
     const st = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
     streams[screenName] = st;
     const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = st; await v.play();
-    const t = new THREE.VideoTexture(v); t.flipY = false; t.encoding = THREE.sRGBEncoding;
+    const t = camTexture(screenName, v); t.flipY = false; t.encoding = THREE.sRGBEncoding;
     setGroup(type, t);
     setStatus('Screen live: ' + (st.getVideoTracks()[0] || {}).label);
   } catch (e) {
@@ -591,7 +598,7 @@ async function setVideo(screenName, deviceId) {
         const st2 = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } }, audio: false });
         streams[screenName] = st2;
         const v2 = document.createElement('video'); v2.muted = true; v2.playsInline = true; v2.srcObject = st2; await v2.play();
-        const t2 = new THREE.VideoTexture(v2); t2.flipY = false; t2.encoding = THREE.sRGBEncoding; setGroup(type, t2);
+        const t2 = camTexture(screenName, v2); t2.flipY = false; t2.encoding = THREE.sRGBEncoding; setGroup(type, t2);
         setStatus('Screen live: ' + (st2.getVideoTracks()[0] || {}).label); return;
       } catch (e2) { e = e2; }
     }
@@ -1292,6 +1299,7 @@ const champFromForm = () => { const name = $('chName').value.trim(); if (!name) 
 $('chAdd').onclick = () => { const it = champFromForm(); if (!it) return; $('chName').value = ''; addChamp(it, $('chSpot').checked); setStatus('Added ' + it.name + ' to the Hall of Champions.'); };
 $('chList').onclick = e => { const b = e.target.closest('button'); if (b) delChamp(+b.dataset.i); };
 $('chShow').onclick = () => { if (hall.mesh) focusMesh(hall.mesh, 'Hall of Champions'); };
+$('camBg').value = store.get('cambg', 'lsc'); $('camBg').onchange = e => applyCamBg(e.target.value, true); setTimeout(() => avatarBg(camBgOn()), 0);
 let gpipMode = store.get('gpip', 'walk'), gpipSrc = null;
 $('gpipMode').value = gpipMode;
 $('gpipMode').onchange = e => { gpipMode = e.target.value; store.set('gpip', gpipMode); postState(); };
@@ -1823,6 +1831,58 @@ refreshMics();
 // ---- city side: avatar renderer, cam screens, picture-in-picture, avatar in the world, faces ----
 const avatarOnly = !!window.LSC_AVATAR;
 AV.drawBackdrop('#ff2d8f', '#38e8ff', '#160826');
+// ---------- live cam background: cut you out of the webcam and put the Lucid State City picture behind you (also behind the 3D avatar) ----------
+const CAMBG = { img: new Image(), mp: null, tex: null };
+CAMBG.img.crossOrigin = 'anonymous'; CAMBG.img.src = 'lsc-bg.jpg';
+const SEG_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/';
+function loadSegLib() {
+  if (CAMBG.mp) return CAMBG.mp;
+  CAMBG.mp = new Promise((res, rej) => { if (window.SelfieSegmentation) return res(); const sc = document.createElement('script'); sc.src = SEG_CDN + 'selfie_segmentation.js'; sc.crossOrigin = 'anonymous'; sc.onload = () => res(); sc.onerror = rej; document.head.appendChild(sc); });
+  return CAMBG.mp;
+}
+function drawCover(x, img, w, h) { const k = Math.max(w / img.width, h / img.height); x.drawImage(img, (w - img.width * k) / 2, (h - img.height * k) / 2, img.width * k, img.height * k); }
+function makeSegCam(video, onFrame) {
+  const c = document.createElement('canvas'); c.width = video.videoWidth || 1280; c.height = video.videoHeight || 720; const x = c.getContext('2d');
+  const m = document.createElement('canvas'); m.width = c.width; m.height = c.height; const mx = m.getContext('2d');
+  const st = { canvas: c, alive: true, seg: null, busy: false };
+  const bg = () => { if (CAMBG.img.naturalWidth) drawCover(x, CAMBG.img, c.width, c.height); else { x.fillStyle = '#07040f'; x.fillRect(0, 0, c.width, c.height); } };
+  bg(); onFrame && onFrame();                                   // background right away, so the room never flashes on stream
+  loadSegLib().then(() => {
+    if (!st.alive) return;
+    const seg = new window.SelfieSegmentation({ locateFile: f => SEG_CDN + f }); st.seg = seg;
+    seg.setOptions({ modelSelection: 1, selfieMode: false });
+    seg.onResults(r => {
+      if (!st.alive) return; const w = c.width, h = c.height;
+      mx.save(); mx.clearRect(0, 0, w, h); mx.filter = 'blur(3px)'; mx.drawImage(r.segmentationMask, 0, 0, w, h); mx.restore();
+      mx.save(); mx.globalCompositeOperation = 'source-in'; mx.drawImage(r.image, 0, 0, w, h); mx.restore();
+      bg(); x.drawImage(m, 0, 0); onFrame && onFrame();
+    });
+    const tick = async () => { if (!st.alive) return; if (!st.busy && video.readyState >= 2) { st.busy = true; try { await seg.send({ image: video }); } catch (e) {} st.busy = false; } setTimeout(tick, 33); };
+    tick();
+  }).catch(() => {                                              // no internet for the model: show the plain webcam instead of a frozen picture
+    const loop = () => { if (!st.alive) return; x.drawImage(video, 0, 0, c.width, c.height); onFrame && onFrame(); setTimeout(loop, 33); }; loop();
+  });
+  st.stop = () => { st.alive = false; try { st.seg && st.seg.close(); } catch (e) {} };
+  return st;
+}
+function avatarBg(on) {                                         // the picture fills the avatar cam exactly, edge to edge
+  if (!AV || !AV.bd) return;
+  if (!AV.bd.userData.orig) AV.bd.userData.orig = AV.bd.material.map;
+  if (on) {
+    if (!CAMBG.tex) { CAMBG.tex = new THREE.Texture(CAMBG.img); CAMBG.tex.encoding = THREE.sRGBEncoding; const upd = () => { CAMBG.tex.needsUpdate = true; }; if (CAMBG.img.complete && CAMBG.img.naturalWidth) upd(); else CAMBG.img.addEventListener('load', upd); }
+    AV.bd.material.map = CAMBG.tex; AV.bd.userData.lsc = true; fitAvatarBg();
+  } else { AV.bd.material.map = AV.bd.userData.orig; AV.bd.userData.lsc = false; AV.bd.scale.set(1, 1, 1); AV.bd.position.set(0, 1.2, -4); }
+  AV.bd.material.needsUpdate = true;
+}
+function fitAvatarBg() {                                        // keep the picture centred and filling the avatar camera wherever it points
+  if (!AV.bd || !AV.bd.userData.lsc) return;
+  const cam = AV.cam, fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion), z = -4;
+  const t = (z - cam.position.z) / fwd.z, c = cam.position.clone().addScaledVector(fwd, t), d = cam.position.distanceTo(c);
+  const vh = 2 * d * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * 1.08, vw = vh * cam.aspect;
+  AV.bd.position.set(c.x, c.y, z); AV.bd.scale.set(vw / 16, vh / 9, 1);
+}
+const camBgOn = () => store.get('cambg', 'lsc') === 'lsc';
+function applyCamBg(v, restart) { store.set('cambg', v); $('camBg').value = v; avatarBg(v === 'lsc'); const sc = $('srcCam').value; if (restart && sc && sc !== 'avatar') setVideo('SCREEN_LIVECAM', sc); postState(); }
 const AVC = {};
 AVC.r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 AVC.r.outputEncoding = THREE.sRGBEncoding; AVC.r.setPixelRatio(1);
@@ -1907,7 +1967,7 @@ function avatarTick(t, dt) {
     if (bc && avAn && (cityReady || avatarOnly)) try { bc.postMessage({ cmd: 'meter', data: { v: AV.lvl } }); } catch (e) {} }
   if (avatarOnly) { AV.cam.aspect = innerWidth / innerHeight; AV.cam.updateProjectionMatrix(); AVC.r.render(AV.scene, AV.cam); return; }
   if (t - avLast < 1 / 24) return; avLast = t;
-  if (needCam) { AV.bd.visible = true; AVC.r.setClearColor(0x000000, 1); AVC.r.render(AV.scene, AV.cam);
+  if (needCam) { fitAvatarBg(); AV.bd.visible = true; AVC.r.setClearColor(0x000000, 1); AVC.r.render(AV.scene, AV.cam);
     const x = AVC.camC.getContext('2d'); x.drawImage(AVC.r.domElement, 0, 0, 768, 432); AVC.camTex.needsUpdate = true; }
   if (needPip) { AV.bd.visible = false; AVC.r.setClearColor(0x000000, 0); AVC.r.render(AV.scene, AV.cam);
     const x = AVC.pipC.getContext('2d'); x.clearRect(0, 0, 768, 432); x.drawImage(AVC.r.domElement, 0, 0, 768, 432); AVC.pipTex.needsUpdate = true; AV.bd.visible = true; }
@@ -1928,7 +1988,7 @@ function postState() {
       chan: chanName, chatState, chatMsgs, status: $('status').textContent,
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
-      show: SHOW.mode, showLen: SHOW.len, gpip: gpipMode, champs, adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
+      show: SHOW.mode, showLen: SHOW.len, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -1961,6 +2021,7 @@ if (bc) bc.onmessage = e => {
     case 'champ': addChamp(d.item, d.spot); break;
     case 'champdel': delChamp(d.i); break;
     case 'hallshow': if (hall.mesh) focusMesh(hall.mesh, 'Hall of Champions'); break;
+    case 'cambg': applyCamBg(d.v, true); break;
     case 'gpip': gpipMode = d.v; $('gpipMode').value = d.v; store.set('gpip', d.v); break;
     case 'scenes': setScenes(d.scenes, d.auto); break;
   }
@@ -2022,6 +2083,7 @@ if (window.LSC_CONTROL) {
     if (st.avSpots) { $('avSpot').innerHTML = Object.entries(st.avSpots).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); $('avSpot').value = st.avSpot; }
     $('pipPos').value = st.pipPos; $('pipSize').value = st.pipSize;
     if (st.gpip && document.activeElement !== $('gpipMode')) $('gpipMode').value = st.gpip;
+    if (st.camBg && document.activeElement !== $('camBg')) $('camBg').value = st.camBg;
     if (st.pa) { const P = st.pa, h = P.list.length ? P.list.map(k => `<button data-s="${k}" title="Pop up ${k}" class="${P.showing === k ? 'on' : ''}">${P.thumbs[k] ? `<img src="${P.thumbs[k]}" alt="">` : ''}<span>${k.replace('AD_SLOT_', '#')}</span></button>`).join('') : '<p class="note" style="grid-column:1/-1">Upload ads in Setup → Billboards first.</p>';
       if ($('paGrid')._h !== h) { $('paGrid')._h = h; $('paGrid').innerHTML = h; }
       if (document.activeElement !== $('paPick')) { const keep = $('paPick').value; $('paPick').innerHTML = st.ads.map(k => `<option value="${k}">${k.replace('AD_SLOT_', 'Slot ')}${P.list.includes(k) ? '  ✓ ad ready' : '  (empty)'}</option>`).join(''); if (keep) $('paPick').value = keep; else if (P.list[0]) $('paPick').value = P.list[0]; }
@@ -2055,6 +2117,7 @@ if (window.LSC_CONTROL) {
   $('exprBtns').onclick = e => { const b = e.target.closest('button'); if (b) send('expr', { e: b.dataset.e }); };
   $('avSpot').onchange = () => send('avspot', { v: $('avSpot').value });
   $('gpipMode').onchange = () => send('gpip', { v: $('gpipMode').value });
+  $('camBg').onchange = () => send('cambg', { v: $('camBg').value });
   $('paNext').onclick = () => send('popad', {});
   $('paGo').onclick = () => { const k = $('paPick').value, P = st && st.pa; if (P && !P.list.includes(k)) { status(k.replace('AD_SLOT_', 'Slot ') + ' has no ad yet: upload one in Setup → Billboards.'); return; } send('popad', { slot: k }); };
   $('paGrid').onclick = e => { const b = e.target.closest('button'); if (b) send('popad', { slot: b.dataset.s }); };

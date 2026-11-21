@@ -72,6 +72,8 @@
     <button id="allow">Find cameras</button>
     <label class="ck"><input type="checkbox" id="mirror"> Mirror cam</label>
   </div>
+  <div class="row" style="margin-top:4px"><select id="camBg" style="flex:1" title="Background behind you on the live cam (webcam and 3D avatar)"><option value="lsc">Cam background: Lucid State City picture</option><option value="off">Cam background: off (your real room / plain)</option></select>
+  </div>
 
   <div class="hint" style="margin-top:6px">Keys: C = next cam source, G = next gameplay source</div>
   <label class="t">World theme (V = next)</label>
@@ -458,6 +460,7 @@ function fitVideo(s){
 }
 function stopSource(s){
   if(s.stream)s.stream.getTracks().forEach(tr=>tr.stop());
+  if(s.seg){s.seg.stop();s.seg=null;}
   s.stream=null;s.avatar=false;if(s.vtex){s.vtex.dispose();s.vtex=null;}s.video=null;s.fitted=false;
   s.mat.map=s.ctex;s.mat.needsUpdate=true;
 }
@@ -470,7 +473,10 @@ async function setSource(id,value){
     if(value==='share'){stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:60},audio:false});}
     else{stream=await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:value},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:60}},audio:false});store.set('src_'+id,value);}
     const v=document.createElement('video');v.muted=true;v.playsInline=true;v.autoplay=true;v.srcObject=stream;await v.play();
-    s.stream=stream;s.video=v;s.vtex=new THREE.VideoTexture(v);s.vtex.minFilter=THREE.LinearFilter;s.vtex.magFilter=THREE.LinearFilter;
+    s.stream=stream;s.video=v;
+    if(id==='cam'&&value!=='share'&&camBgOn()){s.seg=makeSegCam(v,()=>{if(s.vtex)s.vtex.needsUpdate=true;});s.vtex=new THREE.CanvasTexture(s.seg.canvas);}
+    else s.vtex=new THREE.VideoTexture(v);
+    s.vtex.minFilter=THREE.LinearFilter;s.vtex.magFilter=THREE.LinearFilter;
     s.mat.map=s.vtex;s.mat.needsUpdate=true;s.fitted=false;
     stream.getVideoTracks()[0].addEventListener('ended',()=>{if(s.stream===stream){stopSource(s);$(id==='game'?'srcGame':'srcCam').value='demo';setStatus(s.label+' source ended.');}});
     setStatus(s.label+' source connected.');
@@ -2679,7 +2685,7 @@ function loop(){
 
   if((screens.cam.avatar||avatarOnly||pipPos!=='off'||avSpot!=='off')&&!isControl){avatarTick(t,dt);
     if(pipPos!=='off'&&!avatarOnly&&t-lastPipR>1/40){lastPipR=t;pipGlow.material.color.set(T.a1);AV.bd.visible=false;const cc=renderer.getClearColor(new THREE.Color()),ca=renderer.getClearAlpha();renderer.setClearColor(0x000000,0);renderer.setRenderTarget(AV.rt2);renderer.clear();renderer.render(AV.scene,AV.cam);renderer.setRenderTarget(null);renderer.setClearColor(cc,ca);AV.bd.visible=true;}if(avatarOnly){AV.cam.aspect=innerWidth/innerHeight;AV.cam.updateProjectionMatrix();renderer.render(AV.scene,AV.cam);requestAnimationFrame(loop);return;}
-    if(screens.cam.avatar&&t-lastAvR>1/40){lastAvR=t;renderer.setRenderTarget(AV.rt);renderer.render(AV.scene,AV.cam);renderer.setRenderTarget(null);}}
+    if(screens.cam.avatar&&t-lastAvR>1/40){lastAvR=t;fitAvatarBg();renderer.setRenderTarget(AV.rt);renderer.render(AV.scene,AV.cam);renderer.setRenderTarget(null);}}
   if(!isControl&&t-lastMeter>0.1){lastMeter=t;$('avMeterFill').style.width=Math.round(AV.lvl*100)+'%';}
   if(!isControl||(++ctlFrame%6===0)){const avIn=!isControl&&avWorldBegin();renderer.render(scene,camera);if(avIn)avWorldEnd();}requestAnimationFrame(loop);
 }
@@ -2913,6 +2919,62 @@ $('avMic').onchange=()=>sendAv(true);$('avSens').oninput=()=>sendAv(false);
 refreshMics();
 if(avatarOnly){document.body.style.background='transparent';document.documentElement.style.background='transparent';$('panel').style.display='none';AV.bd.visible=false;setTimeout(()=>startAvatarMic(avMicLabel),300);}
 // --- avatar picture-in-picture on the gameplay screen ---
+// ---------- live cam background: cut you out of the webcam and put the Lucid State City picture behind you (also behind the 3D avatar) ----------
+const CAMBG = { img: new Image(), mp: null, tex: null };
+CAMBG.img.crossOrigin = 'anonymous'; CAMBG.img.src = 'lsc-bg.jpg';
+const SEG_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/';
+function loadSegLib() {
+  if (CAMBG.mp) return CAMBG.mp;
+  CAMBG.mp = new Promise((res, rej) => { if (window.SelfieSegmentation) return res(); const sc = document.createElement('script'); sc.src = SEG_CDN + 'selfie_segmentation.js'; sc.crossOrigin = 'anonymous'; sc.onload = () => res(); sc.onerror = rej; document.head.appendChild(sc); });
+  return CAMBG.mp;
+}
+function drawCover(x, img, w, h) { const k = Math.max(w / img.width, h / img.height); x.drawImage(img, (w - img.width * k) / 2, (h - img.height * k) / 2, img.width * k, img.height * k); }
+function makeSegCam(video, onFrame) {
+  const c = document.createElement('canvas'); c.width = video.videoWidth || 1280; c.height = video.videoHeight || 720; const x = c.getContext('2d');
+  const m = document.createElement('canvas'); m.width = c.width; m.height = c.height; const mx = m.getContext('2d');
+  const st = { canvas: c, alive: true, seg: null, busy: false };
+  const bg = () => { if (CAMBG.img.naturalWidth) drawCover(x, CAMBG.img, c.width, c.height); else { x.fillStyle = '#07040f'; x.fillRect(0, 0, c.width, c.height); } };
+  bg(); onFrame && onFrame();                                   // background right away, so the room never flashes on stream
+  loadSegLib().then(() => {
+    if (!st.alive) return;
+    const seg = new window.SelfieSegmentation({ locateFile: f => SEG_CDN + f }); st.seg = seg;
+    seg.setOptions({ modelSelection: 1, selfieMode: false });
+    seg.onResults(r => {
+      if (!st.alive) return; const w = c.width, h = c.height;
+      mx.save(); mx.clearRect(0, 0, w, h); mx.filter = 'blur(3px)'; mx.drawImage(r.segmentationMask, 0, 0, w, h); mx.restore();
+      mx.save(); mx.globalCompositeOperation = 'source-in'; mx.drawImage(r.image, 0, 0, w, h); mx.restore();
+      bg(); x.drawImage(m, 0, 0); onFrame && onFrame();
+    });
+    const tick = async () => { if (!st.alive) return; if (!st.busy && video.readyState >= 2) { st.busy = true; try { await seg.send({ image: video }); } catch (e) {} st.busy = false; } setTimeout(tick, 33); };
+    tick();
+  }).catch(() => {                                              // no internet for the model: show the plain webcam instead of a frozen picture
+    const loop = () => { if (!st.alive) return; x.drawImage(video, 0, 0, c.width, c.height); onFrame && onFrame(); setTimeout(loop, 33); }; loop();
+  });
+  st.stop = () => { st.alive = false; try { st.seg && st.seg.close(); } catch (e) {} };
+  return st;
+}
+function avatarBg(on) {                                         // the picture fills the avatar cam exactly, edge to edge
+  if (!AV || !AV.bd) return;
+  if (!AV.bd.userData.orig) AV.bd.userData.orig = AV.bd.material.map;
+  if (on) {
+    if (!CAMBG.tex) { CAMBG.tex = new THREE.Texture(CAMBG.img); CAMBG.tex.encoding = THREE.sRGBEncoding; const upd = () => { CAMBG.tex.needsUpdate = true; }; if (CAMBG.img.complete && CAMBG.img.naturalWidth) upd(); else CAMBG.img.addEventListener('load', upd); }
+    AV.bd.material.map = CAMBG.tex; AV.bd.userData.lsc = true; fitAvatarBg();
+  } else { AV.bd.material.map = AV.bd.userData.orig; AV.bd.userData.lsc = false; AV.bd.scale.set(1, 1, 1); AV.bd.position.set(0, 1.2, -4); }
+  AV.bd.material.needsUpdate = true;
+}
+function fitAvatarBg() {                                        // keep the picture centred and filling the avatar camera wherever it points
+  if (!AV.bd || !AV.bd.userData.lsc) return;
+  const cam = AV.cam, fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion), z = -4;
+  const t = (z - cam.position.z) / fwd.z, c = cam.position.clone().addScaledVector(fwd, t), d = cam.position.distanceTo(c);
+  const vh = 2 * d * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * 1.08, vw = vh * cam.aspect;
+  AV.bd.position.set(c.x, c.y, z); AV.bd.scale.set(vw / 16, vh / 9, 1);
+}
+
+const camBgOn=()=>store.get('camBg','lsc')==='lsc';
+function applyCamBg(v,restart){store.set('camBg',v);if($('camBg'))$('camBg').value=v;if(isControl)return;avatarBg(v==='lsc');
+  const cur=store.get('src_cam');if(restart&&cur&&!['demo','avatar','share'].includes(cur))setSource('cam',cur);}
+$('camBg').value=store.get('camBg','lsc');$('camBg').onchange=()=>{const v=$('camBg').value;applyCamBg(v,true);remote('cambg',{v});};
+if(!isControl)setTimeout(()=>avatarBg(camBgOn()),0);
 AV.rt2=new THREE.WebGLRenderTarget(960,540,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat});
 const pipMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:AV.rt2.texture,transparent:true,depthWrite:false}));
 pipMesh.renderOrder=5;screens.game.g.add(pipMesh);pipMesh.visible=false;
@@ -3372,6 +3434,7 @@ function applyRemote(cmd,d){
   else if(cmd==='music'){MUS.on=d.on;MUS.vol=d.vol;}
   else if(cmd==='scenes'){introScene=d.introScene;brbScene=d.brbScene;mainScene=d.mainScene;autoScene=d.autoScene;['introScene','brbScene','mainScene','autoScene'].forEach(k=>store.set(k,d[k]));}
   else if(cmd==='avspot')setAvSpot(d.v,true);
+  else if(cmd==='cambg'){applyCamBg(d.v,true);}
   else if(cmd==='trophies'){trophies=d.list||[];trophyOn=d.on!==false;store.set('trophies',trophies);store.set('trophyOn',trophyOn);renderTrophyList();applyTrophyVis();if(d.spot&&!isControl){trophyOn=true;applyTrophyVis();dirCut('trophy',6,5);if(!opts.director)setShot('trophy');avReact('excited',null,4);burst(7.9,7.5,-13.5,80,5,['#ffd23a','#ffffff','#fff1a8'],true);}}
   else if(cmd==='raid')raidWelcome(d.name,d.n);
   else if(cmd==='avmic'){avSens=d.sens||avSens;store.set('avsens',avSens);$('avSens').value=avSens;if(typeof d.label==='string'&&(d.label!==avMicLabel||d.restart)){avMicLabel=d.label;store.set('avmic',avMicLabel);if(screens.cam.avatar||avatarOnly)startAvatarMic(avMicLabel);}}
