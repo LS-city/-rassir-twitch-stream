@@ -141,9 +141,11 @@ canvas#c.pick{cursor:pointer}
 
   <h3>Billboards (ad slots)</h3>
   <select id="adSlot"></select>
+  <input id="adAddr" placeholder="Address shown on the ad (optional)" maxlength="80" style="margin-top:6px">
+  <div class="row" style="margin-top:6px"><button id="adAddrSave">Save address</button></div>
   <div class="row" style="margin-top:6px"><input id="adFile" type="file" accept="image/*"></div>
   <div class="row" style="margin-top:6px"><button id="adShow">Show this slot</button><button id="adReset">Reset slot</button></div>
-  <p class="note" style="margin-top:6px">Upload a 16:9 image for a slot. It's saved in this browser.</p>
+  <p class="note" style="margin-top:6px">Any image shape works: the whole picture always shows, never cropped. A 16:9 image fills the big boards best. The address (if any) shows in a bar along the bottom.</p>
     </section>
 </div>
 
@@ -637,24 +639,78 @@ function updateFloat(dt, t) {
 function buildAdUI() {
   $('adSlot').innerHTML = Object.keys(adSlots).sort().map(k => `<option>${k}</option>`).join('');
 }
+// move badly placed billboards so the street can see them (whole set: board, frame, glow, legs)
+function moveSlot(name, center, yaw, hideLegs) {
+  const parts = []; scene.traverse(o => { if (o.name === name || o.name.startsWith(name + '_')) parts.push(o); });
+  const m = parts.find(o => o.name === name); if (!m) return;
+  const old = new THREE.Box3().setFromObject(m).getCenter(new THREE.Vector3()), qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  parts.forEach(o => { if (hideLegs && /_leg/.test(o.name)) { o.visible = false; return; } scene.attach(o); const r = o.position.clone().sub(old).applyQuaternion(qy); o.position.copy(center).add(r); o.quaternion.premultiply(qy); o.updateMatrixWorld(true); });
+}
+function fixAdSlots() {
+  moveSlot('AD_SLOT_03', new THREE.Vector3(-12.6, 18.9, 67.5), Math.PI / 2);      // theater: rooftop sign now faces the Strip
+  moveSlot('AD_SLOT_06', new THREE.Vector3(-23.5, 36, -55.35), 0, true);         // hotel: off the roof, onto the wall that faces up the Strip
+  moveSlot('AD_SLOT_08', new THREE.Vector3(-12.45, 23.6, -22.5), 0);              // Zero Cool: front edge of the roof, raised clear of the Strip's hanging sign
+  { const pm = new THREE.MeshStandardMaterial({ color: 0x1a1726, roughness: 0.7 }); [-26.5, -18.5].forEach(z => { const p = new THREE.Mesh(new THREE.BoxGeometry(0.35, 7.1, 0.35), pm); p.position.set(-12.75, 16.15, z); p.userData.noBlock = true; scene.add(p); }); }
+  Object.values(adSlots).forEach(m => {                                            // remember each board's real shape + the part of the image it shows
+    const g = m.geometry, uv = g.attributes.uv; let u0 = 1, u1 = 0, v0 = 1, v1 = 0;
+    if (uv) for (let i = 0; i < uv.count; i++) { u0 = Math.min(u0, uv.getX(i)); u1 = Math.max(u1, uv.getX(i)); v0 = Math.min(v0, uv.getY(i)); v1 = Math.max(v1, uv.getY(i)); }
+    const ws = new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
+    m.userData.uvr = { u0, u1, v0, v1 }; m.userData.aspect = Math.max(ws.x, ws.z) / Math.max(0.01, ws.y);
+  });
+}
+// draw an ad so nothing is ever cut off: the whole image fits, a blurred copy fills the rest, and the address sits in a bar at the bottom
+function composeAd(mesh, img, addr) {
+  const C = document.createElement('canvas'); C.width = 1280; C.height = 720; const X = C.getContext('2d');
+  const r = mesh.userData.uvr || { u0: 0, u1: 1, v0: 0, v1: 1 }, A = mesh.userData.aspect || 16 / 9;
+  const rx = r.u0 * 1280, ry = r.v0 * 720, rw = (r.u1 - r.u0) * 1280, rh = (r.v1 - r.v0) * 720;
+  const H = 720, W = Math.round(H * A), c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+  const cover = Math.max(W / img.width, H / img.height), fit = Math.min(W / img.width, H / img.height);
+  x.fillStyle = '#07040f'; x.fillRect(0, 0, W, H);
+  x.save(); x.filter = 'blur(28px) brightness(0.45)'; x.drawImage(img, (W - img.width * cover) / 2, (H - img.height * cover) / 2, img.width * cover, img.height * cover); x.restore();
+  const bar = addr ? Math.round(H * 0.15) : 0, availH = H - bar, f2 = Math.min(W / img.width, availH / img.height);
+  x.drawImage(img, (W - img.width * f2) / 2, (availH - img.height * f2) / 2, img.width * f2, img.height * f2);
+  if (addr) {
+    const g = x.createLinearGradient(0, H - bar, 0, H); g.addColorStop(0, 'rgba(10,6,24,0.92)'); g.addColorStop(1, 'rgba(4,2,12,0.98)'); x.fillStyle = g; x.fillRect(0, H - bar, W, bar);
+    x.fillStyle = '#ff2d8f'; x.fillRect(0, H - bar, W, Math.max(3, bar * 0.05));
+    const py = H - bar / 2, pr = bar * 0.26, px = bar * 0.55;                       // map pin
+    x.fillStyle = '#ff2d8f'; x.beginPath(); x.arc(px, py - pr * 0.35, pr, Math.PI, 0); x.lineTo(px, py + pr * 1.15); x.closePath(); x.fill(); x.fillStyle = '#07040f'; x.beginPath(); x.arc(px, py - pr * 0.35, pr * 0.4, 0, 7); x.fill();
+    let fs = Math.round(bar * 0.46); x.font = `700 ${fs}px Poppins, Arial, sans-serif`; const maxW = W - px - pr - bar * 0.6, tx = px + pr + bar * 0.35;
+    while (x.measureText(addr).width > maxW && fs > bar * 0.3) { fs--; x.font = `700 ${fs}px Poppins, Arial, sans-serif`; }
+    x.fillStyle = '#ffffff'; x.textBaseline = 'middle';
+    if (x.measureText(addr).width <= maxW) x.fillText(addr, tx, py + 2, maxW);
+    else {                                                                         // narrow board: split the address over two lines
+      const words = addr.split(' '); let cut = 1, best = 1e9; for (let i = 1; i < words.length; i++) { const d = Math.abs(x.measureText(words.slice(0, i).join(' ')).width - x.measureText(words.slice(i).join(' ')).width); if (d < best) { best = d; cut = i; } }
+      fs = Math.round(bar * 0.34); x.font = `700 ${fs}px Poppins, Arial, sans-serif`;
+      x.fillText(words.slice(0, cut).join(' '), tx, py - fs * 0.55, maxW); x.fillText(words.slice(cut).join(' '), tx, py + fs * 0.62, maxW);
+    }
+  }
+  X.fillStyle = '#07040f'; X.fillRect(0, 0, 1280, 720); X.drawImage(c, rx, ry, rw, rh);   // pre-squeezed so it looks right on the board's real shape
+  return C;
+}
 function setAdImage(slot, dataUrl) {
   const mesh = adSlots[slot]; if (!mesh) return;
   if (!mesh.userData.orig) mesh.userData.orig = mesh.material;
   if (!dataUrl) { mesh.material = mesh.userData.orig; if (mesh.userData.back) mesh.userData.back.material = mesh.userData.orig; return; }
-  new THREE.TextureLoader().load(dataUrl, t => {
-    t.flipY = false; t.encoding = THREE.sRGBEncoding;
+  const img = new Image();
+  img.onload = () => {
+    const t = new THREE.CanvasTexture(composeAd(mesh, img, (store.get('adaddr', {})[slot] || '').trim())); t.flipY = false; t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
     applyTex(mesh, t); mesh.material.emissiveIntensity = 1.05;
     if (mesh.userData.back) mesh.userData.back.material = mesh.material;
-  });
+  };
+  img.src = dataUrl;
 }
-function restoreAds() { const ads = store.get('ads', {}); Object.entries(ads).forEach(([k, v]) => setAdImage(k, v)); }
+function setAdAddr(slot, addr) { const a = store.get('adaddr', {}); if (addr) a[slot] = addr; else delete a[slot]; store.set('adaddr', a); const d = store.get('ads', {})[slot]; if (d) setAdImage(slot, d); postState(); }
+// slot changes in the panel show that slot's saved address
+function syncAdAddr() { if ($('adAddr')) $('adAddr').value = store.get('adaddr', {})[$('adSlot').value] || ''; }
+function restoreAds() { fixAdSlots(); syncAdAddr(); const ads = store.get('ads', {}); Object.entries(ads).forEach(([k, v]) => setAdImage(k, v)); }
 $('adFile').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   const img = new Image(), url = URL.createObjectURL(f);
   img.onload = () => {
-    const c = document.createElement('canvas'); c.width = 1280; c.height = 720; const x = c.getContext('2d');
-    const s = Math.max(1280 / img.width, 720 / img.height); x.drawImage(img, (1280 - img.width * s) / 2, (720 - img.height * s) / 2, img.width * s, img.height * s);
-    const data = c.toDataURL('image/jpeg', 0.85), slot = $('adSlot').value;
+    const k = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const data = c.toDataURL('image/jpeg', 0.88), slot = $('adSlot').value;
+    if ($('adAddr').value.trim() !== (store.get('adaddr', {})[slot] || '')) { const a = store.get('adaddr', {}); a[slot] = $('adAddr').value.trim(); store.set('adaddr', a); }
     setAdImage(slot, data);
     const ads = store.get('ads', {}); ads[slot] = data;
     setStatus(store.set('ads', ads) ? slot + ' updated and saved.' : slot + ' updated (browser storage is full, so it will reset on reload).');
@@ -662,6 +718,8 @@ $('adFile').onchange = e => {
   };
   img.src = url;
 };
+$('adSlot').addEventListener('change', syncAdAddr);
+$('adAddrSave').onclick = () => { const slot = $('adSlot').value; setAdAddr(slot, $('adAddr').value.trim()); setStatus($('adAddr').value.trim() ? 'Address saved on ' + slot + '.' : 'Address removed from ' + slot + '.'); };
 $('adReset').onclick = () => { const slot = $('adSlot').value, ads = store.get('ads', {}); delete ads[slot]; store.set('ads', ads); setAdImage(slot, null); setStatus(slot + ' reset.'); };
 $('adShow').onclick = () => {
   const m = adSlots[$('adSlot').value]; if (m) focusMesh(m, m.name.replace(/_/g, ' '));
@@ -1764,7 +1822,7 @@ function postState() {
       chan: chanName, status: $('status').textContent,
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
-      show: SHOW.mode, showLen: SHOW.len, gpip: gpipMode, champs, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
+      show: SHOW.mode, showLen: SHOW.len, gpip: gpipMode, champs, adAddr: store.get('adaddr', {}), musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -1780,7 +1838,8 @@ if (bc) bc.onmessage = e => {
     case 'chan': $('chan').value = d.name || ''; connectChat(d.name); break;
     case 'src': $(d.id).value = d.v; store.set(d.id, d.v); setVideo(d.id === 'srcGame' ? 'SCREEN_GAMEPLAY' : 'SCREEN_LIVECAM', d.v); break;
     case 'findcams': findCams().then(postState); break;
-    case 'ad': { setAdImage(d.slot, d.data); const ads = store.get('ads', {}); ads[d.slot] = d.data;
+    case 'adaddr': setAdAddr(d.slot, d.addr); setStatus(d.addr ? 'Address saved on ' + d.slot + '.' : 'Address removed from ' + d.slot + '.'); break;
+    case 'ad': { if (d.addr !== undefined) { const a = store.get('adaddr', {}); if (d.addr) a[d.slot] = d.addr; else delete a[d.slot]; store.set('adaddr', a); } setAdImage(d.slot, d.data); const ads = store.get('ads', {}); ads[d.slot] = d.data;
       setStatus(store.set('ads', ads) ? d.slot + ' updated and saved.' : d.slot + ' updated (storage full, resets on reload).'); break; }
     case 'adreset': { const ads = store.get('ads', {}); delete ads[d.slot]; store.set('ads', ads); setAdImage(d.slot, null); setStatus(d.slot + ' reset.'); break; }
     case 'adshow': if (adSlots[d.slot]) focusMesh(adSlots[d.slot], d.slot.replace(/_/g, ' ')); break;
@@ -1836,6 +1895,7 @@ if (window.LSC_CONTROL) {
       sel.innerHTML = ((id === 'srcCam' && st.camsCam) ? st.camsCam : st.cams).map(o => `<option value="${esc(o.v)}">${esc(o.t)}</option>`).join('') || '<option value="">Placeholder</option>';
       sel.value = id === 'srcGame' ? st.srcGame : st.srcCam; });
     const keep = $('adSlot').value; $('adSlot').innerHTML = st.ads.map(a => `<option>${a}</option>`).join(''); if (keep) $('adSlot').value = keep;
+    if (document.activeElement !== $('adAddr')) $('adAddr').value = (st.adAddr || {})[$('adSlot').value] || '';
     if (st.status) status(st.status);
     $('status').className = '';
     if (document.activeElement !== $('showLen')) $('showLen').value = String(st.showLen);
@@ -1868,6 +1928,8 @@ if (window.LSC_CONTROL) {
   $('srcCam').onchange = e => send('src', { id: 'srcCam', v: e.target.value });
   $('findCams').onclick = () => send('findcams');
   $('adShow').onclick = () => send('adshow', { slot: $('adSlot').value });
+  $('adSlot').addEventListener('change', () => { $('adAddr').value = ((st && st.adAddr) || {})[$('adSlot').value] || ''; });
+  $('adAddrSave').onclick = () => send('adaddr', { slot: $('adSlot').value, addr: $('adAddr').value.trim() });
   $('adReset').onclick = () => send('adreset', { slot: $('adSlot').value });
   $('showIntro').onclick = () => send('show', { mode: 'intro', len: +$('showLen').value });
   $('showBrb').onclick = () => send('show', { mode: 'brb' }); $('showLive').onclick = () => send('show', { mode: 'live' }); $('showOutro').onclick = () => send('show', { mode: 'outro' });
@@ -1889,9 +1951,9 @@ if (window.LSC_CONTROL) {
     const f = e.target.files[0]; if (!f) return;
     const img = new Image(), url = URL.createObjectURL(f);
     img.onload = () => {
-      const c = document.createElement('canvas'); c.width = 1280; c.height = 720; const x = c.getContext('2d');
-      const s = Math.max(1280 / img.width, 720 / img.height); x.drawImage(img, (1280 - img.width * s) / 2, (720 - img.height * s) / 2, img.width * s, img.height * s);
-      send('ad', { slot: $('adSlot').value, data: c.toDataURL('image/jpeg', 0.85) });
+      const k = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      send('ad', { slot: $('adSlot').value, data: c.toDataURL('image/jpeg', 0.88), addr: $('adAddr').value.trim() });
       URL.revokeObjectURL(url); e.target.value = '';
     };
     img.src = url;
