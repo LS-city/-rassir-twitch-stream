@@ -51,6 +51,9 @@ canvas#c.pick{cursor:pointer}
 #status{font-size:13px;color:var(--dim);margin-top:6px;min-height:1.4em}
 #toast{position:fixed;left:50%;bottom:6%;transform:translateX(-50%);font:400 34px/1.1 Anton,Impact,sans-serif;color:#fff;
   text-shadow:0 0 14px var(--pink),0 0 30px var(--pink);opacity:0;transition:opacity .4s;pointer-events:none;z-index:2;text-align:center;white-space:nowrap}
+#gpip{position:fixed;right:2.2%;bottom:3.5%;width:30%;aspect-ratio:16/9;border:3px solid var(--cyan);border-radius:10px;overflow:hidden;background:#000;z-index:2;display:none;box-shadow:0 0 24px rgba(56,232,255,.55),0 0 60px rgba(255,45,143,.35)}
+#gpip video{width:100%;height:100%;object-fit:cover;display:block}
+#gpip span{position:absolute;left:10px;top:8px;font:400 clamp(10px,1.3vw,22px)/1 Anton,Impact,sans-serif;letter-spacing:.08em;color:#fff;background:#ff2d8f;padding:4px 8px;border-radius:4px}
 #hint{position:fixed;right:12px;bottom:10px;color:var(--dim);font-size:12px;z-index:2}
 #hint.hide{display:none}
 </style>
@@ -65,7 +68,8 @@ canvas#c.pick{cursor:pointer}
 <div id="load"><div><h1>LUCID STATE CITY</h1><p id="loadtxt">Loading the city…</p><div id="bar"><i></i></div></div></div>
 <div id="toast"></div>
 <div id="showOv"><div id="sovT"></div><div id="sovC"></div><div id="sovS"></div></div>
-<div id="hint">Click a screen to focus · H = panel · G/C = game/cam source · V = follow · 0 = tour</div>
+<div id="gpip"><video id="gpipV" muted playsinline autoplay></video><span>&#9679; LIVE GAMEPLAY</span></div>
+<div id="hint">Click a screen to focus · H = panel · G/C = game/cam source · W = walk · V = follow · O = orbit · 0 = tour</div>
 <div id="panel">
   <h2>LUCID STATE CITY</h2>
   <p class="note">Live stream world. Press <b>H</b> to hide this panel before going live.</p>
@@ -73,10 +77,12 @@ canvas#c.pick{cursor:pointer}
   <div id="status"></div>
   <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="setup">Setup</button></div>
   <section data-tab="places">
-    <div class="row"><button id="tourBig" class="big">Auto tour</button></div>
+    <div class="row"><button id="tourBig" class="big">Auto tour</button><button id="orbitBig" class="big">Orbit</button></div>
     <p class="note" id="nowShow" style="margin-top:6px"></p>
     <div id="placeTiles"></div>
     <div id="placeDetail"></div>
+    <label class="note" for="gpipMode" style="display:block;margin-top:14px">Gameplay corner screen</label>
+    <select id="gpipMode"><option value="walk">While walking, following or orbiting</option><option value="always">Always on</option><option value="off">Off</option></select>
     <div hidden>  <h3>Camera</h3>
   <div class="row" id="shots"></div>
   <div class="row" style="margin-top:6px"><button id="tour" class="on">Auto tour</button></div>
@@ -414,7 +420,7 @@ function updateWalkers(dt, t) {
   const all = citizens.concat(spawned);
   const party = t < danceUntil;
   all.forEach(w => {
-    const o = w.o;
+    const o = w.o; if (w.guided) return;
     if (w.state === 'street' && performance.now() - w.born > 90000) sendToClub(w);   // viewers head into Zero Cool after 90s
     if (w.state === 'entering') {
       if (stepTo(w, w.path[0], 2.0, dt)) { w.path.shift(); if (!w.path.length) { w.state = 'inside'; w.zone = w.dest; w.idleT = 4 + Math.random() * 8; } }
@@ -594,6 +600,7 @@ function pickFeatured(dt) {
 }
 function updateFloat(dt, t) {
   if (!floatScreen) return;
+  if (hold && (hold.s.walk || hold.s.follow || hold.s.orbit)) { floatScreen.visible = false; return; }
   const f = pickFeatured(dt);
   const onFollow = hold && hold.s.follow;
   let target = f;
@@ -714,16 +721,79 @@ function addCustomShots() {
   const f1 = B(-8, -30, 2.2), t1 = B(4, 10, 3);
   shots.push({ name: 'WALK', label: 'Street walk', pos: f1, quat: lookQuat(f1, t1), fov: 55, walk: true });
   shots.push({ name: 'FOLLOW', label: 'Follow player', pos: f1.clone(), quat: lookQuat(f1, t1), fov: 50, follow: true });
+  shots.push({ name: 'ORBIT', label: 'Orbit', pos: f1.clone(), quat: lookQuat(f1, t1), fov: 50, orbit: true });
+}
+// ---- walking route through the city and into every club (three coords: x, z) ----
+const ROUTE = [
+  [-7.5, 112], [-7.5, 60],
+  [-7.5, 30, { look: [-11, 5.5, 20], wait: 5 }],            // Media Tower screens
+  [-7.5, 12, { look: [24, 4, 23], wait: 2.5 }],             // glance at the park fountain
+  [-7.5, -22.5], [-10.6, -22.5], [-14.5, -22.5],            // into Zero Cool
+  [-23, -22.5, { spin: 7 }],                                // dance floor
+  [-25.5, -17.5, { look: [-27, 2.2, -14.6], wait: 3 }],     // Green Room bar
+  [-19, -28], [-14.5, -22.5], [-10.6, -22.5],               // back out
+  [-10.6, 0], [-47, 0], [-47, -22.5], [-50.5, -22.5], [-55, -22.5],   // over to Fight Club
+  [-63, -22.5, { look: [-77, 3.2, -22.5], wait: 5 }],       // fight stage
+  [-60, -31, { spin: 6 }],                                  // K.O. Lounge
+  [-57.5, -24], [-55, -22.5], [-50.5, -22.5], [-47, -22.5],
+  [-47, 22.5], [-50.5, 22.5], [-55, 22.5],                  // into B.I.T.
+  [-62, 23, { look: [-80, 4.5, 27], wait: 5 }],             // giant CRT
+  [-66, 12, { spin: 6 }],                                   // Y2K Lounge
+  [-58, 20], [-55, 22.5], [-50.5, 22.5], [-47, 22.5],
+  [-47, 0], [-10.6, 0], [0, 0], [10.5, 6],
+  [10.5, 20, { look: [24, 3.5, 23], wait: 4 }],             // park
+  [10.5, 100], [0, 112]
+];
+const V3 = a => new THREE.Vector3(a[0], a[1], a[2]);
+function nearestNode(p) { let bi = 0, bd = 1e9; ROUTE.forEach((n, i) => { const d = Math.hypot(n[0] - p.x, n[1] - p.z); if (d < bd) { bd = d; bi = i; } }); return bi; }
+function makeRW(p, i) { return { p: new THREE.Vector3(p.x, 0, p.z), i, wait: 0, look: null, spin: false, head: 0, t: 0 }; }
+function stepRW(r, dt, speed) {
+  r.t += dt;
+  if (r.wait > 0) { r.wait -= dt; if (r.wait <= 0) { r.i = (r.i + 1) % ROUTE.length; r.look = null; r.spin = false; } return; }
+  const n = ROUTE[r.i], dx = n[0] - r.p.x, dz = n[1] - r.p.z, d = Math.hypot(dx, dz);
+  if (d < 0.3) { const o = n[2] || {}; if (o.wait || o.spin) { r.wait = o.wait || o.spin; r.look = o.look ? V3(o.look) : null; r.spin = !!o.spin; } else r.i = (r.i + 1) % ROUTE.length; return; }
+  const st = Math.min(d, speed * dt); r.p.x += dx / d * st; r.p.z += dz / d * st; r.dist = (r.dist || 0) + st;
+  r.head = Math.atan2(dx, dz);
+}
+const angLerp = (a, b, k) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * k; };
+let walkRW = null, guide = null, guideRW = null, camHead = 0, orbitS = null;
+function releaseGuide() {
+  if (!guide) return; const w = guide; guide = null; w.guided = false;
+  const z = zoneOf(w.o.position);
+  if (z) { w.state = 'inside'; w.zone = z; w.idleT = 3; w.walk = false; }
+  else { if (w.user) w.state = 'street'; w.walk = true; const side = w.o.position.x > 0 ? 1 : -1; w.o.position.x = w.x0 !== undefined && Math.sign(w.x0) === side ? w.x0 : side * 10.6; w.dir = Math.random() < 0.5 ? 1 : -1; }
+}
+function pickGuide() {
+  releaseGuide();
+  const fresh = spawned.filter(w => w.state === 'street').slice(-1)[0] || spawned.slice(-1)[0];
+  guide = fresh || citizens.filter(w => w.walk)[Math.random() * 40 | 0] || citizens[0];
+  if (!guide) return;
+  guide.guided = true; guide.state = guide.user ? 'guided' : guide.state;
+  guideRW = makeRW(guide.o.position, nearestNode(guide.o.position)); camHead = guide.o.rotation.y;
+}
+function orbitFromCam() {
+  const z = zoneOf(cam.position);
+  if (z) { const C = { zc: [-23, -22.5, 7], fc: [-67, -22.5, 9], bit: [-67, 22.5, 9] }[z]; return { c: new THREE.Vector3(C[0], 2, C[1]), r: C[2], h: 4.2, a: Math.atan2(cam.position.x - C[0], cam.position.z - C[1]) }; }
+  // outside: circle high over the nearest area so the camera never clips through buildings
+  const A = [[0, 60, 40, 44], [0, 20, 38, 42], [24, 23, 30, 36], [-47, 0, 36, 42], [0, -55, 36, 42]];
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+  const g = cam.position.clone().addScaledVector(fwd, 15);
+  let best = A[0], bd = 1e9; A.forEach(a => { const d = Math.hypot(a[0] - g.x, a[1] - g.z); if (d < bd) { bd = d; best = a; } });
+  const c = new THREE.Vector3(best[0], 0, best[1]);
+  return { c, r: best[2], h: best[3], a: Math.atan2(cam.position.x - c.x, cam.position.z - c.z) };
 }
 let fly = null, hold = null, cur = 0, tourOn = params.get('tour') !== '0', tourT = 0;
-function prepFollow(s) {               // start the follow shot right behind the player
+function prepFollow(s) {               // start the follow shot right behind the guide (a viewer if one joined, otherwise a citizen)
+  pickGuide(); if (guide) { const p = guide.o.position, f = new THREE.Vector3(Math.sin(camHead), 0, Math.cos(camHead));
+    s.pos = p.clone().addScaledVector(f, -4.2).setY(2.9); s.quat = lookQuat(s.pos, p.clone().addScaledVector(f, 3).setY(1.5)); return; }
     updateFloat(0.016, 0);
     const tg = floatScreen && floatScreen.userData.target;
     if (tg) { const p = tg.o.position, dir = tg.dir || 1, side = p.x > 0 ? -1 : 1;
       s.pos = new THREE.Vector3(p.x + side * 1.8, 3.0, p.z - dir * 8); s.quat = lookQuat(s.pos, new THREE.Vector3(p.x + side * 1.4, 2.4, p.z + dir * 5)); }
 }
 function flyTo(s, dur = 3.2) {
-  if (s.follow) prepFollow(s);
+  if (!s.follow) releaseGuide();
+  if (s.walk || s.follow || s.orbit) { startMove(s); return; }
   if (zoneOf(cam.position) !== zoneOf(s.pos)) {          // TV-style cut in/out of a building
     cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix();
     hold = { s, t: 0 }; fly = null; return;
@@ -736,10 +806,19 @@ function goShot(i, instant) {
   cur = (i + shots.length) % shots.length; const s = shots[cur];
   document.querySelectorAll('#shots button').forEach((b, k) => b.classList.toggle('on', k === cur));
   document.querySelectorAll('#focusBtns button').forEach(b => b.classList.remove('on')); focused = null;
-  if (instant) { if (s.follow) prepFollow(s); cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); hold = { s, t: 0 }; fly = null; }
+  if (instant && (s.walk || s.follow || s.orbit)) { if (!s.follow) releaseGuide(); startMove(s); }
+  else if (instant) { releaseGuide(); cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); hold = { s, t: 0 }; fly = null; }
   else flyTo(s);
   tourT = 0;
 }
+function startMove(s) {
+  if (s.walk) { if (!walkRW) { walkRW = makeRW(new THREE.Vector3(ROUTE[0][0], 0, ROUTE[0][1]), 1); walkRW.head = Math.atan2(ROUTE[1][0] - ROUTE[0][0], ROUTE[1][1] - ROUTE[0][1]); }
+    cam.position.set(walkRW.p.x, EYE, walkRW.p.z); camHead = walkRW.head; cam.quaternion.copy(lookQuat(cam.position, new THREE.Vector3(walkRW.p.x + Math.sin(camHead) * 10, EYE - 0.2, walkRW.p.z + Math.cos(camHead) * 10))); }
+  if (s.follow) { prepFollow(s); cam.position.copy(s.pos); cam.quaternion.copy(s.quat); }
+  if (s.orbit) orbitS = orbitFromCam();
+  cam.fov = s.fov; cam.updateProjectionMatrix(); hold = { s, t: 0 }; fly = null;
+}
+const EYE = 2.05;
 function setTour(on) { tourOn = on; $('tour').classList.toggle('on', on); tourT = 0; postState(); }
 function buildShotUI() {
   $('shots').innerHTML = shots.map((s, i) => `<button data-i="${i}">${i + 1} ${s.label}</button>`).join('');
@@ -756,16 +835,36 @@ function updateCamera(dt) {
     cam.quaternion.slerpQuaternions(fly.fromQ, fly.to.quat, k);
     cam.fov = fly.fromF + (fly.to.fov - fly.fromF) * k; cam.updateProjectionMatrix();
     if (fly.t >= 1) { hold = { s: fly.to, t: 0 }; fly = null; }
-  } else if (hold && hold.s.follow) {
+  } else if (hold && hold.s.walk) {                 // first-person walk: down the Strip, into every club, across the park
+    hold.t += dt; const r = walkRW; stepRW(r, dt, 3.1);
+    const bob = r.wait > 0 ? 0 : Math.sin((r.dist || 0) * 1.9) * 0.045;
+    cam.position.set(r.p.x, EYE + bob, r.p.z);
+    let look;
+    if (r.look) look = r.look;
+    else if (r.spin) { camHead += dt * 0.9; look = new THREE.Vector3(r.p.x + Math.sin(camHead) * 10, EYE + 0.4, r.p.z + Math.cos(camHead) * 10); }
+    else { camHead = angLerp(camHead, r.head, Math.min(1, dt * 2.2)); look = new THREE.Vector3(r.p.x + Math.sin(camHead) * 10, EYE - 0.15, r.p.z + Math.cos(camHead) * 10); }
+    cam.quaternion.slerp(lookQuat(cam.position, look), Math.min(1, dt * (r.look ? 1.8 : 3)));
+  } else if (hold && hold.s.follow) {               // third-person: walk behind the guide on the same route
     hold.t += dt;
-    const tg = floatScreen && floatScreen.userData.target;
-    if (tg) {
-      const p = tg.o.position, dir = tg.dir || 1, side = p.x > 0 ? -1 : 1;
-      const want = new THREE.Vector3(p.x + side * 1.8, 3.0, p.z - dir * 8);
-      cam.position.lerp(want, Math.min(1, dt * 2));
-      const look = new THREE.Vector3(p.x + side * 1.4, 2.4, p.z + dir * 5);
-      const q = lookQuat(cam.position, look); cam.quaternion.slerp(q, Math.min(1, dt * 3));
+    if (!guide || !guide.guided) pickGuide();
+    if (guide) {
+      const r = guideRW, o = guide.o; stepRW(r, dt, 1.7);
+      o.position.x = r.p.x; o.position.z = r.p.z; o.position.y = guide.y0 + (r.wait > 0 ? 0 : Math.abs(Math.sin(r.t * 7 + guide.ph)) * 0.07);
+      let face = r.head; if (r.look) face = Math.atan2(r.look.x - r.p.x, r.look.z - r.p.z); else if (r.spin) face = r.head + r.t * 0.8;
+      o.rotation.y = angLerp(o.rotation.y, face, Math.min(1, dt * 5)); if (!r.wait) r.head = r.head;
+      camHead = angLerp(camHead, r.wait > 0 ? camHead : r.head, Math.min(1, dt * 1.6));
+      const inside = !!zoneOf(o.position), back = inside ? 3.3 : 4.4, f = new THREE.Vector3(Math.sin(camHead), 0, Math.cos(camHead));
+      const want = o.position.clone().addScaledVector(f, -back); want.y = inside ? 2.6 : 3.0;
+      if (cam.position.distanceTo(want) > 14) cam.position.copy(want); else cam.position.lerp(want, Math.min(1, dt * 3));
+      const look = r.look ? r.look.clone().lerp(o.position.clone().setY(1.6), 0.5) : o.position.clone().addScaledVector(f, 3).setY(1.5);
+      cam.quaternion.slerp(lookQuat(cam.position, look), Math.min(1, dt * 3));
     }
+  } else if (hold && hold.s.orbit) {                // slow circle around where the camera was looking
+    hold.t += dt; const O = orbitS || (orbitS = orbitFromCam()); O.a += dt * (O.r < 12 ? 0.16 : 0.09);
+    const want = new THREE.Vector3(O.c.x + Math.sin(O.a) * O.r, O.h + Math.sin(hold.t * 0.3) * 0.6, O.c.z + Math.cos(O.a) * O.r);
+    cam.position.lerp(want, Math.min(1, dt * 2.5));
+    cam.quaternion.slerp(lookQuat(cam.position, O.c.clone().setY(O.r < 12 ? 2 : 3)), Math.min(1, dt * 3));
+    if (hold.t < 0.05 && cam.position.distanceTo(want) > 20) cam.position.copy(want);
   } else if (hold) {
     hold.t += dt;
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(hold.s.quat);
@@ -773,7 +872,7 @@ function updateCamera(dt) {
     cam.position.copy(hold.s.pos).addScaledVector(fwd, drift);
     if (!hold.s.walk && !hold.s.still) cam.position.y += Math.sin(hold.t * 0.35) * 0.4;
   }
-  if (tourOn && !fly) { tourT += dt; if (tourT > 16) { let n = cur + 1; if (shots[n % shots.length].follow && !spawned.some(w => w.state === 'street')) n++; goShot(n); } }
+  if (tourOn && !fly) { tourT += dt; if (tourT > 16) { let n = cur + 1; goShot(n); } }
 }
 
 // ---------------------------------------------------------------- viewer effects
@@ -912,6 +1011,17 @@ function handleLine(line) {
 $('chanGo').onclick = () => connectChat($('chan').value);
 $('chan').addEventListener('keydown', e => { if (e.key === 'Enter') connectChat($('chan').value); });
 
+// ---------------------------------------------------------------- gameplay corner screen (so viewers never lose the game while the camera explores)
+let gpipMode = store.get('gpip', 'walk'), gpipSrc = null;
+$('gpipMode').value = gpipMode;
+$('gpipMode').onchange = e => { gpipMode = e.target.value; store.set('gpip', gpipMode); postState(); };
+function updatePip() {
+  const st = streams.SCREEN_GAMEPLAY || null;
+  const moving = hold && !fly && (hold.s.walk || hold.s.follow || hold.s.orbit);
+  const on = !!st && SHOW.mode === 'live' && (gpipMode === 'always' || (gpipMode === 'walk' && moving));
+  if (st !== gpipSrc) { gpipSrc = st; $('gpipV').srcObject = st; if (st) $('gpipV').play().catch(() => {}); }
+  $('gpip').style.display = on ? 'block' : 'none';
+}
 // ---------------------------------------------------------------- keys + panel
 function setPanel(hidden) { $('panel').classList.toggle('hide', hidden); $('hint').classList.toggle('hide', hidden); store.set('hidden', hidden); }
 setPanel(params.has('obs') ? true : store.get('hidden', false));
@@ -923,6 +1033,8 @@ addEventListener('keydown', e => {
   else if (/^[1-9]$/.test(k) && +k <= shots.length) { setTour(false); goShot(+k - 1); }
   else if (k === 'escape') { setTour(true); goShot(cur + 1); }
   else if (k === 'v') { setTour(false); goShot(shots.findIndex(s => s.follow)); }
+  else if (k === 'o') { setTour(false); goShot(shots.findIndex(s => s.orbit)); }
+  else if (k === 'w') { setTour(false); goShot(shots.findIndex(s => s.walk)); }
   else if (k === 'g' || k === 'c') cycleSource(k === 'g' ? 'srcGame' : 'srcCam');   // dropdowns don't open in OBS Interact
   else if (k === 'r') runCommand('!rain', 'Rassir');
   else if (k === 'f') runCommand('!fireworks', 'Rassir');
@@ -951,6 +1063,7 @@ function loop() {
   const avIn = avWorldBegin();
   composer.render();
   if (avIn) avWorldEnd();
+  updatePip();
 }
 
 // ---------------------------------------------------------------- LSC Control dock (same page with ?control=1 inside an OBS Custom Browser Dock)
@@ -1534,7 +1647,7 @@ function postState() {
       chan: chanName, status: $('status').textContent,
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
-      show: SHOW.mode, showLen: SHOW.len, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
+      show: SHOW.mode, showLen: SHOW.len, gpip: gpipMode, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -1561,12 +1674,14 @@ if (bc) bc.onmessage = e => {
     case 'avspot': setAvSpot(d.v); break;
     case 'pip': setPip(d.pos, d.size); break;
     case 'music': setMusic(d.on, d.vol); break;
+    case 'gpip': gpipMode = d.v; $('gpipMode').value = d.v; store.set('gpip', d.v); break;
     case 'scenes': setScenes(d.scenes, d.auto); break;
   }
   setTimeout(postState, 120);
 };
 
 loop();
+window.__rw = i => { const r = walkRW || (walkRW = makeRW(new THREE.Vector3(), 0)); r.i = i; r.p.set(ROUTE[i][0], 0, ROUTE[i][1]); r.wait = 0; r.look = null; r.spin = false; };
 window.LSC = { musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
 </script>
@@ -1612,6 +1727,7 @@ if (window.LSC_CONTROL) {
     $('exprBtns').innerHTML = Object.entries({ normal: 'Normal', sad: 'Sad', scared: 'Scared', angry: 'Angry', excited: 'Excited' }).map(([k, l]) => `<button data-e="${k}" class="${k === st.expr ? 'on' : ''}">${l}</button>`).join('');
     if (st.avSpots) { $('avSpot').innerHTML = Object.entries(st.avSpots).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); $('avSpot').value = st.avSpot; }
     $('pipPos').value = st.pipPos; $('pipSize').value = st.pipSize;
+    if (st.gpip && document.activeElement !== $('gpipMode')) $('gpipMode').value = st.gpip;
   }
   if (bc) bc.onmessage = e => { const m = e.data || {};
     if (m.cmd === 'meter') { $('avMeterFill').style.width = Math.round((m.data.v || 0) * 100) + '%'; return; }
@@ -1634,6 +1750,7 @@ if (window.LSC_CONTROL) {
   $('avMic').onchange = () => avSend(true); $('avSens').onchange = () => avSend(false);
   $('exprBtns').onclick = e => { const b = e.target.closest('button'); if (b) send('expr', { e: b.dataset.e }); };
   $('avSpot').onchange = () => send('avspot', { v: $('avSpot').value });
+  $('gpipMode').onchange = () => send('gpip', { v: $('gpipMode').value });
   $('pipPos').onchange = () => send('pip', { pos: $('pipPos').value }); $('pipSize').onchange = () => send('pip', { size: $('pipSize').value });
   const musSend = () => send('music', { on: $('musOn').checked, vol: +$('musVol').value / 100 });
   $('musOn').onchange = musSend; $('musVol').onchange = musSend;
@@ -1659,18 +1776,20 @@ if (window.LSC_CONTROL) {
 (function(){
   const $=id=>document.getElementById(id);
   const PLACES=[
-    {k:'streets',n:'Streets',c:'#ff2d8f',shots:['Gateway','Strip','Park','Aerial','Street walk','Follow player'],screens:[]},
+    {k:'streets',n:'Streets',c:'#ff2d8f',shots:['Street walk','Follow player','Gateway','Strip','Park','Aerial'],screens:[]},
     {k:'tower',n:'Media Tower',c:'#38e8ff',shots:['Tower'],screens:['Tower gameplay','Tower cam','Tower chat','Tower commands']},
     {k:'zc',n:'Zero Cool',c:'#d0102a',shots:['Club outside','Zero Cool','Club floor','Green Room'],screens:['Zero Cool main','Zero Cool cam','Zero Cool chat','Zero Cool commands','Green Room screen']},
     {k:'fc',n:'Fight Club',c:'#ff8a1a',shots:['Fight Club outside','Fight stage','Fight Club floor','K.O. Lounge'],screens:['Fight Club main','Fight Club cam','Fight Club chat','Fight Club commands','Bracket board','Fight Club door screen','Versus TV 1','Versus TV 2','Versus TV 3']},
     {k:'bit',n:'B.I.T.',c:'#9a5aff',shots:['B.I.T. outside','Giant CRT','CRT stations','B.I.T. floor','Y2K Lounge'],screens:['B.I.T. giant CRT','CRT 1','CRT 2','CRT 3','B.I.T. door screen','B.I.T. cam','B.I.T. chat','B.I.T. commands']}];
-  const SHORT={'Fight Club outside':'Outside','B.I.T. outside':'Outside','Club outside':'Outside','Fight Club floor':'Floor','B.I.T. floor':'Floor','Club floor':'Floor','Zero Cool':'Entrance',
+  const SHORT={'Street walk':'Walk the city','Follow player':'Follow a player','Fight Club outside':'Outside','B.I.T. outside':'Outside','Club outside':'Outside','Fight Club floor':'Floor','B.I.T. floor':'Floor','Club floor':'Floor','Zero Cool':'Entrance',
     'Tower gameplay':'Gameplay','Tower cam':'Cam','Tower chat':'Chat','Tower commands':'Commands','Zero Cool main':'Main screen','Zero Cool cam':'Cam','Zero Cool chat':'Chat','Zero Cool commands':'Commands',
     'Fight Club main':'Main screen','Fight Club cam':'Cam','Fight Club chat':'Chat','Fight Club commands':'Commands','Fight Club door screen':'Door screen','B.I.T. giant CRT':'Giant CRT','B.I.T. door screen':'Door screen','B.I.T. cam':'Cam','B.I.T. chat':'Chat','B.I.T. commands':'Commands'};
   let sel=null;try{sel=localStorage.getItem('lsc_place');}catch(e){}
   const shotBtns=()=>[...$('shots').querySelectorAll('button')].map(b=>({b,l:b.textContent.replace(/^\d+\s+/,'')}));
+  const S0=()=>shotBtns();
   const scrBtns=()=>[...$('focusBtns').querySelectorAll('button')].map(b=>({b,l:b.textContent}));
   function lists(){const S=shotBtns(),F=scrBtns();const used=new Set();
+    S.filter(x=>x.l==='Orbit').forEach(x=>used.add(x.b));
     const out=PLACES.map(p=>{const sh=p.shots.map(l=>S.find(x=>x.l===l)).filter(Boolean),sc=p.screens.map(l=>F.find(x=>x.l===l)).filter(Boolean);sh.concat(sc).forEach(x=>used.add(x.b));return {...p,sh,sc};});
     const more={k:'more',n:'More',c:'#5a5a7a',sh:S.filter(x=>!used.has(x.b)),sc:F.filter(x=>!used.has(x.b))};if(more.sh.length||more.sc.length)out.push(more);return out;}
   function render(){const L=lists();if(!L.some(p=>p.sh.length||p.sc.length))return;
@@ -1682,12 +1801,14 @@ if (window.LSC_CONTROL) {
     const chip=(x,kind,i)=>`<button data-${kind}="${i}" class="${x.b.classList.contains('on')?'on':''}">${SHORT[x.l]||x.l}</button>`;
     setH('placeDetail',(P.sh.length?`<h4>Camera views</h4><div class="chips">${P.sh.map((x,i)=>chip(x,'v',i)).join('')}</div>`:'')+(P.sc.length?`<h4>Zoom to a screen</h4><div class="chips">${P.sc.map((x,i)=>chip(x,'s',i)).join('')}</div>`:''));
     const on=[...shotBtns(),...scrBtns()].find(x=>x.b.classList.contains('on'));const tour=$('tour').classList.contains('on');
+    const ob=S0().find(x=>x.l==='Orbit');$('orbitBig').classList.toggle('on',!!(ob&&ob.b.classList.contains('on')));
     $('tourBig').classList.toggle('on',tour);$('tourBig').textContent=tour?'Auto tour: ON':'Auto tour: OFF';
     $('nowShow').textContent=tour?'The camera is touring the city on its own.':on?'On stream now: '+on.l:'Pick a place below.';
     $('placeDetail').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.v!==undefined)P.sh[+b.dataset.v].b.click();else P.sc[+b.dataset.s].b.click();setTimeout(render,200);};}
   $('placeTiles').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel=b.dataset.p;try{localStorage.setItem('lsc_place',sel);}catch(err){}
     const P=lists().find(p=>p.k===sel);if(P&&P.sh[0])P.sh[0].b.click();render();setTimeout(render,200);};
   $('tourBig').onclick=()=>{$('tour').click();setTimeout(render,200);};
+  $('orbitBig').onclick=()=>{const ob=shotBtns().find(x=>x.l==='Orbit');if(ob)ob.b.click();setTimeout(render,200);};
   // tabs
   document.querySelector('#panel .tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.tab;
     document.querySelectorAll('#panel .tabs button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('#panel section[data-tab]').forEach(sec=>sec.hidden=sec.dataset.tab!==k);};
