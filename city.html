@@ -575,7 +575,7 @@ function drawChat() {
 const streams = {};
 const segs = {};
 function camTexture(screenName, v) {           // live cam gets the Lucid State City background (person cut out); everything else is plain video
-  if (screenName === 'SCREEN_LIVECAM' && camBgOn()) { const st = makeSegCam(v, () => { if (st.tex) st.tex.needsUpdate = true; }); st.tex = new THREE.CanvasTexture(st.canvas); segs[screenName] = st; return st.tex; }
+  if (screenName === 'SCREEN_LIVECAM' && camBgOn()) { const st = makeSegCam(v, () => { if (segs[screenName] && segs[screenName].tex) segs[screenName].tex.needsUpdate = true; }); st.tex = new THREE.CanvasTexture(st.canvas); segs[screenName] = st; return st.tex; }
   return new THREE.VideoTexture(v);
 }
 async function setVideo(screenName, deviceId) {
@@ -1846,7 +1846,7 @@ function makeSegCam(video, onFrame) {
   const m = document.createElement('canvas'); m.width = c.width; m.height = c.height; const mx = m.getContext('2d');
   const st = { canvas: c, alive: true, seg: null, busy: false };
   const bg = () => { if (CAMBG.img.naturalWidth) drawCover(x, CAMBG.img, c.width, c.height); else { x.fillStyle = '#07040f'; x.fillRect(0, 0, c.width, c.height); } };
-  bg(); onFrame && onFrame();                                   // background right away, so the room never flashes on stream
+  bg(); setTimeout(() => { st.alive && onFrame && onFrame(); }, 0);    // background right away, so the room never flashes on stream
   loadSegLib().then(() => {
     if (!st.alive) return;
     const seg = new window.SelfieSegmentation({ locateFile: f => SEG_CDN + f }); st.seg = seg;
