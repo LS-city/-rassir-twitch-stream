@@ -1857,7 +1857,22 @@ function makeSegCam(video, onFrame) {
       mx.save(); mx.globalCompositeOperation = 'source-in'; mx.drawImage(r.image, 0, 0, w, h); mx.restore();
       bg(); x.drawImage(m, 0, 0); onFrame && onFrame();
     });
-    const tick = async () => { if (!st.alive) return; if (!st.busy && video.readyState >= 2) { st.busy = true; try { await seg.send({ image: video }); } catch (e) {} st.busy = false; } setTimeout(tick, 33); };
+    const pre = document.createElement('canvas'); pre.width = c.width; pre.height = c.height; const px = pre.getContext('2d', { willReadFrequently: true });
+    const probe = document.createElement('canvas'); probe.width = 32; probe.height = 18; const pb = probe.getContext('2d', { willReadFrequently: true });
+    let gain = 1, n = 0;
+    const tick = async () => {                                   // auto-brighten a dark room so the cutout can still find you
+      if (!st.alive) return;
+      if (!st.busy && video.readyState >= 2) {
+        st.busy = true;
+        try {
+          if (n++ % 15 === 0) { pb.drawImage(video, 0, 0, 32, 18); const d = pb.getImageData(0, 0, 32, 18).data; let L = 0; for (let i = 0; i < d.length; i += 4) L += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; L /= d.length / 4 * 255; gain = Math.min(4, Math.max(1, 0.42 / Math.max(L, 0.02))); }
+          px.filter = gain > 1.05 ? 'brightness(' + gain.toFixed(2) + ') contrast(1.08)' : 'none'; px.drawImage(video, 0, 0, pre.width, pre.height);
+          await seg.send({ image: pre });
+        } catch (e) {}
+        st.busy = false;
+      }
+      setTimeout(tick, 33);
+    };
     tick();
   }).catch(() => {                                              // no internet for the model: show the plain webcam instead of a frozen picture
     const loop = () => { if (!st.alive) return; x.drawImage(video, 0, 0, c.width, c.height); onFrame && onFrame(); setTimeout(loop, 33); }; loop();
