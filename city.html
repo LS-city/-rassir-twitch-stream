@@ -31,6 +31,7 @@ button{cursor:pointer;flex:1 1 auto}
 button:hover{border-color:var(--pink)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
 button.on{background:var(--pink);border-color:var(--pink);color:#fff}
 #focusBtns button{font-size:13px;padding:6px 8px}
+#chatState .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#5a5a7a;margin-right:4px;vertical-align:middle}#chatState.on .dot{background:#3aff8a;box-shadow:0 0 8px #3aff8a}#chatState.wait .dot{background:#ffd23a}#chatState.err .dot{background:#ff3b5a}
 .tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:12px 0 4px;position:sticky;top:-14px;z-index:2;background:rgba(9,6,20,.97);padding:6px 0}
 .tabs button{font-size:12px;padding:6px 1px;min-height:34px}
 .chrow{display:flex;gap:8px;align-items:center;justify-content:space-between;border-bottom:1px solid #2c2050;padding:6px 0;font-size:13px}.chrow button{flex:none;min-height:30px;padding:2px 10px}.chrow i{color:var(--dim)}
@@ -171,6 +172,7 @@ canvas#c.pick{cursor:pointer}
   </section>
   <section data-tab="setup" hidden>  <h3>Twitch chat</h3>
   <div class="row"><input id="chan" placeholder="your channel name" autocomplete="off"><button id="chanGo">Connect</button></div>
+  <p class="note" id="chatState" style="margin-top:6px"><span class="dot"></span> Chat not connected</p>
 
   <h3>Viewer commands (test)</h3>
   <div class="row" id="cmdbtns"></div>
@@ -1125,30 +1127,37 @@ $('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) { con
 
 // ---------------------------------------------------------------- Twitch chat (read-only, anonymous)
 let ws = null, chanName = '', reconnectTimer = 0;
+let chatState = 'off', chatMsgs = 0;
+function showChatState(st, chan, msgs) {
+  const el = $('chatState'); if (!el) return; el.className = 'note ' + ({ on: 'on', connecting: 'wait', reconnecting: 'wait', error: 'err' }[st] || '');
+  el.innerHTML = '<span class="dot"></span> ' + ({ on: `Connected to #${chan}${msgs ? ` · ${msgs} chat message${msgs === 1 ? '' : 's'} received` : ' · waiting for chat messages'}`, connecting: `Connecting to #${chan}…`, reconnecting: `Reconnecting to #${chan}…`, error: `Couldn't reach Twitch chat for #${chan}. Retrying…` }[st] || 'Chat not connected');
+}
+function setChatState(st) { chatState = st; showChatState(st, chanName, chatMsgs); postState(); }
 function connectChat(name) {
   chanName = (name || '').trim().toLowerCase().replace(/^#/, '');
   clearTimeout(reconnectTimer);
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} ws = null; }
-  if (!chanName) { setStatus('Chat disconnected.'); return; }
-  store.set('chan', chanName);
-  setStatus('Connecting to #' + chanName + '…');
+  if (!chanName) { setStatus('Chat disconnected.'); setChatState('off'); return; }
+  store.set('chan', chanName); chatMsgs = 0;
+  setStatus('Connecting to #' + chanName + '…'); setChatState('connecting');
   try { ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443'); } catch (e) { setStatus('Chat can\'t connect from this preview. It works in OBS or a normal browser.'); return; }
   const me = ws;
   ws.onopen = () => { me.send('CAP REQ :twitch.tv/tags twitch.tv/commands'); me.send('PASS SCHMOOPIIE'); me.send('NICK justinfan' + (10000 + Math.random() * 80000 | 0)); me.send('JOIN #' + chanName); };
   ws.onmessage = e => String(e.data).split('\r\n').forEach(handleLine);
-  ws.onerror = () => setStatus('Chat can\'t connect from this preview. It works in OBS or a normal browser.');
-  ws.onclose = () => { if (ws !== me) return; reconnectTimer = setTimeout(() => connectChat(chanName), 4000); };
+  ws.onerror = () => { if (ws === me) setChatState('error'); };
+  ws.onclose = () => { if (ws !== me) return; if (chatState === 'on') setChatState('reconnecting'); reconnectTimer = setTimeout(() => connectChat(chanName), 4000); };
   drawChat && chatCanvas && drawChat();
 }
 function handleLine(line) {
   if (!line) return;
   if (line.startsWith('PING')) { ws && ws.send('PONG :tmi.twitch.tv'); return; }
-  if (/ 366 /.test(line)) setStatus('Connected to #' + chanName + ' chat.');
+  if (/ 366 /.test(line)) { setStatus('Connected to #' + chanName + ' chat.'); setChatState('on'); }
+  if (/ NOTICE .*(does not exist|suspended|banned)/i.test(line)) { setStatus('Twitch says #' + chanName + ' does not exist or is unavailable. Check the spelling.'); setChatState('error'); }
   const m = /^(?:@([^ ]*) )?:([^!]+)![^ ]* PRIVMSG #[^ ]+ :(.*)$/.exec(line); if (!m) return;
   const tags = {}; (m[1] || '').split(';').forEach(kv => { const i = kv.indexOf('='); tags[kv.slice(0, i)] = kv.slice(i + 1); });
   const user = tags['display-name'] || m[2], color = tags.color || '#ff2d8f', text = m[3];
   chatLines.push({ user, color, text }); if (chatLines.length > 40) chatLines.shift();
-  chatCount[user] = (chatCount[user] || 0) + 1;
+  chatCount[user] = (chatCount[user] || 0) + 1; chatMsgs++; if (chatMsgs <= 3 || chatMsgs % 10 === 0) showChatState(chatState, chanName, chatMsgs);
   chatCanvas && drawChat();
   const cmd = text.trim().split(/\s+/)[0].toLowerCase();
   if (cmd.startsWith('!')) runCommand(cmd, user, color);
@@ -1916,7 +1925,7 @@ function postState() {
       focus: FOCUS.filter(([, n]) => meshByName(n)), focused: focused ? focused.name : '',
       commands: COMMANDS.map(c => c[0]), ads: Object.keys(adSlots).sort(),
       cams: [...$('srcGame').options].map(o => ({ v: o.value, t: o.text })), camsCam: [...$('srcCam').options].map(o => ({ v: o.value, t: o.text })), srcGame: $('srcGame').value, srcCam: $('srcCam').value,
-      chan: chanName, status: $('status').textContent,
+      chan: chanName, chatState, chatMsgs, status: $('status').textContent,
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
       show: SHOW.mode, showLen: SHOW.len, gpip: gpipMode, champs, adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
@@ -1990,7 +1999,9 @@ if (window.LSC_CONTROL) {
     $('tour').classList.toggle('on', st.tour);
     $('focusBtns').innerHTML = st.focus.map(([l, n]) => `<button data-n="${n}" class="${n === st.focused ? 'on' : ''}">${esc(l)}</button>`).join('');
     $('cmdbtns').innerHTML = st.commands.map(c => `<button data-c="${c}">${c}</button>`).join('');
-    if (document.activeElement !== $('chan')) $('chan').value = st.chan || '';
+    if (document.activeElement !== $('chan') && !chanDirty) $('chan').value = st.chan || '';
+    if (st.chatState !== undefined) { const el = $('chatState'); el.className = 'note ' + ({ on: 'on', connecting: 'wait', reconnecting: 'wait', error: 'err' }[st.chatState] || '');
+      el.innerHTML = '<span class="dot"></span> ' + ({ on: `Connected to #${esc(st.chan)}${st.chatMsgs ? ` · ${st.chatMsgs} chat message${st.chatMsgs === 1 ? '' : 's'} received` : ' · waiting for chat messages'}`, connecting: `Connecting to #${esc(st.chan)}…`, reconnecting: `Reconnecting to #${esc(st.chan)}…`, error: `Couldn't reach Twitch chat for #${esc(st.chan)}. Retrying…` }[st.chatState] || 'Chat not connected'); }
     ['srcGame', 'srcCam'].forEach(id => { const sel = $(id);
       sel.innerHTML = ((id === 'srcCam' && st.camsCam) ? st.camsCam : st.cams).map(o => `<option value="${esc(o.v)}">${esc(o.t)}</option>`).join('') || '<option value="">Placeholder</option>';
       sel.value = id === 'srcGame' ? st.srcGame : st.srcCam; });
@@ -2026,8 +2037,10 @@ if (window.LSC_CONTROL) {
   $('tour').onclick = () => send('tour', { on: !(st && st.tour) });
   $('focusBtns').onclick = e => { const b = e.target.closest('button'); if (b) send('focus', { n: b.dataset.n }); };
   $('cmdbtns').onclick = e => { const b = e.target.closest('button'); if (b) send('run', { c: b.dataset.c }); };
-  $('chanGo').onclick = () => send('chan', { name: $('chan').value });
-  $('chan').addEventListener('keydown', e => { if (e.key === 'Enter') send('chan', { name: $('chan').value }); });
+  let chanDirty = false; $('chan').addEventListener('input', () => { chanDirty = true; });
+  const chanSend = () => { const v = $('chan').value.trim(); chanDirty = false; send('chan', { name: v }); $('chatState').className = 'note wait'; $('chatState').innerHTML = '<span class="dot"></span> ' + (v ? 'Connecting to #' + esc(v.toLowerCase().replace(/^#/, '')) + '…' : 'Disconnecting…'); };
+  $('chanGo').onclick = chanSend;
+  $('chan').addEventListener('keydown', e => { if (e.key === 'Enter') chanSend(); });
   $('srcGame').onchange = e => send('src', { id: 'srcGame', v: e.target.value });
   $('srcCam').onchange = e => send('src', { id: 'srcCam', v: e.target.value });
   $('findCams').onclick = () => send('findcams');
