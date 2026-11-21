@@ -105,7 +105,7 @@ canvas#c.pick{cursor:pointer}
   <p class="note">Live stream world. Press <b>H</b> to hide this panel before going live.</p>
 
   <div id="status"></div>
-  <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="trophy">Trophies</button><button data-tab="setup">Setup</button></div>
+  <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="alerts">Alerts</button><button data-tab="trophy">Trophies</button><button data-tab="setup">Setup</button></div>
   <section data-tab="places">
     <div class="row"><button id="tourBig" class="big">Auto tour</button><button id="orbitBig" class="big">Orbit</button></div>
     <p class="note" id="nowShow" style="margin-top:6px"></p>
@@ -157,6 +157,23 @@ canvas#c.pick{cursor:pointer}
   <label class="note" for="pipPos">Avatar on the gameplay screens (seen while you play)</label>
   <div class="row" style="flex-wrap:nowrap"><select id="pipPos" style="flex:2"><option value="off">Off</option><option value="br">Bottom right</option><option value="bl">Bottom left</option></select><select id="pipSize" style="flex:1"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option></select></div>
 
+  </section>
+  <section data-tab="alerts" hidden>
+    <h3>Stream alerts</h3>
+    <p class="note" id="alTw">Twitch link: checking...</p>
+    <div class="row" style="margin-top:6px"><button id="alLogin">Log in with Twitch</button></div>
+    <p class="note" style="margin-top:6px">Subs, gift subs, bits, raids, first-time chatters and watch streaks come through chat. Follows, channel points and hype trains also need the Twitch login (same login as the Rooftop Arena).</p>
+    <h3>Test an alert</h3>
+    <div id="alTests" class="chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    <h3>Show these alerts</h3>
+    <div id="alOn" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px"></div>
+    <h3>Look and sound</h3>
+    <div class="row" style="flex-wrap:nowrap"><select id="alPos" title="Where the pop-up shows"><option value="tc">Top center</option><option value="c">Center</option><option value="tl">Top left</option><option value="tr">Top right</option><option value="bl">Bottom left</option><option value="br">Bottom right</option></select><select id="alDur" title="How long it stays"><option value="5">5 s</option><option value="7">7 s</option><option value="10">10 s</option><option value="15">15 s</option></select></div>
+    <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><label class="note" style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="alSound" style="width:18px;min-height:18px"> Alert sound</label><input type="range" id="alVol" min="0" max="100" style="flex:1;min-height:30px;padding:0"></div>
+    <label class="note" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="alScreens" style="width:18px;min-height:18px"> Also flash the alert on the chat screens in the city</label>
+    <h3>Recent alerts <span class="note" style="font-weight:500">(click to replay)</span></h3>
+    <div id="alList"></div>
+    <div class="row" style="margin-top:6px"><button id="alClear">Clear list</button></div>
   </section>
   <section data-tab="trophy" hidden>
     <h3>Hall of Champions (Fight Club)</h3>
@@ -211,6 +228,222 @@ const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('lscCity') : nu
 const setStatus = t => { $('status').textContent = t; if (bc) try { bc.postMessage({ cmd: 'status', data: { msg: t } }); } catch (e) {} };
 let toastT = 0;
 function toast(t) { const el = $('toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = 0, 3200); }
+// ---------- ALERT POP-UP: big animated on-stream alert card (follows, subs, bits, raids, ...) ----------
+const ALPOP = (() => {
+  const TYPES = {
+    follow: { t: 'NEW FOLLOWER', i: '♥', c: '#ff2d8f', c2: '#ff9ae0', n: [784, 988, 1319] },
+    sub:    { t: 'NEW SUB', i: '★', c: '#a05aff', c2: '#e0c4ff', n: [659, 831, 988, 1319] },
+    resub:  { t: 'RESUB', i: '★', c: '#8a6bff', c2: '#d6ccff', n: [659, 831, 988, 1319] },
+    gift:   { t: 'GIFT SUBS', i: '🎁', c: '#ff4fd8', c2: '#ffd0f6', n: [523, 659, 784, 1047, 1319] },
+    bits:   { t: 'BITS', i: '◆', c: '#38e8ff', c2: '#c8f8ff', n: [1047, 1319, 1568] },
+    raid:   { t: 'RAID!', i: '⚔', c: '#ffb02e', c2: '#ffe7b0', n: [392, 523, 659, 784, 1047] },
+    redeem: { t: 'REDEEMED', i: '✦', c: '#3fffd0', c2: '#c8fff0', n: [880, 1175] },
+    hype:   { t: 'HYPE TRAIN!', i: '🚂', c: '#ff5a2e', c2: '#ffd0b0', n: [523, 659, 784, 1047, 1319, 1568] },
+    first:  { t: 'FIRST TIME IN CHAT', i: '👋', c: '#9dff3a', c2: '#e2ffc4', n: [880, 1109] },
+    streak: { t: 'WATCH STREAK', i: '🔥', c: '#ff8a1a', c2: '#ffd9a8', n: [740, 988, 1245] },
+    shout:  { t: 'SHOUTOUT', i: '📣', c: '#22e6ff', c2: '#c8f8ff', n: [784, 1047] },
+    other:  { t: 'ALERT', i: '⚡', c: '#ffd23a', c2: '#fff1a8', n: [784, 1047] } };
+  const css = `
+#alp{position:fixed;z-index:9;display:none;pointer-events:none;width:44vw;font-family:Anton,Impact,"Arial Black",sans-serif;--c:#ff2d8f;--c2:#ff9ae0}
+#alp.p-tc{left:50%;top:5%;transform:translateX(-50%)}#alp.p-c{left:50%;top:50%;transform:translate(-50%,-50%)}
+#alp.p-tl{left:2.5%;top:5%}#alp.p-bl{left:2.5%;bottom:6%}#alp.p-br{right:2.5%;bottom:6%}#alp.p-tr{right:2.5%;top:5%}
+#alp .rays{position:absolute;left:50%;top:50%;width:160%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;opacity:0;
+  background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--c) 55%,transparent) 0deg 7deg,transparent 7deg 22deg);
+  -webkit-mask:radial-gradient(circle,#000 8%,transparent 62%);mask:radial-gradient(circle,#000 8%,transparent 62%)}
+#alp.show .rays{animation:alpRays 7s linear infinite,alpFadeIn .6s .15s forwards}
+#alp .card{position:relative;padding:1.1vw 2vw 1.4vw;border-radius:1.2vw;text-align:center;overflow:hidden;
+  background:linear-gradient(160deg,rgba(16,6,34,.95),rgba(6,4,16,.95));border:.28vw solid var(--c);
+  box-shadow:0 0 1.6vw var(--c),0 0 4vw color-mix(in srgb,var(--c) 45%,transparent),inset 0 0 2vw color-mix(in srgb,var(--c) 30%,transparent)}
+#alp .card::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 2px,transparent 2px 5px);pointer-events:none}
+#alp .shine{position:absolute;top:-20%;bottom:-20%;width:30%;left:-40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-18deg)}
+#alp.show .shine{animation:alpShine 1.5s .5s ease-out 2}
+#alp .ic{font-size:4.4vw;line-height:1.1;color:var(--c2);text-shadow:0 0 1vw var(--c),0 0 2.4vw var(--c);display:inline-block}
+#alp.show .ic{animation:alpPop .7s cubic-bezier(.2,1.6,.4,1) both,alpBeat 1s .8s ease-in-out infinite}
+#alp .tt{font-size:2.5vw;letter-spacing:.25vw;color:var(--c2);text-shadow:0 0 .8vw var(--c);margin-top:.2vw}
+#alp.show .tt{animation:alpGlitch .55s steps(5) .1s both}
+#alp .nm{font-size:4vw;line-height:1.05;color:#fff;text-shadow:0 0 .6vw #fff,0 0 1.6vw var(--c),0 0 3vw var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#alp.show .nm{animation:alpName .8s cubic-bezier(.2,1.4,.4,1) .2s both}
+#alp .ms{font:600 1.35vw/1.35 Poppins,"Segoe UI",Arial,sans-serif;color:#ecebff;margin-top:.5vw;max-height:3.8vw;overflow:hidden}
+#alp.show .ms{animation:alpFadeIn .6s .55s both}
+#alp .bar{height:.35vw;margin-top:1vw;background:rgba(255,255,255,.12);border-radius:.2vw;overflow:hidden}#alp .bar i{display:block;height:100%;background:var(--c);box-shadow:0 0 .6vw var(--c);transform-origin:left}
+#alp.show .card{animation:alpIn .75s cubic-bezier(.2,1.3,.35,1) both,alpGlow 1.4s .75s ease-in-out infinite alternate}
+#alp.out .card,#alp.out .rays{animation:alpOut .55s ease-in forwards}
+#alp .cf{position:absolute;left:50%;top:40%;width:.7vw;height:1.1vw;border-radius:.15vw;opacity:0}
+#alp.show .cf{animation:alpConf var(--d) cubic-bezier(.15,.6,.4,1) var(--w) forwards}
+@keyframes alpIn{0%{transform:scale(.2) rotate(-8deg);opacity:0;filter:brightness(3)}60%{transform:scale(1.08) rotate(1deg);opacity:1}100%{transform:none;filter:none}}
+@keyframes alpOut{to{transform:translateY(-30%) scale(.85);opacity:0}}
+@keyframes alpGlow{from{box-shadow:0 0 1.2vw var(--c),0 0 3vw color-mix(in srgb,var(--c) 40%,transparent)}to{box-shadow:0 0 2.2vw var(--c),0 0 6vw color-mix(in srgb,var(--c) 70%,transparent)}}
+@keyframes alpRays{from{transform:translate(-50%,-50%) rotate(0)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes alpFadeIn{from{opacity:0;transform:translateY(.6vw)}to{opacity:1}}
+#alp.show .rays{animation:alpRays 7s linear infinite,alpRaysIn .6s .15s forwards}@keyframes alpRaysIn{to{opacity:.9}}
+@keyframes alpShine{from{left:-40%}to{left:120%}}
+@keyframes alpPop{0%{transform:scale(0) rotate(-40deg)}100%{transform:none}}
+@keyframes alpBeat{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+@keyframes alpName{0%{transform:scale(2.2);opacity:0;letter-spacing:1vw}100%{transform:none;opacity:1}}
+@keyframes alpGlitch{0%{transform:translateX(-.6vw);opacity:0;clip-path:inset(0 0 60% 0)}25%{transform:translateX(.5vw);clip-path:inset(40% 0 0 0)}50%{transform:translateX(-.3vw);clip-path:inset(0 0 20% 0);opacity:1}75%{transform:translateX(.2vw);clip-path:inset(10% 0 0 0)}100%{transform:none;clip-path:none;opacity:1}}
+@keyframes alpConf{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r))}}`;
+  let el = null, q = [], busy = false, ac = null, timer = 0;
+  function build() {
+    if (el) return el;
+    const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+    el = document.createElement('div'); el.id = 'alp';
+    el.innerHTML = '<div class="rays"></div><div class="card"><div class="shine"></div><div class="ic"></div><div class="tt"></div><div class="nm"></div><div class="ms"></div><div class="bar"><i></i></div></div>';
+    document.body.appendChild(el); return el;
+  }
+  function chime(T, vol) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume();
+      const t0 = ac.currentTime + 0.02, out = ac.createGain(); out.gain.value = Math.max(0, Math.min(1, vol)) * 0.5; out.connect(ac.destination);
+      T.n.forEach((f, i) => { [1, 2].forEach(h => { const o = ac.createOscillator(), g = ac.createGain(); o.type = h === 1 ? 'triangle' : 'sine'; o.frequency.value = f * h;
+        const t = t0 + i * 0.09; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(h === 1 ? 0.5 : 0.12, t + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t + 1); }); });
+      const n = ac.createBufferSource(), b = ac.createBuffer(1, ac.sampleRate * 0.4, ac.sampleRate), d = b.getChannelData(0);   // little sparkle swoosh
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3) * 0.25;
+      const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4000; n.buffer = b; n.connect(hp); hp.connect(out); n.start(t0);
+    } catch (e) {}
+  }
+  function next() {
+    if (busy || !q.length) return; busy = true;
+    const a = q.shift(), T = TYPES[a.k] || TYPES.other, e = build(), dur = Math.max(3, a.dur || 7);
+    e.style.setProperty('--c', T.c); e.style.setProperty('--c2', T.c2);
+    e.className = 'p-' + (a.pos || 'tc');
+    e.querySelector('.ic').textContent = T.i; e.querySelector('.tt').textContent = a.title || T.t;
+    e.querySelector('.nm').textContent = a.name || ''; e.querySelector('.ms').textContent = a.msg || '';
+    e.querySelector('.ms').style.display = a.msg ? '' : 'none';
+    e.querySelectorAll('.cf').forEach(x => x.remove());
+    const cols = [T.c, T.c2, '#ffffff', '#ffd23a', '#38e8ff', '#ff2d8f'];
+    for (let i = 0; i < 46; i++) { const c = document.createElement('i'); c.className = 'cf'; const ang = Math.random() * Math.PI * 2, r = 14 + Math.random() * 26;
+      c.style.cssText = `background:${cols[i % cols.length]};--x:${(Math.cos(ang) * r).toFixed(1)}vw;--y:${(Math.sin(ang) * r * 0.7 + 8).toFixed(1)}vw;--r:${(Math.random() * 900 - 450) | 0}deg;--d:${(1.4 + Math.random() * 1.4).toFixed(2)}s;--w:${(Math.random() * 0.35).toFixed(2)}s`;
+      e.appendChild(c); }
+    const bar = e.querySelector('.bar i'); bar.style.transition = 'none'; bar.style.transform = 'scaleX(1)';
+    e.style.display = 'block'; void e.offsetWidth; e.classList.add('show');
+    requestAnimationFrame(() => { bar.style.transition = `transform ${dur}s linear`; bar.style.transform = 'scaleX(0)'; });
+    if (a.sound !== false) chime(T, a.vol == null ? 0.6 : a.vol);
+    clearTimeout(timer);
+    timer = setTimeout(() => { e.classList.add('out'); setTimeout(() => { e.style.display = 'none'; e.className = ''; busy = false; setTimeout(next, 500); }, 560); }, dur * 1000);
+  }
+  return { TYPES, show(a) { q.push(a); if (q.length > 25) q.splice(0, q.length - 25); next(); }, get busy() { return busy; }, get queued() { return q.length; } };
+})();
+// ---------------------------------------------------------------- STREAM ALERTS (follows, subs, gift subs, bits, raids, channel points, hype train, first-time chatters, watch streaks)
+const AL_KINDS = ['follow', 'sub', 'gift', 'bits', 'raid', 'redeem', 'hype', 'first', 'streak'];
+const AL = { cfg: Object.assign({ on: {}, pos: 'tc', dur: 7, sound: true, vol: 0.6, screens: true }, store.get('alcfg', {})), recent: store.get('alrecent', []), seen: {}, giftHold: {},
+  cur: null, tok: '', cid: '', user: null, ws: null, tw: 'Not linked: follows, channel points and hype trains need the Twitch login.', twOk: false, subsOk: {} };
+AL_KINDS.forEach(k => { if (AL.cfg.on[k] === undefined) AL.cfg.on[k] = true; });
+if (!Array.isArray(AL.recent)) AL.recent = [];
+const alSave = () => { store.set('alcfg', AL.cfg); };
+function fireAlert(k, name, msg, opt) {
+  opt = opt || {};
+  const kk = k === 'resub' ? 'sub' : k;
+  if (!opt.test && AL.cfg.on[kk] === false) return;
+  const key = k + ':' + String(name || '').toLowerCase() + ':' + (opt.key || '');
+  if (!opt.test && !opt.replay && AL.seen[key] && Date.now() - AL.seen[key] < 20000) return;      // chat and EventSub can both report the same raid
+  AL.seen[key] = Date.now();
+  const T = ALPOP.TYPES[k] || ALPOP.TYPES.other;
+  if (!opt.replay) { AL.recent.unshift({ k, name: name || '', msg: msg || '', title: opt.title || '', t: Date.now(), test: !!opt.test }); AL.recent = AL.recent.slice(0, 15); store.set('alrecent', AL.recent); }
+  ALPOP.show({ k, title: opt.title || T.t, name: name || '', msg: msg || '', dur: AL.cfg.dur, pos: AL.cfg.pos, sound: AL.cfg.sound, vol: AL.cfg.vol });
+  if (AL.cfg.screens) AL.screenQ.push({ k, title: opt.title || T.t, name: name || '', msg: msg || '' });
+  postState();
+}
+AL.screenQ = [];
+setInterval(() => {                                                // the city's chat screens light up with each alert too
+  const nowMs = Date.now();
+  if (AL.cur && nowMs > AL.cur.until) { AL.cur = null; chatCanvas && drawChat(); }
+  if (!AL.cur && AL.screenQ.length) { AL.cur = Object.assign(AL.screenQ.shift(), { from: nowMs, until: nowMs + AL.cfg.dur * 1000 + 600 }); }
+  if (AL.cur && chatCanvas) drawChat();
+}, 90);
+function drawAlertCard(x, w, h) {
+  const a = AL.cur, T = ALPOP.TYPES[a.k] || ALPOP.TYPES.other, t = (Date.now() - a.from) / 1000, pulse = 0.5 + 0.5 * Math.sin(t * 8);
+  const g = x.createRadialGradient(w / 2, h / 2, 40, w / 2, h / 2, w * 0.7); g.addColorStop(0, '#2a0f45'); g.addColorStop(1, '#05030c'); x.fillStyle = g; x.fillRect(0, 0, w, h);
+  x.save(); x.translate(w / 2, h / 2 - 40); x.rotate(t * 0.4); x.globalAlpha = 0.22;
+  for (let i = 0; i < 18; i++) { x.rotate(Math.PI / 9); x.fillStyle = T.c; x.beginPath(); x.moveTo(0, 0); x.lineTo(900, -60); x.lineTo(900, 60); x.closePath(); x.fill(); }
+  x.restore();
+  const k = Math.min(1, t / 0.45), s = 1 + (1 - k) * 0.8 + (k === 1 ? 0 : 0);
+  x.save(); x.translate(w / 2, 0); x.scale(s, s); x.textAlign = 'center';
+  x.shadowColor = T.c; x.shadowBlur = 30 + pulse * 30;
+  x.font = '120px "Segoe UI Emoji", "Apple Color Emoji", sans-serif'; x.fillStyle = T.c2; x.fillText(T.i, 0, 190);
+  x.font = '78px Anton, Impact, sans-serif'; x.fillStyle = T.c2; x.fillText(a.title, 0, 300);
+  x.font = '128px Anton, Impact, sans-serif'; x.fillStyle = '#fff'; let nm = a.name; while (x.measureText(nm).width > w * 0.88 && nm.length > 3) nm = nm.slice(0, -1); x.fillText(nm, 0, 450);
+  x.shadowBlur = 0; x.font = 'bold 40px Poppins, sans-serif'; x.fillStyle = '#ecebff';
+  let m = a.msg || ''; while (x.measureText(m).width > w * 0.86 && m.length > 3) m = m.slice(0, -2) + '…'; x.fillText(m, 0, 540);
+  x.restore();
+  const left = Math.max(0, 1 - (Date.now() - a.from) / (a.until - a.from)); x.fillStyle = 'rgba(255,255,255,.12)'; x.fillRect(80, 620, w - 160, 12); x.fillStyle = T.c; x.fillRect(80, 620, (w - 160) * left, 12);
+  x.lineWidth = 12 + pulse * 8; x.strokeStyle = T.c; x.shadowColor = T.c; x.shadowBlur = 40; x.strokeRect(10, 10, w - 20, h - 20); x.shadowBlur = 0;
+}
+// chat (IRC) side: subs, gift subs, bits, raids, first-time chatters, watch streaks
+const ircUnesc = s => String(s || '').replace(/\\s/g, ' ').replace(/\\:/g, ';').replace(/\\\\/g, '\\').replace(/\\r|\\n/g, '');
+function alertFromIrc(line) {
+  const m = /^(?:@([^ ]*) )?:[^ ]+ (USERNOTICE|PRIVMSG) #[^ ]+(?: :(.*))?$/.exec(line); if (!m) return;
+  const tags = {}; (m[1] || '').split(';').forEach(kv => { const i = kv.indexOf('='); if (i > 0) tags[kv.slice(0, i)] = ircUnesc(kv.slice(i + 1)); });
+  const who = tags['display-name'] || tags.login || 'Someone', text = (m[3] || '').trim();
+  if (m[2] === 'PRIVMSG') {
+    if (tags.bits) { const said = text.replace(/\b[a-z]+\d+\b/gi, '').trim(); fireAlert('bits', who, tags.bits + ' bits' + (said ? ': ' + said : ''), { title: tags.bits + ' BITS', key: tags.id }); }
+    else if (tags['first-msg'] === '1') fireAlert('first', who, text ? '"' + text + '"' : 'Welcome to the city!', { key: tags.id });
+    return;
+  }
+  const id = tags['msg-id'], n = +tags['msg-param-cumulative-months'] || +tags['msg-param-months'] || 0, tier = { '2000': 'Tier 2', '3000': 'Tier 3', Prime: 'Prime' }[tags['msg-param-sub-plan']] || '';
+  if (id === 'sub') fireAlert('sub', who, (tier ? tier + ' sub' : 'Just subscribed') + (text ? ': ' + text : '') , { key: tags.id });
+  else if (id === 'resub') fireAlert('resub', who, (n ? n + ' months' : 'Resubscribed') + (tier ? ' (' + tier + ')' : '') + (text ? ': ' + text : ''), { title: n ? 'RESUB x' + n : 'RESUB', key: tags.id });
+  else if (id === 'primepaidupgrade' || id === 'giftpaidupgrade' || id === 'anongiftpaidupgrade') fireAlert('sub', who, 'Kept the sub going!', { key: tags.id });
+  else if (id === 'submysterygift') { const c = +tags['msg-param-mass-gift-count'] || 1; AL.giftHold[who.toLowerCase()] = (AL.giftHold[who.toLowerCase()] || 0) + c;
+    fireAlert('gift', who, 'Gifted ' + c + ' sub' + (c === 1 ? '' : 's') + ' to the community!', { title: c + ' GIFT SUB' + (c === 1 ? '' : 'S'), key: tags.id }); }
+  else if (id === 'subgift' || id === 'anonsubgift') { const k = who.toLowerCase(); if (AL.giftHold[k] > 0) { AL.giftHold[k]--; return; }
+    fireAlert('gift', who, 'Gifted a sub to ' + (tags['msg-param-recipient-display-name'] || 'someone'), { title: 'GIFT SUB', key: tags.id }); }
+  else if (id === 'raid') { const v = +tags['msg-param-viewerCount'] || 0; fireAlert('raid', tags['msg-param-displayName'] || who, (v ? v + ' raiders' : 'Raiders') + ' incoming. Welcome to Lucid State City!'); }
+  else if (id === 'viewermilestone' && tags['msg-param-category'] === 'watch-streak') { const v = +tags['msg-param-value'] || 0; fireAlert('streak', who, (v ? v + ' streams in a row' : 'Watch streak') + (text ? ': ' + text : ''), { title: v ? v + ' STREAM STREAK' : 'WATCH STREAK', key: tags.id }); }
+}
+// Twitch account side (EventSub): follows, channel points, hype trains, raids. Uses the same Twitch login as the Rooftop Arena.
+const AL_CID = 'tydew0sk04o28ypn5y2kqlpmu7j5bv';
+const AL_SCOPES = 'moderator:read:followers channel:read:redemptions channel:read:hype_train channel:manage:broadcast clips:edit';
+const nhaGet = k => { try { const v = localStorage.getItem('nha_' + k); return v === null ? null : JSON.parse(v); } catch (e) { return null; } };
+function alSetTw(msg, ok) { AL.tw = msg; AL.twOk = !!ok; postState(); }
+function alOnEvent(type, ev) {
+  if (type === 'channel.follow') fireAlert('follow', ev.user_name || 'Someone', 'Welcome to Lucid State City!');
+  else if (type === 'channel.channel_points_custom_reward_redemption.add') { const r = (ev.reward && ev.reward.title) || 'Reward'; fireAlert('redeem', ev.user_name || 'Someone', r + (ev.user_input ? ': ' + ev.user_input : ''), { key: ev.id }); }
+  else if (type === 'channel.hype_train.begin') fireAlert('hype', 'LUCID STATE CITY', 'Level ' + (ev.level || 1) + ': keep it going!', { key: ev.id });
+  else if (type === 'channel.hype_train.end') fireAlert('hype', 'LUCID STATE CITY', 'Hype train reached level ' + (ev.level || '?') + '!', { title: 'HYPE TRAIN DONE', key: ev.id + 'end' });
+  else if (type === 'channel.raid') fireAlert('raid', ev.from_broadcaster_user_name || ev.from_broadcaster_user_login || 'Someone', (ev.viewers ? ev.viewers + ' raiders' : 'Raiders') + ' incoming. Welcome to Lucid State City!');
+}
+async function alLink(url) {
+  if (window.LSC_CONTROL) return;
+  const tok = nhaGet('twtoken') || '', cid = nhaGet('twcid') || AL_CID;
+  if (!tok) { try { AL.ws && AL.ws.close(); } catch (e) {} AL.ws = null; AL.tok = ''; alSetTw('Not linked: follows, channel points and hype trains need the Twitch login (Alerts tab).', false); return; }
+  if (!url && tok === AL.tok && AL.ws && AL.ws.readyState <= 1) return;
+  AL.tok = tok; AL.cid = /^[a-z0-9]{25,40}$/.test(cid) ? cid : AL_CID;
+  let u;
+  try { const r = await fetch('https://id.twitch.tv/oauth2/validate', { headers: { Authorization: 'OAuth ' + tok } });
+    if (r.status === 401) { alSetTw('Twitch login expired. Click "Log in with Twitch" in the Alerts tab.', false); return; } u = await r.json(); AL.user = u; }
+  catch (e) { alSetTw('Could not reach Twitch. Retrying soon.', false); return; }
+  try { if (AL.ws) { AL.ws.onclose = null; AL.ws.close(); } } catch (e) {}
+  const s = new WebSocket(url || 'wss://eventsub.wss.twitch.tv/ws'); AL.ws = s;
+  s.onmessage = async e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } const t = m.metadata && m.metadata.message_type;
+    if (t === 'session_welcome') { if (url) return; const sid = m.payload.session.id, id = u.user_id, bad = [];
+      for (const [ty, v, c] of [['channel.follow', '2', { broadcaster_user_id: id, moderator_user_id: id }], ['channel.channel_points_custom_reward_redemption.add', '1', { broadcaster_user_id: id }],
+        ['channel.hype_train.begin', '2', { broadcaster_user_id: id }], ['channel.hype_train.end', '2', { broadcaster_user_id: id }], ['channel.raid', '1', { to_broadcaster_user_id: id }]]) {
+        try { const r = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', { method: 'POST', headers: { 'Client-Id': AL.cid, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: ty, version: v, condition: c, transport: { method: 'websocket', session_id: sid } }) }); AL.subsOk[ty] = r.ok; if (!r.ok) bad.push(ty.replace('channel.', '').replace('channel_points_custom_reward_redemption.add', 'channel points') + ' (' + r.status + ')'); }
+        catch (x) { bad.push(ty); } }
+      alSetTw('Twitch linked as ' + u.login + (bad.length ? '. Not working: ' + bad.join(', ') : '. Follows, channel points, hype trains and raids are on.'), !bad.length); }
+    else if (t === 'notification') alOnEvent(m.payload.subscription.type, m.payload.event);
+    else if (t === 'session_reconnect') alLink(m.payload.session.reconnect_url);
+    else if (t === 'revocation') alSetTw('Twitch turned off an alert permission. Log in with Twitch again.', false); };
+  s.onclose = () => { if (AL.ws !== s) return; AL.ws = null; setTimeout(() => alLink(), 5000); };
+}
+setTimeout(() => alLink(), 2500);
+setInterval(() => { if (nhaGet('twtoken') !== AL.tok) alLink(); }, 30000);      // picks up a login done in the arena dock or this dock
+const AL_TESTS = {
+  follow: ['NeonRider', 'Welcome to Lucid State City!'], sub: ['PixelQueen', 'Just subscribed: love the city!'], gift: ['GiftGoblin', 'Gifted 5 subs to the community!', '5 GIFT SUBS'],
+  bits: ['ByteBandit', '500 bits: lets gooo', '500 BITS'], raid: ['CyberCrew', '42 raiders incoming. Welcome to Lucid State City!'], redeem: ['ChillViewer', 'Hydrate!'],
+  hype: ['LUCID STATE CITY', 'Level 1: keep it going!'], first: ['NewFace', '"yo this city is crazy"'], streak: ['LoyalLurker', '10 streams in a row', '10 STREAM STREAK'] };
+function alertCmd(cmd, d) {
+  d = d || {};
+  if (cmd === 'alerttest') { const T = AL_TESTS[d.k]; if (T) fireAlert(d.k, T[0], T[1], { test: true, title: T[2] }); }
+  else if (cmd === 'alertset') { ['pos', 'dur', 'sound', 'vol', 'screens'].forEach(k => { if (d[k] !== undefined) AL.cfg[k] = k === 'dur' || k === 'vol' ? +d[k] : d[k]; }); if (d.on) Object.assign(AL.cfg.on, d.on); alSave(); postState(); }
+  else if (cmd === 'alertreplay') { const a = AL.recent[d.i]; if (a) fireAlert(a.k, a.name, a.msg, { replay: true, test: true, title: a.title }); }
+  else if (cmd === 'alertclear') { AL.recent = []; store.set('alrecent', []); postState(); }
+  else if (cmd === 'twrelink') alLink();
+}
+const alState = () => ({ cfg: AL.cfg, recent: AL.recent.slice(0, 10), tw: AL.tw, twOk: AL.twOk, kinds: AL_KINDS });
+window.__alAct = alertCmd; window.__alIrc = alertFromIrc;
 // Blender (x,y,z) -> three (x, z, -y)
 const B = (x, y, z) => new THREE.Vector3(x, z, -y);
 
@@ -554,6 +787,7 @@ function drawCommands() {
 }
 function drawChat() {
   const x = chatCanvas.getContext('2d'), w = 1280, h = 720;
+  if (AL.cur && AL.cfg.screens) { drawAlertCard(x, w, h); chatTex.needsUpdate = true; return; }
   x.fillStyle = '#0a0716'; x.fillRect(0, 0, w, h);
   x.fillStyle = '#1a1033'; x.fillRect(0, 0, w, 96);
   x.font = '64px Anton, Impact, sans-serif'; x.fillStyle = '#b478ff'; x.textAlign = 'left'; x.fillText('CHAT', 36, 72);
@@ -1159,6 +1393,7 @@ function handleLine(line) {
   if (!line) return;
   if (line.startsWith('PING')) { ws && ws.send('PONG :tmi.twitch.tv'); return; }
   if (/ 366 /.test(line)) { setStatus('Connected to #' + chanName + ' chat.'); setChatState('on'); }
+  try { alertFromIrc(line); } catch (e) {}
   if (/ NOTICE .*(does not exist|suspended|banned)/i.test(line)) { setStatus('Twitch says #' + chanName + ' does not exist or is unavailable. Check the spelling.'); setChatState('error'); }
   const m = /^(?:@([^ ]*) )?:([^!]+)![^ ]* PRIVMSG #[^ ]+ :(.*)$/.exec(line); if (!m) return;
   const tags = {}; (m[1] || '').split(';').forEach(kv => { const i = kv.indexOf('='); tags[kv.slice(0, i)] = kv.slice(i + 1); });
@@ -1993,6 +2228,7 @@ if (store.get('srcCam', '') === 'avatar' && !avatarOnly) setTimeout(() => { if (
 
 var cityReady = false;
 function postState() {
+  try { window.__alState = alState(); window.__alRender && window.__alRender(); } catch (e) {}
   if (!bc || !cityReady) return;
   try {
     bc.postMessage({ cmd: 'state', data: {
@@ -2003,6 +2239,7 @@ function postState() {
       chan: chanName, chatState, chatMsgs, status: $('status').textContent,
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
+      al: alState(),
       show: SHOW.mode, showLen: SHOW.len, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
@@ -2021,6 +2258,7 @@ if (bc) bc.onmessage = e => {
     case 'findcams': findCams().then(postState); break;
     case 'adaddr': setAdAddr(d.slot, d.addr); setStatus(d.addr ? 'Address saved on ' + d.slot + '.' : 'Address removed from ' + d.slot + '.'); break;
     case 'popad': popAd(d.slot); break;
+    case 'alerttest': case 'alertset': case 'alertreplay': case 'alertclear': case 'twrelink': alertCmd(m.cmd, d); break;
     case 'popset': paSet(d); break;
     case 'ad': { setTimeout(() => makeThumb(d.slot), 50); if (d.addr !== undefined) { const a = store.get('adaddr', {}); if (d.addr) a[d.slot] = d.addr; else delete a[d.slot]; store.set('adaddr', a); } setAdImage(d.slot, d.data); const ads = store.get('ads', {}); ads[d.slot] = d.data;
       setStatus(store.set('ads', ads) ? d.slot + ' updated and saved.' : d.slot + ' updated (storage full, resets on reload).'); break; }
@@ -2108,7 +2346,7 @@ if (window.LSC_CONTROL) {
   }
   if (bc) bc.onmessage = e => { const m = e.data || {};
     if (m.cmd === 'meter') { $('avMeterFill').style.width = Math.round((m.data.v || 0) * 100) + '%'; return; }
-    if (m.cmd === 'state') { st = m.data; render(); }
+    if (m.cmd === 'state') { st = m.data; render(); if (st.al) { window.__alState = st.al; window.__alRender && window.__alRender(); } }
     else if (m.cmd === 'status' && m.data) { status(m.data.msg); $('status').className = ''; } };
   $('shots').onclick = e => { const b = e.target.closest('button'); if (b) send('shot', { i: +b.dataset.i }); };
   $('tour').onclick = () => send('tour', { on: !(st && st.tour) });
@@ -2158,9 +2396,42 @@ if (window.LSC_CONTROL) {
     };
     img.src = url;
   };
+  window.__alAct = send;
   send('hello');
   setInterval(() => send('hello'), st ? 15000 : 3000);
 }
+</script>
+<script>
+// ---- Alerts tab UI (works in the OBS dock and in the page's own panel) ----
+(function(){
+  const $=id=>document.getElementById(id);if(!$('alTests'))return;
+  const L={follow:['\u2665','Follow','#ff2d8f'],sub:['\u2605','Sub','#a05aff'],gift:['\uD83C\uDF81','Gift subs','#ff4fd8'],bits:['\u25C6','Bits','#38e8ff'],raid:['\u2694','Raid','#ffb02e'],redeem:['\u2726','Channel points','#3fffd0'],hype:['\uD83D\uDE82','Hype train','#ff5a2e'],first:['\uD83D\uDC4B','First-time chatter','#9dff3a'],streak:['\uD83D\uDD25','Watch streak','#ff8a1a'],resub:['\u2605','Resub','#8a6bff']};
+  const act=(c,d)=>{if(window.__alAct)window.__alAct(c,d||{});};
+  const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const setH=(id,h)=>{if($(id)._h!==h){$(id)._h=h;$(id).innerHTML=h;}};
+  const ago=t=>{const s=Math.round((Date.now()-t)/1000);return s<60?s+'s ago':s<3600?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago';};
+  window.__alRender=function(){const A=window.__alState;if(!A)return;const C=A.cfg;
+    $('alTw').innerHTML='<span class="dot"></span> '+esc(A.tw);$('alTw').className='note '+(A.twOk?'on':'wait');
+    $('alLogin').textContent=A.twOk?'Log in again':'Log in with Twitch';
+    setH('alTests',A.kinds.map(k=>`<button data-k="${k}" style="flex:0 1 auto;font-size:13px;padding:6px 10px;min-height:34px;border-color:${L[k][2]}">${L[k][0]} ${L[k][1]}</button>`).join(''));
+    setH('alOn',A.kinds.map(k=>`<label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="${k}" ${C.on[k]!==false?'checked':''} style="width:18px;min-height:18px"> ${L[k][0]} ${L[k][1]}</label>`).join(''));
+    [['alPos',C.pos],['alDur',String(C.dur)]].forEach(([id,v])=>{if(document.activeElement!==$(id))$(id).value=v;});
+    if(document.activeElement!==$('alVol')){$('alVol').value=Math.round(C.vol*100);}$('alSound').checked=!!C.sound;$('alScreens').checked=!!C.screens;
+    setH('alList',A.recent.length?A.recent.map((a,i)=>{const T=L[a.k]||['\u26A1',a.k,'#ffd23a'];return `<button data-i="${i}" style="display:flex;width:100%;text-align:left;gap:8px;align-items:center;margin:3px 0;border-left:4px solid ${T[2]}"><span>${T[0]}</span><span style="flex:1"><b>${esc(a.name)}</b> · ${esc(a.title||T[1])}${a.test?' <i>(test)</i>':''}<br><span class="note">${esc(a.msg)}</span></span><span class="note">${ago(a.t)}</span></button>`;}).join(''):'<p class="note">No alerts yet.</p>');};
+  $('alTests').onclick=e=>{const b=e.target.closest('button');if(b)act('alerttest',{k:b.dataset.k});};
+  $('alOn').onchange=e=>{const c=e.target.closest('input');if(c)act('alertset',{on:{[c.dataset.k]:c.checked}});};
+  $('alPos').onchange=e=>act('alertset',{pos:e.target.value});$('alDur').onchange=e=>act('alertset',{dur:+e.target.value});
+  $('alSound').onchange=e=>act('alertset',{sound:e.target.checked});$('alVol').onchange=e=>act('alertset',{vol:+e.target.value/100});
+  $('alScreens').onchange=e=>act('alertset',{screens:e.target.checked});
+  $('alList').onclick=e=>{const b=e.target.closest('button');if(b)act('alertreplay',{i:+b.dataset.i});};
+  $('alClear').onclick=()=>act('alertclear');
+  const set=(k,v)=>{try{localStorage.setItem('nha_'+k,JSON.stringify(v));}catch(e){}};
+  $('alLogin').onclick=()=>{if(window.obsstudio&&!window.LSC_CONTROL){alert('Log in from the LSC Control dock.');return;}
+    const st=Math.random().toString(36).slice(2);set('twstate',st);set('twreturn',location.href);set('twcid','tydew0sk04o28ypn5y2kqlpmu7j5bv');
+    location.href='https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=tydew0sk04o28ypn5y2kqlpmu7j5bv&redirect_uri='+encodeURIComponent('https://raw.githack.com/LS-city/-rassir-twitch-stream/main/auth.html')+'&scope='+encodeURIComponent('moderator:read:followers channel:read:redemptions channel:read:hype_train channel:manage:broadcast clips:edit')+'&state='+st+'&force_verify=true';};
+  setInterval(()=>{if($('alList')._h&&window.__alState)window.__alRender();},20000);
+  if(window.LSC_CONTROL)setTimeout(()=>act('twrelink'),4000);
+})();
 </script>
 <script>
 // ---- Places: one tile per place; pick a place to see only its views and screens ----
