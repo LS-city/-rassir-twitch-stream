@@ -1921,7 +1921,7 @@ const ZONE_SHOTS = [
   ['space', 'Space station', [0, 5.6, 27], [0, 5, 0], 50], ['space', 'Space wide', [30, 13, 46], [-4, 3, -6], 55], ['space', 'Planets view', [48, 7, 34], [430, -95, -600], 50],
   ['planet', 'Planet landing', [0, 4.6, 19], [0, 8.5, -13], 52], ['planet', 'Planet sky view', [16, 2.6, 26], [-14, 22, -40], 62], ['planet', 'Crystal fields', [44, 7, 34], [0, 9, -8], 55],
   ['bay', 'Bay stage', [0, 6.5, -44], [0, 8.5, 0], 55], ['bay', 'Beach view', [-40, 4.5, -98], [4, 7, -2], 55], ['bay', 'Ocean Drive', [-62, 3.6, -140], [10, 10, -162], 58], ['bay', 'Pier & wheel', [38, 5, -78], [70, 16, -34], 58],
-  ['summit', 'Summit arena', [0, 6.5, 27], [0, 3, -6], 55], ['summit', 'Temple', [12, 4, 4], [0, 9, -26], 58], ['summit', 'Lava arena', [-53, -8.5, 17], [-64, -11.8, 8], 55],
+  ['summit', 'Summit arena', [0, 6.5, 27], [0, 3, -6], 55], ['summit', 'Temple', [10, 7.5, 2], [0, 7, -24], 58], ['summit', 'Lava arena', [-53, -8.5, 17], [-64, -11.8, 8], 55],
   ['summit', 'Ice peak', [35, 22.5, -50], [44, 20, -60], 55], ['summit', 'Waterfall', [8, -3, 44], [-8, -6, 62], 55], ['summit', 'Helipad', [22, 5, 30], [38, 2, 16], 55]];
 const ZONE_FOCUS = [['Space main screen', 'SCREEN_GAMEPLAY_SPACE'], ['Space cam', 'SCREEN_LIVECAM_SPACE'], ['Space chat', 'SCREEN_CHAT_SPACE'], ['Space commands', 'SCREEN_COMMANDS_SPACE'],
   ['Planet main screen', 'SCREEN_GAMEPLAY_PLANET'], ['Planet cam', 'SCREEN_LIVECAM_PLANET'], ['Planet chat', 'SCREEN_CHAT_PLANET'], ['Planet commands', 'SCREEN_COMMANDS_PLANET'],
@@ -2424,10 +2424,10 @@ function buildSummit() {
     const rtop = new THREE.Mesh(new THREE.PlaneGeometry(17.6, 17.6), smM(0xffffff, { map: rt, roughness: 0.7, emissive: 0xffffff, emissiveMap: rt, emissiveIntensity: 0.12 })); rtop.rotation.x = -Math.PI / 2; rtop.position.y = 0.81; S.add(rtop);
     [[-9, -9], [9, -9], [-9, 9], [9, 9]].forEach(([x, z]) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.4, 1.4, 10), SM_GOLD); b.position.set(x, 1.5, z); S.add(b);
       const f = zGlowSprite('rgb(255,140,40)', 3.4, 0.08); f.position.set(x, 2.8, z); S.add(f); const L = new THREE.PointLight(0xff8a3a, 1.2, 22, 2); L.position.set(x, 3.2, z); S.add(L); SM.braz.push({ f, L, ph: Math.random() * 7 }); });
-    [[-11, 7], [11, 7], [-11, -7], [11, -7]].forEach(([x, z], i) => { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 9, 6), SM_WOOD); pole.position.set(x, 4.5, z); S.add(pole);
+    [[-15, 9], [15, 9], [-12.5, -10.5], [12.5, -10.5]].forEach(([x, z], i) => { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 9, 6), SM_WOOD); pole.position.set(x, 4.5, z); S.add(pole);
       const bt = smTex(128, 512, (c) => { c.fillStyle = i % 2 ? '#a8202a' : '#16161c'; c.fillRect(0, 0, 128, 512); c.fillStyle = '#d8a838'; c.fillRect(0, 0, 128, 14); c.fillRect(0, 498, 128, 14); c.beginPath(); c.arc(64, 140, 40, 0, 7); c.fill();
         c.fillStyle = i % 2 ? '#a8202a' : '#16161c'; c.beginPath(); c.arc(64, 140, 26, 0, 7); c.fill(); c.fillStyle = '#d8a838'; c.font = '44px Anton, Impact, sans-serif'; c.textAlign = 'center'; 'FIGHT'.split('').forEach((ch, k) => c.fillText(ch, 64, 240 + k * 52)); });
-      const bn = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 5.6, 1, 8), smM(0xffffff, { map: bt, side: THREE.DoubleSide, roughness: 0.9 })); bn.position.set(x + 0.75, 6, z); S.add(bn); SM.banners.push(bn); }); }
+      const bn = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 5.6, 1, 8), smM(0xffffff, { map: bt, side: THREE.DoubleSide, roughness: 0.9 })); bn.position.set(x + (x < 0 ? -0.75 : 0.75), 6, z); S.add(bn); SM.banners.push(bn); }); }
   { const T = new THREE.Group(); T.position.set(0, 0, -30); S.add(T);
     const base = new THREE.Mesh(new THREE.BoxGeometry(32, 2, 16), SM_DSTONE); base.position.y = 1; T.add(base);
     for (let i = 0; i < 6; i++) { const st = new THREE.Mesh(new THREE.BoxGeometry(10, 0.34, 1), SM_STONE); st.position.set(0, 0.17 + i * 0.34, 8.5 + (5 - i) * 0.9 - 4); T.add(st); }
@@ -2437,11 +2437,11 @@ function buildSummit() {
       const eave = new THREE.Mesh(new THREE.BoxGeometry(w + 1, 0.3, d + 1), SM_ROOF); eave.position.y = y - h / 2; T.add(eave); const trim = new THREE.Mesh(new THREE.BoxGeometry(w + 1.1, 0.12, d + 1.1), SM_GOLD); trim.position.y = y - h / 2 - 0.2; T.add(trim); };
     roof(28, 15, 12, 3.4); const up = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 7), smM(0x2a1a16)); up.position.y = 15.4; T.add(up); roof(18, 10, 19, 3);
     [-7, 7].forEach(x => { const o = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.4, 6), SM_GOLD); o.position.set(x, 20.4, 0); T.add(o); });
-    const sc = zScreen('GAMEPLAY', 'SCREEN_GAMEPLAY_SUMMIT', 14.4, 8.1, 'summit', 0xd8a838); sc.position.set(0, 6.4, 6.9); T.add(sc);
+    const sc = zScreen('GAMEPLAY', 'SCREEN_GAMEPLAY_SUMMIT', 13.6, 7.65, 'summit', 0xd8a838); sc.position.set(0, 6.25, 7.5); T.add(sc);
     const plaque = bayNeonSign([{ t: 'CRIMSON SUMMIT', y: 0.42, c: '#ff3a3a', fill: '#ffe0a0' }, { t: 'TOURNAMENT OF FISTS', y: 0.82, c: '#d8a838', f: 'bold 56px Poppins, sans-serif', fill: '#ffd98a' }], 1024, 260, '#ff3a3a', 12);
     plaque.position.set(0, 16, 3.6); T.add(plaque); SM.plaque = plaque;
     // drummers on the steps
-    [-4.2, 4.2].forEach((x, i) => { const dr = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.9, 20), smM(0x8a3a1a)); dr.rotation.x = Math.PI / 2; dr.position.set(x, 2.9, 4.6); T.add(dr);
+    [-10.2, 10.2].forEach((x, i) => { const dr = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.9, 20), smM(0x8a3a1a)); dr.rotation.x = Math.PI / 2; dr.position.set(x, 2.9, 4.6); T.add(dr);
       const skin = new THREE.Mesh(new THREE.CircleGeometry(0.7, 20), smM(0xe8dcc0)); skin.position.set(x, 2.9, 5.06); T.add(skin);
       const p = smPerson(0xf2f0ea, null, SKINS[i + 1]); p.position.set(x, 2.04, 6.2); p.rotation.y = Math.PI; T.add(p); SM.drums.push(p); }); }
   // gate, trees, lanterns
@@ -2458,14 +2458,14 @@ function buildSummit() {
       const p = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.4, 8), SM_STONE); p.position.y = 1; g.add(p); const box = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.7), new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xffa040, emissiveIntensity: 1.6 })); box.position.y = 2; g.add(box);
       const cap = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.5, 4), SM_STONE); cap.rotation.y = Math.PI / 4; cap.position.y = 2.55; g.add(cap); };
     for (let i = 0; i < 6; i++) { lan(-4.5, 30 + i * 3.5 - 10); lan(4.5, 30 + i * 3.5 - 10); } [[-15, -12], [15, -12], [-15, 8], [15, 8]].forEach(([x, z]) => lan(x, z));
-    const bulb = new THREE.MeshStandardMaterial({ color: 0x400808, emissive: 0xff3a2a, emissiveIntensity: 1.8 }); [[-12, -14, 12, -14], [-12, 13, 12, 13], [-12, -14, -12, 13], [12, -14, 12, 13]].forEach(([x1, z1, x2, z2]) => {
-      for (let i = 0; i <= 10; i++) { const u = i / 10, l = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), bulb); l.scale.y = 1.3; l.position.set(x1 + (x2 - x1) * u, 7.2 - Math.sin(u * Math.PI) * 1.6, z1 + (z2 - z1) * u); S.add(l); } }); }
+    const bulb = new THREE.MeshStandardMaterial({ color: 0x400808, emissive: 0xff3a2a, emissiveIntensity: 1.8 }); [[-12, 13, 12, 13]].forEach(([x1, z1, x2, z2]) => {
+      for (let i = 0; i <= 10; i++) { const u = i / 10, l = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), bulb); l.scale.y = 1.3; l.position.set(x1 + (x2 - x1) * u, 10.8 - Math.sin(u * Math.PI) * 1.1, z1 + (z2 - z1) * u); S.add(l); } }); }
   // screens on stone towers + scroll board
   { const tower = (x, z, ry, type, nm, col) => { const t = new THREE.Mesh(new THREE.BoxGeometry(2.2, 6, 2.2), SM_DSTONE); t.position.set(x, 3, z); t.rotation.y = ry; S.add(t);
       const s = zScreen(type, nm, 8.8, 4.95, 'summit', col); s.position.set(x, 8.6, z); s.rotation.y = ry; S.add(s); };
     tower(-21, -7, 0.75, 'LIVECAM', 'SCREEN_LIVECAM_SUMMIT', 0xd8a838); tower(21, -7, -0.75, 'CHAT', 'SCREEN_CHAT_SUMMIT', 0xd8a838);
-    const sb = zScreen('COMMANDS', 'SCREEN_COMMANDS_SUMMIT', 6.4, 3.6, 'summit', 0xa8202a); sb.position.set(-15.5, 3.1, 15.5); sb.rotation.y = 2.4; S.add(sb);
-    [-1, 1].forEach(s => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 5, 6), SM_WOOD); p.position.set(-15.5 + s * 2.4 * Math.cos(2.4), 2.5, 15.5 - s * 2.4 * Math.sin(2.4)); S.add(p); }); }
+    const sb = zScreen('COMMANDS', 'SCREEN_COMMANDS_SUMMIT', 6.4, 3.6, 'summit', 0xa8202a); sb.position.set(-14, 3.4, 14); sb.rotation.y = 0.82; S.add(sb);
+    [-1, 1].forEach(s => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 5.2, 6), SM_WOOD); p.position.set(-14 + s * 3.4 * Math.cos(0.82), 2.6, 14 - s * 3.4 * Math.sin(0.82)); S.add(p); }); }
   // helipad on the cliff edge
   { const pt = smTex(512, 512, (x) => { x.fillStyle = '#26242e'; x.fillRect(0, 0, 512, 512); x.strokeStyle = '#f0f0f0'; x.lineWidth = 16; x.beginPath(); x.arc(256, 256, 220, 0, 7); x.stroke();
       x.fillStyle = '#f0f0f0'; x.font = 'bold 300px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('H', 256, 270); });
@@ -2498,7 +2498,7 @@ function buildSummit() {
     for (let i = 0; i < 34; i++) { let a = i / 34 * Math.PI * 2; if (Math.abs(Math.sin(a)) > 0.9 && Math.cos(a) > -0.2 && Math.sin(a) < 0) continue; const r = 11.6 + (i % 2) * 1.6, p = smPerson(cols[i % cols.length]);
       p.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); p.lookAt(0, 0, 0); S.add(p); SM.crowd.push(p); }
     for (let i = 0; i < 4; i++) { const m = new THREE.Group(), robe = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 12), smM(0xd8701a)), h = new THREE.Mesh(headGeo, smM(SKINS[i % 5])); robe.position.y = 0.8; h.position.y = 1.75; m.add(robe, h);
-      m.position.set(-12 + i * 8, 2, -23.5); S.add(m); SM.monks.push(m); } }
+      m.position.set([-14.5, -12.5, 12.5, 14.5][i], 2, -23.5); S.add(m); SM.monks.push(m); } }
   // particles: petals, embers, snow
   const pts = (n, col, size, box, add) => { const g = new THREE.BufferGeometry(), p = new Float32Array(n * 3), R = zRand(n); for (let i = 0; i < n; i++) p.set([box[0] + R() * box[3], box[1] + R() * box[4], box[2] + R() * box[5]], i * 3);
     g.setAttribute('position', new THREE.BufferAttribute(p, 3)); const m = new THREE.Points(g, new THREE.PointsMaterial({ color: col, size, transparent: true, opacity: 0.9, depthWrite: false, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending })); m.userData.box = box; S.add(m); return m; };
