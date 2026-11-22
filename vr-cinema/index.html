@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthwave Cinema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* VOICE: playful night-out, a demo you can poke at
+   IDEA: a drive-in screen dropped into Rassir's BEAT//WAVE synthwave worlds
+   PICTURE: the live 3D world itself, full screen
+   COLOUR and TYPE: night purple, hot pink + cyan neon, pixel title
+   LAYOUT: world fills the screen, world picker on top, one control bar at the bottom */
+:root{color-scheme:dark;--bg:#120726;--ink:#f3f0ff;--pink:#ff3ea5;--cyan:#22e6ff;--panel:rgba(14,10,30,.84)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow:hidden}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.top{position:absolute;top:0;left:0;right:0;padding:14px max(3vw,14px);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none}
+h1{margin:0;font:400 clamp(13px,2.2vw,20px)/1.4 'Press Start 2P',monospace;color:var(--pink);text-shadow:0 0 12px rgba(255,62,165,.6)}
+.hint{margin:6px 0 0;font-size:13px;color:#c9c1ea;max-width:44ch}
+.worlds{display:flex;flex-wrap:wrap;gap:6px;pointer-events:auto}
+.worlds button{min-height:40px;font-size:14px}
+.worlds button[aria-pressed=true]{background:var(--cyan);border-color:var(--cyan);color:#001a20}
+.bar{position:absolute;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:10px;background:var(--panel);border:1px solid rgba(255,255,255,.1);border-radius:16px;width:min(640px,calc(100% - 24px))}
+button,label.btn{font:500 15px Inter,sans-serif;min-height:44px;padding:0 16px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#1a1433;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+button:hover,label.btn:hover{border-color:var(--cyan)}
+button:focus-visible,label.btn:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
+.primary{background:var(--pink);border-color:var(--pink);color:#1a0010}
+button:disabled{opacity:.4;cursor:default}
+#file{position:absolute;opacity:0;width:1px;height:1px}
+#status{width:100%;text-align:center;font-size:13px;color:#c9c1ea;margin:0}
+#loading{position:absolute;inset:0;display:grid;place-items:center;font:400 13px 'Press Start 2P',monospace;color:var(--cyan);pointer-events:none}
+#vrslot button{border-color:var(--cyan);background:#0b2a33;color:var(--cyan)}
+@media(max-width:600px){.hint{display:none}}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="loading">Loading world…</div>
+<div class="top">
+  <div>
+    <h1>Synthwave cinema</h1>
+    <p class="hint">Your BEAT//WAVE Blender stage with a movie screen. Pick a place, load an MP4, drag to look around.</p>
+  </div>
+  <div class="worlds" id="worlds" role="group" aria-label="Pick a world"></div>
+</div>
+<div class="bar">
+  <label class="btn primary" for="file">Load video<input id="file" type="file" accept="video/*"></label>
+  <button id="play" disabled>Play</button>
+  <button id="mute" disabled>Sound on</button>
+  <button id="seat">Reset seat</button>
+  <span id="vrslot"></span>
+  <p id="status">No video loaded yet</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+{
+const stage = document.getElementById('stage');
+const statusEl = document.getElementById('status');
+const loadingEl = document.getElementById('loading');
+const playBtn = document.getElementById('play');
+const muteBtn = document.getElementById('mute');
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.xr.enabled = true;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x120726);
+
+const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 1200);
+const rig = new THREE.Group();
+rig.add(camera);
+scene.add(rig);
+
+const SCREEN_Z = 14, SEAT_Z = 3;
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI*0.55;
+controls.minDistance = 1; controls.maxDistance = 40;
+function resetSeat(){ camera.position.set(0,1.7,SEAT_Z); controls.target.set(0,3.2,SCREEN_Z); controls.update(); }
+resetSeat();
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const key = new THREE.DirectionalLight(0xffc4e8, 0.6); key.position.set(-5,10,-5); scene.add(key);
+
+const SW = 9.6, SH = 5.4;
+const frame = new THREE.Mesh(new THREE.BoxGeometry(SW+0.4, SH+0.4, 0.2), new THREE.MeshStandardMaterial({color:0x05040b}));
+frame.position.set(0,3.2,SCREEN_Z+0.12); scene.add(frame);
+const edgeMat = c => new THREE.MeshBasicMaterial({color:c});
+[[SH/2+0.25,0xff3ea5],[-SH/2-0.25,0x22e6ff]].forEach(([dy,c]) => {
+  const e = new THREE.Mesh(new THREE.BoxGeometry(SW+0.6,0.08,0.08), edgeMat(c));
+  e.position.set(0,3.2+dy,SCREEN_Z); scene.add(e);
+});
+
+const idle = document.createElement('canvas'); idle.width = 1280; idle.height = 720;
+const g = idle.getContext('2d');
+g.fillStyle = '#0c0820'; g.fillRect(0,0,1280,720);
+g.strokeStyle = '#ff3ea5'; g.lineWidth = 6; g.strokeRect(40,40,1200,640);
+g.fillStyle = '#22e6ff'; g.font = '64px sans-serif'; g.textAlign = 'center';
+g.fillText('LOAD A VIDEO', 640, 340);
+g.fillStyle = '#c9c1ea'; g.font = '34px sans-serif';
+g.fillText('Your MP4 plays here', 640, 410);
+const idleTex = new THREE.CanvasTexture(idle); idleTex.encoding = THREE.sRGBEncoding;
+const screenMat = new THREE.MeshBasicMaterial({map:idleTex, toneMapped:false});
+const screen = new THREE.Mesh(new THREE.PlaneGeometry(SW,SH), screenMat);
+screen.position.set(0,3.2,SCREEN_Z); screen.rotation.y = Math.PI; scene.add(screen);
+
+const PLACES = [['City','place_City'],['Beach','place_Beach'],['Desert','place_Desert'],['Space','place_Space'],['Tunnel','place_Tunnel']];
+const worldsEl = document.getElementById('worlds');
+worldsEl.innerHTML = PLACES.map(([label,id],i) => `<button data-id="${id}" aria-pressed="${i===0}" disabled>${label}</button>`).join('');
+let places = {};
+function showPlace(id){
+  Object.entries(places).forEach(([k,o]) => o.visible = (k===id));
+  worldsEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id===id));
+}
+worldsEl.addEventListener('click', e => { const b = e.target.closest('button'); if(b && !b.disabled) showPlace(b.dataset.id); });
+
+new THREE.GLTFLoader().load('world.glb', gltf => {
+  const root = gltf.scene;
+  PLACES.forEach(([,id]) => { const o = root.getObjectByName(id); if(o) places[id] = o; });
+  scene.add(root);
+  showPlace('place_City');
+  worldsEl.querySelectorAll('button').forEach(b => b.disabled = !places[b.dataset.id]);
+  loadingEl.remove();
+}, p => {
+  if(p.total) loadingEl.textContent = 'Loading world… ' + Math.round(p.loaded/p.total*100) + '%';
+}, () => { loadingEl.textContent = 'Could not load the world file'; });
+
+const video = document.createElement('video');
+video.playsInline = true; video.loop = true;
+let videoTex = null, lastUrl = null;
+
+document.getElementById('file').addEventListener('change', e => {
+  const f = e.target.files[0]; if(!f) return;
+  if(lastUrl) URL.revokeObjectURL(lastUrl);
+  lastUrl = URL.createObjectURL(f);
+  video.src = lastUrl; video.muted = false;
+  statusEl.textContent = 'Loading ' + f.name + '…';
+  const fail = () => { statusEl.textContent = 'This browser could not play that file. Try an H.264 MP4.'; };
+  video.onerror = fail;
+  video.play().then(onPlaying).catch(() => { video.muted = true; video.play().then(onPlaying).catch(fail); });
+  function onPlaying(){
+    if(!videoTex){ videoTex = new THREE.VideoTexture(video); videoTex.encoding = THREE.sRGBEncoding; }
+    screenMat.map = videoTex; screenMat.needsUpdate = true;
+    playBtn.disabled = false; muteBtn.disabled = false;
+    playBtn.textContent = 'Pause';
+    muteBtn.textContent = video.muted ? 'Sound on' : 'Mute';
+    statusEl.textContent = 'Now playing: ' + f.name;
+  }
+});
+playBtn.addEventListener('click', () => {
+  if(video.paused){ video.play(); playBtn.textContent = 'Pause'; } else { video.pause(); playBtn.textContent = 'Play'; }
+});
+muteBtn.addEventListener('click', () => { video.muted = !video.muted; muteBtn.textContent = video.muted ? 'Sound on' : 'Mute'; });
+document.getElementById('seat').addEventListener('click', resetSeat);
+
+const vrBtn = document.createElement('button');
+vrBtn.textContent = 'Enter VR'; vrBtn.disabled = true;
+document.getElementById('vrslot').appendChild(vrBtn);
+let xrSession = null;
+if(navigator.xr){
+  navigator.xr.isSessionSupported('immersive-vr').then(ok => {
+    vrBtn.disabled = !ok; if(!ok) vrBtn.textContent = 'VR not available here';
+  }).catch(() => { vrBtn.textContent = 'VR not available here'; });
+} else { vrBtn.textContent = 'VR not available here'; }
+vrBtn.addEventListener('click', async () => {
+  if(xrSession){ xrSession.end(); return; }
+  try {
+    xrSession = await navigator.xr.requestSession('immersive-vr', {optionalFeatures:['local-floor']});
+    xrSession.addEventListener('end', () => { xrSession = null; vrBtn.textContent = 'Enter VR'; });
+    await renderer.xr.setSession(xrSession);
+    vrBtn.textContent = 'Exit VR';
+  } catch(err) { statusEl.textContent = 'Could not start VR in this browser.'; }
+});
+renderer.xr.addEventListener('sessionstart', () => { rig.position.set(0,0,SEAT_Z); rig.rotation.y = Math.PI; });
+renderer.xr.addEventListener('sessionend', () => { rig.position.set(0,0,0); rig.rotation.y = 0; resetSeat(); });
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+renderer.setAnimationLoop(() => {
+  if(!renderer.xr.isPresenting) controls.update();
+  renderer.render(scene, camera);
+});
+}
+</script>
+</body>
+</html>
