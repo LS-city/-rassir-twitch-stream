@@ -105,6 +105,7 @@ canvas#c.pick{cursor:pointer}
   <p class="note">Live stream world. Press <b>H</b> to hide this panel before going live.</p>
 
   <div id="status"></div>
+  <div id="verBanner" style="display:none;margin:8px 0;padding:10px;border:2px solid #ffd23a;border-radius:10px;background:rgba(255,210,58,.1)"><b style="color:#ffd23a">The city in OBS is running an older version.</b><br><span class="note">New features (like the newest places) will not work until it updates.</span><button id="verBtn" class="big" style="margin-top:8px;width:100%">Update the city now</button></div>
   <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="alerts">Alerts</button><button data-tab="trophy">Trophies</button><button data-tab="setup">Setup</button></div>
   <section data-tab="places">
     <div class="row"><button id="tourBig" class="big">Auto tour</button><button id="orbitBig" class="big">Orbit</button></div>
@@ -1976,7 +1977,7 @@ function trTick(dt, t) {
   setTimeout(postState, 50); return false;
 }
 function zoneTick(dt, t) {
-  if (SHOW.mode !== 'live' && ZONES.cur !== 'city' && !TR.on) setZone('city');      // intro / BRB / outro always play in the city
+  if (SHOW.mode !== 'live' && (ZONES.cur !== 'city' || TR.on)) { if (TR.on) { TR.on = false; renderPass.camera = cam; } setZone('city'); }      // intro / BRB / outro always play in the city
   harborTick(dt, t);
   if (!TR.on) { if (ZONES.cur === 'space') spaceTick(dt, t); else if (ZONES.cur === 'planet') planetTick(dt, t); else if (ZONES.cur === 'bay') bayTick(dt, t); }
 }
@@ -2953,7 +2954,7 @@ function postState() {
       chan: chanName, chatState, chatMsgs, status: $('status').textContent,
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
-      al: alState(),
+      al: alState(), ver: (location.pathname.match(/[0-9a-f]{40}/) || ['dev'])[0],
       show: SHOW.mode, showLen: SHOW.len, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
@@ -2963,6 +2964,7 @@ if (bc) bc.onmessage = e => {
   if (!cityReady && m.cmd !== 'hello') return;
   switch (m.cmd) {
     case 'hello': break;
+    case 'reload': setTimeout(() => location.reload(), 300); break;
     case 'shot': if (SHOW.mode !== 'live') { SHOW.mode = 'live'; } setTour(false); goShot(d.i); break;
     case 'tour': setTour(!!d.on); if (d.on) goShot(cur + 1); break;
     case 'focus': focusMesh(meshByName(d.n), PRETTY(d.n)); break;
@@ -3060,7 +3062,9 @@ if (window.LSC_CONTROL) {
   }
   if (bc) bc.onmessage = e => { const m = e.data || {};
     if (m.cmd === 'meter') { $('avMeterFill').style.width = Math.round((m.data.v || 0) * 100) + '%'; return; }
-    if (m.cmd === 'state') { st = m.data; render(); if (st.al) { window.__alState = st.al; window.__alRender && window.__alRender(); } }
+    if (m.cmd === 'state') { st = m.data; render(); if (st.al) { window.__alState = st.al; window.__alRender && window.__alRender(); }
+      const myVer = (location.pathname.match(/[0-9a-f]{40}/) || ['dev'])[0], vb = document.getElementById('verBanner');
+      if (vb) vb.style.display = st.ver && myVer !== 'dev' && st.ver !== 'dev' && st.ver !== myVer && !window.__verDone ? 'block' : 'none'; }
     else if (m.cmd === 'status' && m.data) { status(m.data.msg); $('status').className = ''; } };
   $('shots').onclick = e => { const b = e.target.closest('button'); if (b) send('shot', { i: +b.dataset.i }); };
   $('tour').onclick = () => send('tour', { on: !(st && st.tour) });
@@ -3111,6 +3115,7 @@ if (window.LSC_CONTROL) {
     img.src = url;
   };
   window.__alAct = send;
+  document.getElementById('verBtn').onclick = () => { window.__verDone = true; document.getElementById('verBanner').style.display = 'none'; send('reload'); setTimeout(() => location.reload(), 2500); };
   send('hello');
   setInterval(() => send('hello'), st ? 15000 : 3000);
 }
@@ -3189,7 +3194,7 @@ if (window.LSC_CONTROL) {
   $('placeTiles').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel=b.dataset.p;try{localStorage.setItem('lsc_place',sel);}catch(err){}
     const P=lists().find(p=>p.k===sel);if(P&&P.sh[0])P.sh[0].b.click();render();setTimeout(render,200);};
   $('tourBig').onclick=()=>{$('tour').click();setTimeout(render,200);};
-  $('travelRow').onclick=e=>{const b=e.target.closest('button');if(!b)return;const x=shotBtns().find(y=>y.l===b.dataset.go);if(x){x.b.click();const p={'Space station':'space','Planet landing':'planet','Bay stage':'bay','Gateway':'streets'}[b.dataset.go];sel=p;try{localStorage.setItem('lsc_place',sel);}catch(err){}}setTimeout(render,200);};
+  $('travelRow').onclick=e=>{const b=e.target.closest('button');if(!b)return;const x=shotBtns().find(y=>y.l===b.dataset.go);if(!x){$('nowShow').textContent='The city in OBS needs an update first: click "Update the city now" above (or Refresh the Lucid State City source).';const vb=document.getElementById('verBanner');if(vb)vb.style.display='block';return;}if(x){x.b.click();const p={'Space station':'space','Planet landing':'planet','Bay stage':'bay','Gateway':'streets'}[b.dataset.go];sel=p;try{localStorage.setItem('lsc_place',sel);}catch(err){}}setTimeout(render,200);};
   $('orbitBig').onclick=()=>{const ob=shotBtns().find(x=>x.l==='Orbit');if(ob)ob.b.click();setTimeout(render,200);};
   // tabs
   document.querySelector('#panel .tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.tab;
