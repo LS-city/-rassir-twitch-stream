@@ -1927,7 +1927,7 @@ function buildZones() {
   ZONE_FOCUS.forEach(f => FOCUS.push(f));
 }
 function zoneOrbit() {
-  const C = ZONES.cur === 'space' ? { c: new THREE.Vector3(0, 4, 3), r: 36, h: 8, look: 4.5 } : { c: new THREE.Vector3(0, 0, -2), r: 36, h: 8.5, look: 11 };
+  const C = ZONES.cur === 'space' ? { c: new THREE.Vector3(0, 4, 2), r: 29, h: 7.5, look: 4.5 } : { c: new THREE.Vector3(0, 0, -2), r: 36, h: 8.5, look: 11 };
   return { c: C.c, r: C.r, h: C.h, look: C.look, a: Math.atan2(cam.position.x - C.c.x, cam.position.z - C.c.z) };
 }
 function setZone(z) {
