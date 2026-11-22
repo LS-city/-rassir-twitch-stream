@@ -1,0 +1,15 @@
+{
+  "name": "Zero Cool Cinema",
+  "short_name": "Zero Cool",
+  "description": "Watch your own videos inside the Zero Cool club in Lucid State City.",
+  "start_url": "https://ls-city.github.io/-rassir-twitch-stream/vr-cinema/zero-cool/",
+  "scope": "https://ls-city.github.io/-rassir-twitch-stream/vr-cinema/zero-cool/",
+  "display": "standalone",
+  "background_color": "#0a0002",
+  "theme_color": "#e0213a",
+  "ovr_package_name": "com.lscity.zerocoolcinema",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
