@@ -108,6 +108,7 @@ canvas#c.pick{cursor:pointer}
   <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="alerts">Alerts</button><button data-tab="trophy">Trophies</button><button data-tab="setup">Setup</button></div>
   <section data-tab="places">
     <div class="row"><button id="tourBig" class="big">Auto tour</button><button id="orbitBig" class="big">Orbit</button></div>
+    <div class="row" id="travelRow" style="margin-top:6px"><button data-go="Space station" class="big" style="--pc:#38e8ff">&#x1F680; Space</button><button data-go="Planet landing" class="big" style="--pc:#ff4fd8">&#x1FA90; Planet</button><button data-go="Gateway" class="big" style="--pc:#ff2d8f">&#x1F3D9; City</button></div>
     <p class="note" id="nowShow" style="margin-top:6px"></p>
     <h3>Pop-up ads <span class="note" style="font-weight:500">(P = next ad)</span></h3>
     <div class="row" style="flex-wrap:nowrap"><select id="paPick" style="flex:3" title="Pick which ad slot to pop up"></select><button id="paGo" class="big" style="flex:2">Pop it up</button></div>
@@ -563,6 +564,7 @@ if (!window.LSC_AVATAR) loader.load('Lucid_State_City.glb', gltf => {
   if (document.fonts) document.fonts.ready.then(() => { drawChat(); drawCommands(); });
   buildAdUI();
   restoreAds();
+  buildZones();
   buildShotUI();
   buildHall();
   buildFocusUI();
@@ -1029,7 +1031,9 @@ function focusMesh(m, label, instant) {
   setTour(false);
   focused = m;
   const shot = { name: 'FOCUS', label, pos, quat: lookQuat(pos, c), fov, still: true };
-  if (instant) { cam.position.copy(pos); cam.quaternion.copy(shot.quat); cam.fov = fov; cam.updateProjectionMatrix(); hold = { s: shot, t: 0 }; fly = null; }
+  const mz = m.userData.zone || 'city';
+  if (mz !== ZONES.cur || TR.on) travel(mz, shot);
+  else if (instant) { cam.position.copy(pos); cam.quaternion.copy(shot.quat); cam.fov = fov; cam.updateProjectionMatrix(); hold = { s: shot, t: 0 }; fly = null; }
   else flyTo(shot, 1.8);
   document.querySelectorAll('#focusBtns button').forEach(b => b.classList.toggle('on', b.dataset.n === m.name));
   document.querySelectorAll('#shots button').forEach(b => b.classList.remove('on'));
@@ -1146,6 +1150,7 @@ function pickGuide() {
   guideRW = makeRW(guide.o.position, nearestNode(guide.o.position)); camHead = guide.o.rotation.y;
 }
 function orbitFromCam() {
+  if (ZONES.cur !== 'city') return zoneOrbit();
   const z = zoneOf(cam.position);
   if (z) { const C = { zc: [-23, -22.5, 7], fc: [-67, -22.5, 9], bit: [-67, 22.5, 9] }[z]; return { c: new THREE.Vector3(C[0], 2, C[1]), r: C[2], h: 4.2, a: Math.atan2(cam.position.x - C[0], cam.position.z - C[1]) }; }
   // outside: circle high over the nearest area so the camera never clips through buildings
@@ -1172,7 +1177,7 @@ function prepFollow(s) {               // start the follow shot right behind the
 function flyTo(s, dur = 3.2) {
   if (!s.follow) releaseGuide();
   if (s.walk || s.follow || s.orbit) { startMove(s); return; }
-  if (zoneOf(cam.position) !== zoneOf(s.pos)) {          // TV-style cut in/out of a building
+  if (ZONES.cur === 'city' && zoneOf(cam.position) !== zoneOf(s.pos)) {          // TV-style cut in/out of a building
     cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix();
     hold = { s, t: 0 }; fly = null; return;
   }
@@ -1184,6 +1189,8 @@ function goShot(i, instant) {
   cur = (i + shots.length) % shots.length; const s = shots[cur];
   document.querySelectorAll('#shots button').forEach((b, k) => b.classList.toggle('on', k === cur));
   document.querySelectorAll('#focusBtns button').forEach(b => b.classList.remove('on')); focused = null;
+  const zt = s.zone || (s.orbit ? ZONES.cur : 'city');
+  if (zt !== ZONES.cur || TR.on) { if (instant) setZone(zt); else { travel(zt, s); tourT = 0; return; } }
   if (instant && (s.walk || s.follow || s.orbit)) { if (!s.follow) releaseGuide(); startMove(s); }
   else if (instant) { releaseGuide(); cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); hold = { s, t: 0 }; fly = null; }
   else flyTo(s);
@@ -1251,7 +1258,7 @@ function updateCamera(dt) {
     hold.t += dt; const O = orbitS || (orbitS = orbitFromCam()); O.a += dt * (O.r < 12 ? 0.16 : 0.09);
     const want = new THREE.Vector3(O.c.x + Math.sin(O.a) * O.r, O.h + Math.sin(hold.t * 0.3) * 0.6, O.c.z + Math.cos(O.a) * O.r);
     cam.position.lerp(want, Math.min(1, dt * 2.5));
-    cam.quaternion.slerp(lookQuat(cam.position, O.c.clone().setY(O.r < 12 ? 2 : 3)), Math.min(1, dt * 3));
+    cam.quaternion.slerp(lookQuat(cam.position, O.c.clone().setY(O.look !== undefined ? O.look : O.r < 12 ? 2 : 3)), Math.min(1, dt * 3));
     if (hold.t < 0.05 && cam.position.distanceTo(want) > 20) cam.position.copy(want);
   } else if (hold) {
     hold.t += dt;
@@ -1260,7 +1267,7 @@ function updateCamera(dt) {
     cam.position.copy(hold.s.pos).addScaledVector(fwd, drift);
     if (!hold.s.walk && !hold.s.still) cam.position.y += Math.sin(hold.t * 0.35) * 0.4;
   }
-  if (tourOn && !fly) { tourT += dt; if (tourT > 16) { let n = cur + 1; while (shots[n % shots.length].goto) n++; goShot(n); } }
+  if (tourOn && !fly) { tourT += dt; if (tourT > 16) { let n = cur + 1; while (shots[n % shots.length].goto || shots[n % shots.length].zone) n++; goShot(n); } }
 }
 
 // ---------------------------------------------------------------- viewer effects
@@ -1568,11 +1575,398 @@ addEventListener('keydown', e => {
 
 // ---------------------------------------------------------------- loop
 const clock = new THREE.Clock();
+// ---------------------------------------------------------------- SPACE + PLANET: two extra parts of the map (own scenes, same live screens), with warp transitions
+const ZONES = { cur: 'city' };
+const renderPass = composer.passes[0];
+const zRand = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+function zNoise(seed) {
+  const R = zRand(seed), p = new Uint8Array(512), perm = []; for (let i = 0; i < 256; i++) perm.push(i);
+  for (let i = 255; i > 0; i--) { const j = (R() * (i + 1)) | 0; [perm[i], perm[j]] = [perm[j], perm[i]]; }
+  for (let i = 0; i < 512; i++) p[i] = perm[i & 255];
+  return (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const h = (a, b) => p[(a & 255) + p[b & 255]] / 255, a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
+}
+const zFbm = (n, x, y, o) => { let s = 0, a = 0.5, f = 1, w = 0; for (let i = 0; i < o; i++) { s += n(x * f, y * f) * a; w += a; a *= 0.5; f *= 2.03; } return s / w; };
+const zSeam = (n, u, v, sc, o) => (1 - u) * zFbm(n, u * sc, v * sc, o) + u * zFbm(n, (u - 1) * sc, v * sc, o);      // wraps around a sphere with no seam
+function zCanvasTex(w, h, srgb = true) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); if (srgb) t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return [c, t]; }
+function zPixels(c, fn) {                                   // per-pixel painter for planet maps
+  const x = c.getContext('2d'), w = c.width, h = c.height, im = x.createImageData(w, h), d = im.data;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const col = fn(i / w, j / h), k = (j * w + i) * 4; d[k] = col[0]; d[k + 1] = col[1]; d[k + 2] = col[2]; d[k + 3] = col[3] === undefined ? 255 : col[3]; }
+  x.putImageData(im, 0, 0);
+}
+function zNebula(x, w, h, opt) {                            // deep space: glowing nebula band + thousands of stars
+  opt = opt || {}; const R = zRand(opt.seed || 7), sc = w / 2048, top = opt.top || 0, bot = opt.bot || h, mid = opt.mid || h * 0.5, spread = opt.spread || h * 0.13;
+  x.fillStyle = opt.bg || '#030109'; x.fillRect(0, 0, w, h);
+  x.globalCompositeOperation = 'lighter';
+  const cols = opt.cols || ['150,40,230', '235,40,160', '40,140,240', '50,220,220', '120,60,255'];
+  for (let i = 0; i < 340; i++) { const u = R(), cx = u * w, cy = mid + Math.sin(u * Math.PI * 4 + 1.3) * spread + (R() - 0.5) * spread * 1.7, r = (24 + R() * 190) * sc;
+    if (cy < top || cy > bot) continue; const col = 'rgba(' + cols[i % cols.length] + ',';
+    for (const dx of [-w, 0, w]) { const g = x.createRadialGradient(cx + dx, cy, 0, cx + dx, cy, r); g.addColorStop(0, col + (0.03 + R() * 0.08).toFixed(3) + ')'); g.addColorStop(1, col + '0)'); x.fillStyle = g; x.fillRect(cx + dx - r, cy - r, r * 2, r * 2); } }
+  x.globalCompositeOperation = 'source-over';
+  for (let i = 0; i < 120; i++) { const u = R(), cx = u * w, cy = mid + Math.sin(u * Math.PI * 4 + 1.3) * spread + (R() - 0.5) * spread, r = (10 + R() * 60) * sc;
+    if (cy < top || cy > bot) continue; const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, 'rgba(2,1,8,0.35)'); g.addColorStop(1, 'rgba(2,1,8,0)'); x.fillStyle = g; x.fillRect(cx - r, cy - r, r * 2, r * 2); }
+  x.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 14000 * (w / 4096); i++) { const sx = R() * w, sy = top + R() * (bot - top), inBand = Math.abs(sy - mid) < spread * 1.5, b = Math.pow(R(), inBand ? 2.2 : 3.2), s = (b > 0.9 ? 2.2 : b > 0.6 ? 1.5 : 1) * sc + 0.4;
+    x.fillStyle = `rgba(${200 + R() * 55 | 0},${195 + R() * 60 | 0},255,${(0.2 + b * 0.8).toFixed(2)})`; x.fillRect(sx, sy, s, s); }
+  for (let i = 0; i < 70; i++) { const sx = R() * w, sy = top + R() * (bot - top), r = (4 + R() * 9) * sc, c = ['255,255,255', '180,220,255', '255,200,240'][i % 3];
+    const g = x.createRadialGradient(sx, sy, 0, sx, sy, r); g.addColorStop(0, 'rgba(' + c + ',0.95)'); g.addColorStop(0.25, 'rgba(' + c + ',0.25)'); g.addColorStop(1, 'rgba(' + c + ',0)'); x.fillStyle = g; x.fillRect(sx - r, sy - r, r * 2, r * 2);
+    x.fillStyle = 'rgba(' + c + ',0.35)'; x.fillRect(sx - r * 1.8, sy - 0.5, r * 3.6, 1); x.fillRect(sx - 0.5, sy - r * 1.8, 1, r * 3.6); }
+  x.globalCompositeOperation = 'source-over';
+}
+function zSky(tex, r) { const m = new THREE.Mesh(new THREE.SphereGeometry(r || 1500, 64, 32), new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false })); m.renderOrder = -10; return m; }
+function zStars(n, r, size, seed, color) {
+  const R = zRand(seed), g = new THREE.BufferGeometry(), p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const u = R() * 2 - 1, a = R() * Math.PI * 2, s = Math.sqrt(1 - u * u); p.set([Math.cos(a) * s * r, u * r, Math.sin(a) * s * r], i * 3); }
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: color || 0xdfe6ff, size, sizeAttenuation: false, fog: false, transparent: true, depthWrite: false }));
+}
+function zGlowSprite(col, scale, inner) {
+  const [c, t] = zCanvasTex(256, 256); const x = c.getContext('2d'), g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, '#ffffff'); g.addColorStop(inner || 0.12, col); g.addColorStop(0.45, col.replace('rgb(', 'rgba(').replace(')', ',0.25)')); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, transparent: true })); s.scale.setScalar(scale); return s;
+}
+function zAtmo(r, col, power, k) {
+  return new THREE.Mesh(new THREE.SphereGeometry(r, 64, 32), new THREE.ShaderMaterial({ uniforms: { c: { value: new THREE.Color(col) }, p: { value: power }, k: { value: k } },
+    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 c; uniform float p; uniform float k; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), p) * k; gl_FragColor = vec4(c * f, f); }',
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+}
+// ---- planet look-ups (painted a moment after the city loads so the city shows up first)
+const PLT = {};
+function zPlanetTextures() {
+  [PLT.giantC, PLT.giant] = zCanvasTex(1024, 512); [PLT.lucC, PLT.luc] = zCanvasTex(1024, 512); [PLT.lucEC, PLT.lucE] = zCanvasTex(1024, 512);
+  [PLT.iceC, PLT.ice] = zCanvasTex(512, 256); [PLT.redC, PLT.red] = zCanvasTex(512, 256); [PLT.ringC, PLT.ring] = zCanvasTex(1024, 16);
+  const jobs = [
+    () => { const n = zNoise(11), pal = [[255, 196, 150], [236, 128, 112], [196, 84, 150], [120, 62, 150], [250, 222, 186], [214, 106, 92]];
+      zPixels(PLT.giantC, (u, v) => { const tb = zSeam(n, u, v, 7, 3), k = (v * 13 + tb * 2.4 + Math.sin(v * 41) * 0.15), i = Math.floor(k) % pal.length, f = k - Math.floor(k), a = pal[(i + pal.length) % pal.length], b = pal[(i + 1) % pal.length];
+        const s = 0.82 + zSeam(n, u, v * 3, 22, 2) * 0.35; return [(a[0] + (b[0] - a[0]) * f) * s, (a[1] + (b[1] - a[1]) * f) * s, (a[2] + (b[2] - a[2]) * f) * s]; });
+      const x = PLT.giantC.getContext('2d'), g = x.createRadialGradient(700, 330, 0, 700, 330, 46); g.addColorStop(0, 'rgba(255,120,140,0.85)'); g.addColorStop(1, 'rgba(255,120,140,0)'); x.fillStyle = g; x.save(); x.scale(1.8, 1); x.beginPath(); x.arc(700 / 1.8, 330, 46, 0, 7); x.fill(); x.restore();
+      PLT.giant.needsUpdate = true; },
+    () => { const n = zNoise(23), n2 = zNoise(29), e = PLT.lucEC.getContext('2d').createImageData(1024, 512), ed = e.data;
+      zPixels(PLT.lucC, (u, v) => { const h = zSeam(n, u, v, 5, 5), land = h > 0.5, pole = v < 0.07 || v > 0.93, k = ((v * 512 | 0) * 1024 + (u * 1024 | 0)) * 4;
+        if (land && !pole) { const c = zSeam(n2, u, v, 26, 3); if (c > 0.58) { const pink = c > 0.66; const s = Math.min(1, (c - 0.58) * 9); ed[k] = (pink ? 255 : 60) * s; ed[k + 1] = (pink ? 60 : 230) * s; ed[k + 2] = 255 * s; } }
+        ed[k + 3] = 255;
+        if (pole) return [215, 200, 245]; if (!land) { const d = 0.6 + h; return [18 * d, 10 * d, 58 * d]; }
+        const t = (h - 0.5) * 4; return [70 + t * 60, 30 + t * 30, 110 + t * 50]; });
+      PLT.lucEC.getContext('2d').putImageData(e, 0, 0); PLT.luc.needsUpdate = true; PLT.lucE.needsUpdate = true; },
+    () => { const n = zNoise(31); zPixels(PLT.iceC, (u, v) => { const s = 0.7 + zSeam(n, u, v, 8, 4) * 0.4; return [185 * s, 208 * s, 238 * s]; });
+      const x = PLT.iceC.getContext('2d'), R = zRand(5); for (let i = 0; i < 70; i++) { const cx = R() * 512, cy = 20 + R() * 216, r = 2 + Math.pow(R(), 2) * 16;
+        x.fillStyle = 'rgba(70,90,130,0.35)'; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); x.strokeStyle = 'rgba(240,248,255,0.5)'; x.lineWidth = 1; x.beginPath(); x.arc(cx - 0.5, cy - 0.5, r, 3.6, 5.6); x.stroke(); }
+      PLT.ice.needsUpdate = true;
+      const n2 = zNoise(37); zPixels(PLT.redC, (u, v) => { const s = 0.6 + zSeam(n2, u, v, 6, 4) * 0.6, b = 0.9 + Math.sin(v * 30 + zSeam(n2, u, v, 3, 2) * 4) * 0.1; return [190 * s * b, 82 * s * b, 52 * s * b]; }); PLT.red.needsUpdate = true;
+      const r = PLT.ringC.getContext('2d'), R2 = zRand(9); for (let i = 0; i < 1024; i++) { const a = (0.25 + R2() * 0.6) * (i < 30 || i > 1000 ? 0.3 : 1) * (i > 420 && i < 470 ? 0.12 : 1), c = R2() < 0.5 ? '255,214,190' : '230,150,200';
+        r.fillStyle = `rgba(${c},${a.toFixed(2)})`; r.fillRect(i, 0, 1, 16); } PLT.ring.needsUpdate = true; } ];
+  let i = 0; const run = () => { if (i < jobs.length) { try { jobs[i++](); } catch (e) { console.warn('planet paint', e); } setTimeout(run, 60); } }; setTimeout(run, 1200);
+}
+function zRing(inner, outer) {
+  const g = new THREE.RingGeometry(inner, outer, 160, 1), pos = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < pos.count; i++) { const r = Math.hypot(pos.getX(i), pos.getY(i)); uv.setXY(i, (r - inner) / (outer - inner), 0.5); }
+  return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: PLT.ring, transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false, opacity: 0.95 }));
+}
+function zGiant(r) {           // ringed gas giant, seen from space and from the planet's sky
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(r, 96, 48), new THREE.MeshStandardMaterial({ map: PLT.giant, roughness: 1, metalness: 0, fog: false })); g.add(body);
+  const at = zAtmo(r * 1.015, 0xff9ac0, 3.2, 1.3); at.material.fog = false; g.add(at);
+  const ring = zRing(r * 1.3, r * 2.25); ring.rotation.x = -Math.PI / 2; g.add(ring);
+  g.rotation.set(0.42, 0, -0.32); g.userData.body = body; return g;
+}
+function zBall(r, map, opt) {
+  opt = opt || {}; const m = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 32), new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0, fog: false, emissive: opt.emissiveMap ? 0xffffff : 0x000000, emissiveMap: opt.emissiveMap || null, emissiveIntensity: opt.ei || 1 }));
+  const g = new THREE.Group(); g.add(m); if (opt.atmo) { const a = zAtmo(r * 1.02, opt.atmo, 2.6, opt.ak || 1.4); a.material.fog = false; g.add(a); } g.userData.body = m; return g;
+}
+// ---- screens: same live textures as the city screens (gameplay, cam, chat, commands)
+function zScreen(type, name, w, h, zone, frameCol) {
+  const geo = new THREE.PlaneGeometry(w, h), uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));      // same UV flip as the Blender screens
+  const m = new THREE.Mesh(geo, screens[type][0] ? screens[type][0].material : new THREE.MeshBasicMaterial({ color: 0x111111 }));
+  m.name = name; m.userData.zone = zone; m.position.z = 0.36; screens[type].push(m);
+  const g = new THREE.Group(); g.add(m);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(w + 0.9, h + 0.9, 0.6), new THREE.MeshBasicMaterial({ color: 0x0a0812 })); g.add(back);
+  const fm = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: new THREE.Color(frameCol), emissiveIntensity: 1.5 }); g.userData.frameMat = fm;
+  [[0, h / 2 + 0.42, w + 0.9, 0.12], [0, -h / 2 - 0.42, w + 0.9, 0.12], [-w / 2 - 0.42, 0, 0.12, h + 0.9], [w / 2 + 0.42, 0, 0.12, h + 0.9]].forEach(([x, y, bw, bh]) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.66), fm); b.position.set(x, y, 0); g.add(b); });
+  return g;
+}
+function zSign(top, sub, col, w) {
+  const [c, t] = zCanvasTex(1024, 256), x = c.getContext('2d'); x.textAlign = 'center';
+  x.font = '120px Anton, Impact, sans-serif'; x.shadowColor = col; x.shadowBlur = 28; x.fillStyle = '#fff'; x.fillText(top, 512, 130);
+  x.font = 'bold 50px Poppins, sans-serif'; x.shadowBlur = 16; x.fillStyle = col; x.fillText(sub, 512, 214);
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false }));
+}
+// ---- floating / hopping people (viewers who typed !spawn get their name over their helmet)
+const zSuit = new THREE.MeshStandardMaterial({ color: 0xe6e8f2, roughness: 0.55, metalness: 0.15 }), zDark = new THREE.MeshStandardMaterial({ color: 0x15131f, roughness: 0.7 });
+const zHelmetGeo = new THREE.SphereGeometry(0.27, 16, 12), zPackGeo = new THREE.BoxGeometry(0.42, 0.55, 0.22), zArmGeo = new THREE.CylinderGeometry(0.07, 0.065, 0.62, 6);
+function zAstro(color, name) {
+  const col = new THREE.Color(color || ['#ff2d8f', '#38e8ff', '#b478ff', '#ffd23a', '#7dff6a'][Math.random() * 5 | 0]), g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
+  const accent = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.1, roughness: 0.5 });
+  const b = new THREE.Mesh(bodyGeo, zSuit); b.position.y = 1.2; inner.add(b);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.262, 0.262, 0.08, 10), accent); band.position.y = 1.32; inner.add(band);
+  const hm = new THREE.Mesh(zHelmetGeo, zSuit); hm.position.y = 1.78; inner.add(hm);
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10, 0, Math.PI), new THREE.MeshStandardMaterial({ color: 0x080612, emissive: col, emissiveIntensity: 0.55, roughness: 0.1, metalness: 0.9 }));
+  visor.position.set(0, 1.79, 0.1); inner.add(visor);
+  const pack = new THREE.Mesh(zPackGeo, zDark); pack.position.set(0, 1.25, -0.3); inner.add(pack);
+  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.12, 8), accent); jet.position.set(0, 0.92, -0.3); inner.add(jet);
+  [-0.34, 0.34].forEach((x, i) => { const a = new THREE.Mesh(zArmGeo, zSuit); a.position.set(x, 1.24, 0); a.rotation.z = (i ? -1 : 1) * 0.5; inner.add(a); });
+  [-0.12, 0.12].forEach(x => { const l = new THREE.Mesh(legGeo, zSuit); l.position.set(x, 0.43, 0); inner.add(l); });
+  inner.position.y = -1.1;
+  if (name) { const s = nameSprite(name, '#' + col.getHexString()); s.position.y = 1.4; g.add(s); }
+  g.userData.inner = inner; return g;
+}
+// ---- warp tunnel (between places)
+const WARP = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(95, 16 / 9, 0.1, 1200), n: 1900 };
+{ WARP.scene.background = new THREE.Color(0x020108);
+  const g = new THREE.BufferGeometry(); WARP.pos = new Float32Array(WARP.n * 6); WARP.col = new Float32Array(WARP.n * 6); WARP.seed = [];
+  const R = zRand(3); for (let i = 0; i < WARP.n; i++) WARP.seed.push({ a: R() * Math.PI * 2, r: 2.5 + Math.pow(R(), 0.6) * 46, z: -R() * 640, c: R() });
+  g.setAttribute('position', new THREE.BufferAttribute(WARP.pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(WARP.col, 3));
+  WARP.lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); WARP.scene.add(WARP.lines);
+  WARP.core = zGlowSprite('rgb(160,120,255)', 260, 0.08); WARP.core.position.z = -420; WARP.scene.add(WARP.core);
+  WARP.clouds = []; for (let i = 0; i < 46; i++) { const s = zGlowSprite('rgb(255,120,60)', 30 + R() * 40, 0.02); s.material.opacity = 0.0; s.userData = { a: R() * 7, r: 12 + R() * 40, z: -R() * 640 }; WARP.scene.add(s); WARP.clouds.push(s); } }
+function warpColors(to) { return { space: [[0.65, 0.8, 1], [1, 1, 1], [0.7, 0.45, 1]], planet: [[1, 0.5, 0.2], [1, 0.2, 0.55], [1, 0.82, 0.3]], city: [[0.22, 0.9, 1], [1, 0.18, 0.56], [0.7, 0.47, 1]] }[to]; }
+function warpTick(dt, speed, to) {
+  const C = warpColors(to), len = Math.min(90, 3 + speed * 0.06);
+  for (let i = 0; i < WARP.n; i++) { const s = WARP.seed[i]; s.z += speed * dt; if (s.z > 2) s.z -= 640;
+    const x = Math.cos(s.a) * s.r, y = Math.sin(s.a) * s.r, c = C[(s.c * 3) | 0];
+    WARP.pos.set([x, y, s.z, x, y, s.z - len], i * 6); WARP.col.set([c[0], c[1], c[2], c[0] * 0.08, c[1] * 0.08, c[2] * 0.08], i * 6); }
+  WARP.lines.geometry.attributes.position.needsUpdate = true; WARP.lines.geometry.attributes.color.needsUpdate = true;
+  WARP.cam.rotation.z += dt * 0.7;
+  WARP.core.material.color.setRGB(C[0][0], C[0][1], C[0][2]); WARP.core.scale.setScalar(200 + Math.sin(performance.now() / 120) * 30);
+  WARP.clouds.forEach(s => { const u = s.userData; u.z += speed * 0.8 * dt; if (u.z > 2) u.z -= 640; s.position.set(Math.cos(u.a) * u.r, Math.sin(u.a) * u.r, u.z); s.material.opacity = to === 'planet' ? 0.55 : 0; });
+}
+// ---- flash + whoosh
+const zFlash = document.createElement('div'); zFlash.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:7;opacity:0;background:radial-gradient(circle at 50% 50%,#fff 0%,rgba(255,255,255,.85) 35%,rgba(200,170,255,.6) 100%)'; document.body.appendChild(zFlash);
+function flash(peak, sec) { zFlash.style.transition = 'none'; zFlash.style.opacity = peak; void zFlash.offsetWidth; zFlash.style.transition = `opacity ${sec || 0.9}s ease-out`; zFlash.style.opacity = 0; }
+let zAC = null;
+function whoosh(len) {
+  try { zAC = zAC || new (window.AudioContext || window.webkitAudioContext)(); if (zAC.state === 'suspended') zAC.resume(); const a = zAC, t0 = a.currentTime + 0.02;
+    const n = a.createBufferSource(), b = a.createBuffer(1, a.sampleRate * len, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const f = a.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.4; f.frequency.setValueAtTime(140, t0); f.frequency.exponentialRampToValueAtTime(3200, t0 + len * 0.55); f.frequency.exponentialRampToValueAtTime(260, t0 + len);
+    const g = a.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.28, t0 + len * 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+    n.buffer = b; n.connect(f); f.connect(g); g.connect(a.destination); n.start(t0);
+    const o = a.createOscillator(), lp = a.createBiquadFilter(), og = a.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(38, t0); o.frequency.exponentialRampToValueAtTime(110, t0 + len * 0.6);
+    lp.type = 'lowpass'; lp.frequency.value = 220; og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(0.1, t0 + len * 0.4); og.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+    o.connect(lp); lp.connect(og); og.connect(a.destination); o.start(t0); o.stop(t0 + len); } catch (e) {}
+}
+// ---------------------------------------------------------------- SPACE: orbital station with floating screens, people drifting, planets all around
+const SP = { scene: new THREE.Scene(), float: [], viewers: {}, scr: [] };
+function buildSpace() {
+  const S = SP.scene; S.fog = new THREE.FogExp2(0x05030c, 0.0009);
+  const [nc, nt] = zCanvasTex(4096, 2048); zNebula(nc.getContext('2d'), 4096, 2048, { seed: 7 }); nt.needsUpdate = true; S.add(zSky(nt));
+  SP.st1 = zStars(2600, 1300, 1.6, 41); SP.st2 = zStars(700, 1300, 2.6, 43, 0xffe6f6); S.add(SP.st1, SP.st2);
+  S.add(new THREE.HemisphereLight(0x6a5ad8, 0x10081a, 0.5));
+  const sunDir = new THREE.Vector3(0.62, 0.3, 0.72).normalize(), sun = new THREE.DirectionalLight(0xfff0e0, 1.6); sun.position.copy(sunDir).multiplyScalar(100); S.add(sun);
+  const sunS = zGlowSprite('rgb(255,214,170)', 420, 0.06); sunS.position.copy(sunDir).multiplyScalar(1250); S.add(sunS);
+  const flare = zGlowSprite('rgb(255,120,200)', 900, 0.01); flare.material.opacity = 0.35; flare.position.copy(sunS.position); S.add(flare);
+  [[0xff2d8f, -16, 10, 10], [0x38e8ff, 16, 10, 10], [0xb478ff, 0, 18, -6]].forEach(([c, x, y, z]) => { const L = new THREE.PointLight(c, 1.6, 60, 2); L.position.set(x, y, z); S.add(L); });
+  // planets
+  SP.giant = zGiant(230); SP.giant.position.set(-520, 70, -880); S.add(SP.giant);
+  SP.luc = zBall(120, PLT.luc, { emissiveMap: PLT.lucE, ei: 1.1, atmo: 0xff4fd8, ak: 1.1 }); SP.luc.position.set(430, -95, -600); SP.luc.rotation.z = 0.25; S.add(SP.luc);
+  SP.ice = zBall(42, PLT.ice, { atmo: 0x9fd8ff, ak: 0.9 }); SP.ice.position.set(160, 190, -1050); S.add(SP.ice);
+  SP.red = zBall(28, PLT.red, { atmo: 0xff7a4a, ak: 0.8 }); SP.red.position.set(820, 40, 260); S.add(SP.red);
+  const moonlet = zBall(16, PLT.ice); moonlet.position.set(-300, -160, 520); S.add(moonlet);
+  // asteroid belt
+  { const R = zRand(17), geo = new THREE.IcosahedronGeometry(1, 0), p = geo.attributes.position; for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) * (0.7 + R() * 0.6), p.getY(i) * (0.7 + R() * 0.6), p.getZ(i) * (0.7 + R() * 0.6)); geo.computeVertexNormals();
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0x5a5068, roughness: 0.95, flatShading: true }), 520), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+    for (let i = 0; i < 520; i++) { const a = R() * Math.PI * 2, r = 120 + R() * 70, s = 0.3 + Math.pow(R(), 3) * 3.2; e.set(R() * 6, R() * 6, R() * 6); q.setFromEuler(e);
+      m.compose(new THREE.Vector3(Math.cos(a) * r, (R() - 0.5) * 9 - 8, Math.sin(a) * r), q, new THREE.Vector3(s, s, s)); im.setMatrixAt(i, m); }
+    SP.belt = new THREE.Group(); SP.belt.add(im); SP.belt.rotation.x = 0.12; S.add(SP.belt); }
+  // the station: platform, rings, screens
+  { const [gc, gt] = zCanvasTex(512, 512); const x = gc.getContext('2d'); x.fillStyle = '#07060f'; x.fillRect(0, 0, 512, 512); x.strokeStyle = 'rgba(56,232,255,0.55)'; x.lineWidth = 2;
+    for (let i = 0; i <= 512; i += 32) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 512); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(512, i); x.stroke(); }
+    x.strokeStyle = 'rgba(255,45,143,0.8)'; x.lineWidth = 6; x.beginPath(); x.arc(256, 256, 200, 0, 7); x.stroke(); x.beginPath(); x.arc(256, 256, 120, 0, 7); x.stroke(); gt.needsUpdate = true;
+    const top = new THREE.MeshStandardMaterial({ color: 0x0c0a16, emissive: 0xffffff, emissiveMap: gt, emissiveIntensity: 0.55, map: gt, roughness: 0.4, metalness: 0.7 });
+    const side = new THREE.MeshStandardMaterial({ color: 0x14121e, roughness: 0.4, metalness: 0.85 });
+    const plat = new THREE.Mesh(new THREE.CylinderGeometry(24, 20, 1.6, 64), [side, top, side]); plat.position.y = -9; S.add(plat);
+    const edge = new THREE.Mesh(new THREE.TorusGeometry(24, 0.22, 8, 128), new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff2d8f, emissiveIntensity: 3 })); edge.rotation.x = Math.PI / 2; edge.position.y = -8.2; S.add(edge);
+  }
+  SP.rings = [];
+  [[34, 0x38e8ff, 0.35, 0.12], [38, 0xff2d8f, -0.25, -0.08], [42, 0xb478ff, 0.15, 0.05]].forEach(([r, c, tx, sp]) => { const t = new THREE.Mesh(new THREE.TorusGeometry(r, 0.09, 6, 200), new THREE.MeshStandardMaterial({ color: 0, emissive: c, emissiveIntensity: 1.3 }));
+    t.rotation.set(Math.PI / 2 + tx, 0, 0); t.userData.sp = sp; S.add(t); SP.rings.push(t); });
+  const add = (g, x, y, z, ry) => { g.position.set(x, y, z); g.rotation.y = ry; g.userData.base = g.position.clone(); g.userData.ph = Math.random() * 6; S.add(g); SP.scr.push(g); };
+  add(zScreen('GAMEPLAY', 'SCREEN_GAMEPLAY_SPACE', 19.2, 10.8, 'space', 0xff2d8f), 0, 5.4, 0, 0);
+  add(zScreen('LIVECAM', 'SCREEN_LIVECAM_SPACE', 9.6, 5.4, 'space', 0x38e8ff), -16.5, 6.5, 4.5, 0.55);
+  add(zScreen('CHAT', 'SCREEN_CHAT_SPACE', 9.6, 5.4, 'space', 0xb478ff), 16.5, 6.5, 4.5, -0.55);
+  add(zScreen('COMMANDS', 'SCREEN_COMMANDS_SPACE', 8.8, 4.95, 'space', 0x38e8ff), 0, -3.6, 1.5, 0);
+  const sign = zSign('LUCID STATE CITY', 'ORBITAL STATION', '#ff2d8f', 18); sign.position.set(0, 14.3, 0.4); S.add(sign); SP.sign = sign;
+  // drifting people
+  const R = zRand(55); for (let i = 0; i < 26; i++) { const o = zAstro(); S.add(o); SP.float.push({ o, r: 9 + R() * 24, a: R() * 7, y: -6 + R() * 22, sp: (R() < 0.5 ? -1 : 1) * (0.03 + R() * 0.06), tum: new THREE.Vector3(R() - 0.5, R() - 0.5, R() - 0.5).multiplyScalar(0.8), ph: R() * 7 }); }
+  // shooting stars
+  SP.shoot = []; for (let i = 0; i < 3; i++) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, fog: false })); S.add(l); SP.shoot.push({ l, t: 3 + i * 4, p: new THREE.Vector3(), v: new THREE.Vector3() }); }
+}
+function syncViewers(Z, scn, mk) {                         // viewers who typed !spawn show up here too
+  const live = new Set(spawned.map(w => w.user));
+  Object.keys(Z.viewers).forEach(u => { if (!live.has(u)) { scn.remove(Z.viewers[u].o); delete Z.viewers[u]; } });
+  spawned.forEach(w => { if (Z.viewers[w.user]) return; let col = '#ff2d8f'; w.o.traverse(o => { if (o.isMesh && o.material && o.material.emissive && o.material.emissiveIntensity > 0.5 && col === '#ff2d8f') col = '#' + o.material.emissive.getHexString(); });
+    const o = zAstro(col, w.user); scn.add(o); Z.viewers[w.user] = mk(o); });
+}
+function spaceTick(dt, t) {
+  SP.rings.forEach(r => r.rotation.z += dt * r.userData.sp);
+  SP.belt.rotation.y += dt * 0.012; SP.giant.userData.body.rotation.y += dt * 0.006; SP.luc.userData.body.rotation.y += dt * 0.01; SP.ice.rotation.y += dt * 0.02;
+  SP.st2.material.opacity = 0.65 + Math.sin(t * 2.3) * 0.35; SP.st1.material.opacity = 0.85 + Math.sin(t * 1.7 + 1) * 0.15;
+  SP.scr.forEach(g => { g.position.y = g.userData.base.y + Math.sin(t * 0.45 + g.userData.ph) * 0.18; });
+  SP.sign.position.y = 14.3 + Math.sin(t * 0.7) * 0.25;
+  if ((SP.syncT = (SP.syncT || 0) - dt) <= 0) { SP.syncT = 3; syncViewers(SP, SP.scene, o => ({ o, r: 11 + Math.random() * 16, a: Math.random() * 7, y: -4 + Math.random() * 14, sp: 0.05, tum: new THREE.Vector3(0.1, 0.3, 0.05), ph: Math.random() * 7, viewer: true })); }
+  SP.float.concat(Object.values(SP.viewers)).forEach(f => { f.a += dt * f.sp; const o = f.o;
+    o.position.set(Math.cos(f.a) * f.r, f.y + Math.sin(t * 0.4 + f.ph) * 1.2, Math.sin(f.a) * f.r + 6);
+    const i = o.userData.inner; i.rotation.x += dt * f.tum.x; i.rotation.y += dt * f.tum.y; i.rotation.z += dt * f.tum.z; if (f.viewer) o.lookAt(cam.position.x, o.position.y, cam.position.z); });
+  SP.shoot.forEach(s => { s.t -= dt; const m = s.l.material;
+    if (s.t <= 0) { s.t = 5 + Math.random() * 8; const a = Math.random() * Math.PI * 2; s.p.set(Math.cos(a) * 700, 150 + Math.random() * 350, Math.sin(a) * 700); s.v.set(-Math.cos(a) * 600 + (Math.random() - 0.5) * 300, -180, -Math.sin(a) * 600); s.life = 1.1; }
+    if (s.life > 0) { s.life -= dt; s.p.addScaledVector(s.v, dt); const p = s.l.geometry.attributes.position; p.setXYZ(0, s.p.x, s.p.y, s.p.z); p.setXYZ(1, s.p.x - s.v.x * 0.12, s.p.y - s.v.y * 0.12, s.p.z - s.v.z * 0.12); p.needsUpdate = true; m.opacity = Math.max(0, Math.min(1, s.life * 2)); } else m.opacity = 0; });
+}
+// ---------------------------------------------------------------- PLANET "LUCIDA": neon crystal world with a giant ringed planet, moons and auroras in the sky
+const PL = { scene: new THREE.Scene(), hop: [], viewers: {}, scr: [] };
+const plN = zNoise(71), plN2 = zNoise(73);
+function plH(x, z) {                        // ground height (flat landing plaza in the middle, mountains far away)
+  const d = Math.hypot(x, z), k = Math.min(1, Math.max(0, (d - 34) / 46)), base = (zFbm(plN, x * 0.012, z * 0.012, 5) - 0.5) * 16 * k;
+  const far = Math.max(0, d - 230) / 470; return base + Math.pow(Math.max(0, zFbm(plN2, x * 0.006, z * 0.006, 4) - 0.32), 1.2) * 240 * far * far + far * 20;
+}
+function buildPlanet() {
+  const S = PL.scene; S.fog = new THREE.FogExp2(0x2a1046, 0.0031);
+  const [sc, st] = zCanvasTex(4096, 2048), x = sc.getContext('2d');
+  zNebula(x, 4096, 2048, { seed: 19, top: 0, bot: 1024, mid: 560, spread: 160, cols: ['170,50,230', '255,60,170', '60,150,255', '80,230,220'] });
+  const hz = x.createLinearGradient(0, 700, 0, 1100); hz.addColorStop(0, 'rgba(42,16,70,0)'); hz.addColorStop(0.55, 'rgba(110,30,120,0.75)'); hz.addColorStop(0.75, 'rgba(255,90,150,0.55)'); hz.addColorStop(1, 'rgba(42,16,70,1)');
+  x.fillStyle = hz; x.fillRect(0, 700, 4096, 400); x.fillStyle = '#2a1046'; x.fillRect(0, 1100, 4096, 948); st.needsUpdate = true; S.add(zSky(st, 1600));
+  PL.st = zStars(1800, 1400, 1.7, 61); PL.st.geometry.attributes.position.array.forEach((v, i, a) => { if (i % 3 === 1) a[i] = Math.abs(v) + 40; }); S.add(PL.st);
+  S.add(new THREE.HemisphereLight(0x8a6ae0, 0x241030, 0.55));
+  const sunDir = new THREE.Vector3(0.82, 0.12, -0.56).normalize(), sun = new THREE.DirectionalLight(0xffb0c8, 1.5); sun.position.copy(sunDir).multiplyScalar(100); S.add(sun);
+  const sunS = zGlowSprite('rgb(255,170,200)', 380, 0.05); sunS.position.copy(sunDir).multiplyScalar(1300); S.add(sunS);
+  // the sky: giant ringed planet, moons
+  PL.giant = zGiant(300); PL.giant.position.set(-430, 430, -860); PL.giant.rotation.set(0.95, 0.45, -0.3); S.add(PL.giant);
+  PL.ice = zBall(46, PLT.ice, { atmo: 0x9fd8ff, ak: 1.1 }); PL.ice.position.set(320, 230, -700); S.add(PL.ice);
+  PL.red = zBall(24, PLT.red, { atmo: 0xff7a4a, ak: 1 }); PL.red.position.set(620, 160, 420); S.add(PL.red);
+  // auroras
+  PL.aur = new THREE.ShaderMaterial({ uniforms: { t: { value: 0 } }, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+    vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'uniform float t; varying vec2 vU; void main(){ float w = 0.5 + 0.5*sin(vU.x*38.0 + t*1.6 + sin(vU.x*9.0 - t*0.7)*2.0); float a = smoothstep(0.0,0.18,vU.y) * pow(1.0-vU.y,1.6) * (0.35 + 0.65*w) * smoothstep(0.0,0.08,vU.x) * smoothstep(1.0,0.92,vU.x); vec3 c = mix(vec3(0.15,1.0,0.75), vec3(1.0,0.25,0.8), clamp(vU.y*1.3 + 0.25*sin(vU.x*6.0+t*0.3),0.0,1.0)); gl_FragColor = vec4(c*a*0.9, a); }' });
+  [[520, 150, -0.5, 1.4], [600, 190, 1.9, 1.1], [560, 130, 3.6, 1.2]].forEach(([R, y, a0, span]) => { const g = new THREE.PlaneGeometry(1, 1, 90, 1), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const u = p.getX(i) + 0.5, v = p.getY(i) + 0.5, a = a0 + u * span, r = R + Math.sin(u * 9) * 30; p.setXYZ(i, Math.sin(a) * r, y + v * 150, -Math.cos(a) * r); }
+    S.add(new THREE.Mesh(g, PL.aur)); });
+  // ground
+  { const g = new THREE.PlaneGeometry(1500, 1500, 230, 230); g.rotateX(-Math.PI / 2); const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, plH(p.getX(i), p.getZ(i))); g.computeVertexNormals();
+    const [vc, vt] = zCanvasTex(512, 512), vx = vc.getContext('2d'), R = zRand(83); vx.fillStyle = '#000'; vx.fillRect(0, 0, 512, 512); vx.lineCap = 'round';
+    for (let i = 0; i < 26; i++) { let px = R() * 512, py = R() * 512; vx.strokeStyle = R() < 0.6 ? 'rgba(60,230,255,0.9)' : 'rgba(255,60,180,0.9)'; vx.lineWidth = 1 + R() * 2; vx.beginPath(); vx.moveTo(px, py);
+      for (let k = 0; k < 6; k++) { px += (R() - 0.5) * 120; py += (R() - 0.5) * 120; vx.lineTo(px, py); } vx.stroke(); }
+    vt.wrapS = vt.wrapT = THREE.RepeatWrapping; vt.repeat.set(34, 34); vt.needsUpdate = true;
+    const [dc, dt2] = zCanvasTex(512, 512), dx = dc.getContext('2d'), n = zNoise(5); const im = dx.createImageData(256, 256);
+    const im2 = dx.createImageData(512, 512); for (let j = 0; j < 512; j++) for (let i = 0; i < 512; i++) { const s = 0.55 + zFbm(n, i / 40, j / 40, 4) * 0.7, k = (j * 512 + i) * 4; im2.data[k] = 44 * s; im2.data[k + 1] = 24 * s; im2.data[k + 2] = 72 * s; im2.data[k + 3] = 255; }
+    dx.putImageData(im2, 0, 0); dt2.wrapS = dt2.wrapT = THREE.RepeatWrapping; dt2.repeat.set(40, 40); dt2.needsUpdate = true;
+    PL.groundMat = new THREE.MeshStandardMaterial({ map: dt2, color: 0xffffff, roughness: 0.82, metalness: 0.12, emissive: 0xffffff, emissiveMap: vt, emissiveIntensity: 0.7, flatShading: true });
+    S.add(new THREE.Mesh(g, PL.groundMat)); }
+  // crystals
+  { const R = zRand(91), geo = new THREE.OctahedronGeometry(1, 0); PL.cry = [];
+    [[0xff2d8f, 0.0], [0x38e8ff, 0.35], [0xb478ff, 0.7]].forEach(([c, off]) => { const n = 90, mat = new THREE.MeshStandardMaterial({ color: 0x1a0d26, emissive: c, emissiveIntensity: 0.6, roughness: 0.35, metalness: 0.2, transparent: true, opacity: 0.9 });
+      const im = new THREE.InstancedMesh(geo, mat, n), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+      for (let i = 0; i < n; i++) { const a = R() * Math.PI * 2, d = i < 8 ? 260 + R() * 160 : 40 + Math.pow(R(), 0.7) * 300, px = Math.cos(a) * d, pz = Math.sin(a) * d, big = i < 8 ? 9 + R() * 10 : 0.5 + Math.pow(R(), 2.5) * 5;
+        e.set((R() - 0.5) * 0.6, R() * 6, (R() - 0.5) * 0.6); q.setFromEuler(e); m.compose(new THREE.Vector3(px, plH(px, pz) + big * 1.4, pz), q, new THREE.Vector3(big * 0.38, big * 2.6, big * 0.38)); im.setMatrixAt(i, m); }
+      im.userData.off = off; S.add(im); PL.cry.push(im); }); }
+  // glowing pools
+  { const R = zRand(97); for (let i = 0; i < 9; i++) { const a = R() * Math.PI * 2, d = 45 + R() * 110, px = Math.cos(a) * d, pz = Math.sin(a) * d, r = 3 + R() * 6;
+    const m = new THREE.Mesh(new THREE.CircleGeometry(r, 32), new THREE.MeshStandardMaterial({ color: 0x041820, emissive: 0x2ee6ff, emissiveIntensity: 0.5, roughness: 0.05, metalness: 0.6 })); m.rotation.x = -Math.PI / 2; m.position.set(px, plH(px, pz) + 0.25, pz); S.add(m); } }
+  // landing plaza
+  { const [pc, pt] = zCanvasTex(1024, 1024), x2 = pc.getContext('2d'); x2.fillStyle = '#0d0a17'; x2.fillRect(0, 0, 1024, 1024); x2.lineWidth = 10;
+    [[470, '#ff2d8f'], [380, '#38e8ff'], [250, '#ff2d8f']].forEach(([r, c]) => { x2.strokeStyle = c; x2.beginPath(); x2.arc(512, 512, r, 0, 7); x2.stroke(); });
+    x2.fillStyle = '#38e8ff'; x2.font = '150px Anton, Impact, sans-serif'; x2.textAlign = 'center'; x2.fillText('LUCIDA', 512, 560); pt.needsUpdate = true;
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(15, 15.6, 0.6, 64), [new THREE.MeshStandardMaterial({ color: 0x15121f, metalness: 0.8, roughness: 0.4 }), new THREE.MeshStandardMaterial({ map: pt, emissive: 0xffffff, emissiveMap: pt, emissiveIntensity: 0.4, roughness: 0.7 }), new THREE.MeshStandardMaterial({ color: 0x15121f })]);
+    pad.position.y = 0.3; pad.rotation.y = Math.PI / 2; S.add(pad); }
+  [[0xff2d8f, -22, 16, -20], [0x38e8ff, 22, 16, -20], [0xb478ff, 0, 22, -24]].forEach(([c, x3, y, z]) => { const L = new THREE.PointLight(c, 1.1, 55, 2); L.position.set(x3, y, z); S.add(L); });
+  const mono = (w, h, x3, z, ry) => { const g = new THREE.Mesh(new THREE.BoxGeometry(w, h, 1.6), new THREE.MeshStandardMaterial({ color: 0x0b0912, roughness: 0.75, metalness: 0.35 })); g.position.set(x3, h / 2, z); g.rotation.y = ry; S.add(g); };
+  const add = (g, x3, y, z, ry) => { g.position.set(x3, y, z); g.rotation.y = ry; S.add(g); PL.scr.push(g); };
+  mono(3, 7, -9, -13.6, 0); mono(3, 7, 9, -13.6, 0);
+  add(zScreen('GAMEPLAY', 'SCREEN_GAMEPLAY_PLANET', 17.6, 9.9, 'planet', 0xff2d8f), 0, 11.5, -13, 0);
+  mono(2.2, 5, -19, -6, 0.75); add(zScreen('LIVECAM', 'SCREEN_LIVECAM_PLANET', 8.8, 4.95, 'planet', 0x38e8ff), -19, 7.6, -6, 0.75);
+  mono(2.2, 5, 19, -6, -0.75); add(zScreen('CHAT', 'SCREEN_CHAT_PLANET', 8.8, 4.95, 'planet', 0xb478ff), 19, 7.6, -6, -0.75);
+  mono(1.6, 2.4, 24, 9, -1.4); add(zScreen('COMMANDS', 'SCREEN_COMMANDS_PLANET', 7.2, 4.05, 'planet', 0x38e8ff), 24, 4.6, 9, -1.4);
+  const sign = zSign('LUCIDA', 'LUCID STATE CITY COLONY', '#38e8ff', 16); sign.position.set(0, 19.6, -13); S.add(sign); PL.sign = sign;
+  // parked ship
+  { const ship = new THREE.Group(), hull = new THREE.MeshStandardMaterial({ color: 0xdfe2ee, metalness: 0.6, roughness: 0.3 }), glow = new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff2d8f, emissiveIntensity: 3 });
+    const body = new THREE.Mesh(new THREE.ConeGeometry(1.6, 9, 12), hull); body.rotation.x = Math.PI / 2; ship.add(body);
+    const cock = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), new THREE.MeshStandardMaterial({ color: 0x101830, emissive: 0x38e8ff, emissiveIntensity: 0.6, metalness: 0.9, roughness: 0.05 })); cock.scale.set(0.8, 0.6, 1.6); cock.position.set(0, 0.8, 0.6); ship.add(cock);
+    [-1, 1].forEach(s => { const w = new THREE.Mesh(new THREE.BoxGeometry(5, 0.25, 2.6), hull); w.position.set(s * 2.8, -0.2, -2); w.rotation.z = s * -0.18; ship.add(w);
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 2.4), glow); tip.position.set(s * 5.2, -0.65, -2); ship.add(tip); });
+    const eng = zGlowSprite('rgb(255,70,170)', 4, 0.1); eng.position.set(0, 0, -4.8); ship.add(eng); PL.eng = eng;
+    ship.position.set(-8.5, 2.2, 6); ship.rotation.y = 2.3; S.add(ship); PL.ship = ship; }
+  // floating dust
+  { const n = 900, g = new THREE.BufferGeometry(), p = new Float32Array(n * 3), R = zRand(13); for (let i = 0; i < n; i++) p.set([(R() - 0.5) * 120, R() * 30, (R() - 0.5) * 120], i * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3)); PL.dust = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffb0f0, size: 0.18, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })); S.add(PL.dust); }
+  // low-gravity hoppers
+  const R = zRand(101); for (let i = 0; i < 14; i++) { const o = zAstro(); S.add(o); PL.hop.push({ o, r: 18 + R() * 22, a: R() * 7, sp: (R() < 0.5 ? -1 : 1) * (0.04 + R() * 0.05), ph: R() * 7, hz: 0.6 + R() * 0.5 }); }
+}
+function planetTick(dt, t) {
+  PL.aur.uniforms.t.value = t; PL.giant.userData.body.rotation.y += dt * 0.004; PL.giant.rotation.y += dt * 0.0015;
+  PL.cry.forEach(c => c.material.emissiveIntensity = 0.5 + Math.sin(t * 1.4 + c.userData.off * 6) * 0.2);
+  PL.groundMat.emissiveIntensity = 0.6 + Math.sin(t * 0.8) * 0.15;
+  PL.eng.scale.setScalar(4 + Math.sin(t * 9) * 0.6); PL.ship.position.y = 2.2 + Math.sin(t * 0.9) * 0.25;
+  PL.sign.position.y = 19.6 + Math.sin(t * 0.7) * 0.2;
+  const dp = PL.dust.geometry.attributes.position; for (let i = 0; i < dp.count; i++) { let y = dp.getY(i) + dt * 0.6; if (y > 30) y = 0; dp.setY(i, y); } dp.needsUpdate = true;
+  if ((PL.syncT = (PL.syncT || 0) - dt) <= 0) { PL.syncT = 3; syncViewers(PL, PL.scene, o => ({ o, r: 16 + Math.random() * 12, a: Math.random() * 7, sp: 0.06, ph: Math.random() * 7, hz: 0.8, viewer: true })); }
+  PL.hop.concat(Object.values(PL.viewers)).forEach(h => { h.a += dt * h.sp; const x = Math.cos(h.a) * h.r, z = Math.sin(h.a) * h.r + 4, j = Math.abs(Math.sin(t * h.hz + h.ph));
+    h.o.position.set(x, plH(x, z) + 1.15 + j * 1.8, z); h.o.rotation.y = h.a * -1 + (h.sp > 0 ? Math.PI : 0); h.o.userData.inner.rotation.x = (1 - j) * 0.25; });
+}
+// ---------------------------------------------------------------- camera views + orbit + travel between places
+const ZONE_SHOTS = [
+  ['space', 'Space station', [0, 5.6, 27], [0, 5, 0], 50], ['space', 'Space wide', [30, 13, 46], [-4, 3, -6], 55], ['space', 'Planets view', [48, 7, 34], [430, -95, -600], 50],
+  ['planet', 'Planet landing', [0, 4.6, 19], [0, 8.5, -13], 52], ['planet', 'Planet sky view', [16, 2.6, 26], [-14, 22, -40], 62], ['planet', 'Crystal fields', [44, 7, 34], [0, 9, -8], 55]];
+const ZONE_FOCUS = [['Space main screen', 'SCREEN_GAMEPLAY_SPACE'], ['Space cam', 'SCREEN_LIVECAM_SPACE'], ['Space chat', 'SCREEN_CHAT_SPACE'], ['Space commands', 'SCREEN_COMMANDS_SPACE'],
+  ['Planet main screen', 'SCREEN_GAMEPLAY_PLANET'], ['Planet cam', 'SCREEN_LIVECAM_PLANET'], ['Planet chat', 'SCREEN_CHAT_PLANET'], ['Planet commands', 'SCREEN_COMMANDS_PLANET']];
+function buildZones() {
+  zPlanetTextures(); buildSpace(); buildPlanet();
+  ZONE_SHOTS.forEach(([zone, label, p, l, fov]) => { const pos = new THREE.Vector3(...p); shots.push({ name: 'ZONE', zone, label, pos, quat: lookQuat(pos, new THREE.Vector3(...l)), fov }); });
+  ZONE_FOCUS.forEach(f => FOCUS.push(f));
+}
+function zoneOrbit() {
+  const C = ZONES.cur === 'space' ? { c: new THREE.Vector3(0, 4, 3), r: 36, h: 8, look: 4.5 } : { c: new THREE.Vector3(0, 0, -2), r: 36, h: 8.5, look: 11 };
+  return { c: C.c, r: C.r, h: C.h, look: C.look, a: Math.atan2(cam.position.x - C.c.x, cam.position.z - C.c.z) };
+}
+function setZone(z) {
+  ZONES.cur = z; renderPass.scene = z === 'space' ? SP.scene : z === 'planet' ? PL.scene : scene; renderPass.camera = cam;
+  document.body.dataset.zone = z;
+}
+const TR = { on: false };
+function travel(to, shot) {
+  if (TR.on) { TR.shot = shot; TR.to = to; return; }
+  const from = ZONES.cur; setTour(false); releaseGuide();
+  Object.assign(TR, { on: true, from, to, shot, t: 0, v: 0, warp: false, mode: from === 'space' && to === 'planet' ? 'dive' : from === 'space' ? 'forward' : 'up',
+    p0: cam.position.clone(), q0: cam.quaternion.clone(), f0: cam.fov });
+  whoosh(TR.mode === 'dive' ? 4.6 : 3.8);
+  toast({ space: 'Launching to space...', planet: from === 'space' ? 'Diving to planet Lucida...' : 'Flying to planet Lucida...', city: 'Heading back to Lucid State City...' }[to]);
+  setTimeout(postState, 50);
+}
+function trTick(dt, t) {
+  if (!TR.on) return false;
+  TR.t += dt; const A = TR.mode === 'dive' ? 2.5 : 1.5, W = 1.7;
+  if (TR.t < A) {                                         // leave: blast up, fly forward, or dive at the planet
+    const k = TR.t / A, fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    if (TR.mode === 'up') { TR.v += dt * (30 + k * 320); cam.position.y += TR.v * dt; const flat = fwd.clone().setY(0).normalize();
+      cam.quaternion.slerp(lookQuat(cam.position, cam.position.clone().add(new THREE.Vector3(0, 10, 0)).addScaledVector(flat, 4)), Math.min(1, dt * 1.6)); }
+    else if (TR.mode === 'forward') { TR.v += dt * (25 + k * 340); cam.position.addScaledVector(fwd, TR.v * dt); }
+    else { const c = SP.luc.position, tgt = c.clone().add(TR.p0.clone().sub(c).normalize().multiplyScalar(126)), e = k * k * k;
+      cam.position.copy(TR.p0).lerp(tgt, e); cam.quaternion.slerp(lookQuat(cam.position, c), Math.min(1, dt * 2.5)); }
+    cam.fov = TR.f0 + (88 - TR.f0) * k * k; cam.updateProjectionMatrix(); bloom.strength = 0.9 + k * 1.4;
+    if (ZONES.cur === 'space') spaceTick(dt, t); else if (ZONES.cur === 'planet') planetTick(dt, t);
+    return true;
+  }
+  if (TR.t < A + W) {                                     // warp tunnel
+    if (!TR.warp) { TR.warp = true; flash(0.55, 0.5); WARP.cam.aspect = cam.aspect; WARP.cam.updateProjectionMatrix(); renderPass.scene = WARP.scene; renderPass.camera = WARP.cam; }
+    const k = (TR.t - A) / W; warpTick(dt, 220 + Math.sin(k * Math.PI) * 1100, TR.to); bloom.strength = 1.6 + Math.sin(k * Math.PI) * 0.8; return true;
+  }
+  // arrive
+  flash(0.95, 1.1); setZone(TR.to); TR.on = false; const s = TR.shot; bloom.strength = 1.2;
+  if (s.walk || s.follow || s.orbit) { if (TR.to !== 'city') { cam.position.set(0, 10, 40); } startMove(s); }
+  else { const back = new THREE.Vector3(0, 0, 1).applyQuaternion(s.quat), start = TR.to === 'planet' ? new THREE.Vector3(0, 150, 230) : TR.to === 'space' ? s.pos.clone().addScaledVector(back, 110).add(new THREE.Vector3(0, 30, 0)) : s.pos.clone().addScaledVector(back, 50).add(new THREE.Vector3(0, 90, 0));
+    cam.position.copy(start); cam.quaternion.copy(lookQuat(start, s.pos.clone().lerp(new THREE.Vector3(0, 0, 0), TR.to === 'city' ? 0 : 0.5))); cam.fov = 75; cam.updateProjectionMatrix();
+    fly = { fromP: start, fromQ: cam.quaternion.clone(), fromF: 75, to: s, t: 0, dur: TR.to === 'city' ? 3.0 : 3.4 }; hold = null; }
+  setTimeout(postState, 50); return false;
+}
+function zoneTick(dt, t) {
+  if (SHOW.mode !== 'live' && ZONES.cur !== 'city' && !TR.on) setZone('city');      // intro / BRB / outro always play in the city
+  if (!TR.on) { if (ZONES.cur === 'space') spaceTick(dt, t); else if (ZONES.cur === 'planet') planetTick(dt, t); }
+}
 function loop() {
   requestAnimationFrame(loop);
   if (window.LSC_AVATAR) { const dt0 = Math.min(clock.getDelta(), 0.05); avatarTick(clock.getElapsedTime(), dt0); return; }
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.getElapsedTime();
-  updateWalkers(dt, t); updateFloat(dt, t); if (!showTick(dt, t)) updateCamera(dt); updateCars(dt); updateRain(dt, t); updateFireworks(dt);
+  updateWalkers(dt, t); updateFloat(dt, t); zoneTick(dt, t); if (!showTick(dt, t) && !trTick(dt, t)) updateCamera(dt); updateCars(dt); updateRain(dt, t); updateFireworks(dt);
   if (fwQueue > 0) { fwT -= dt; if (fwT <= 0) { firework(); fwQueue--; fwT = 0.35 + Math.random() * 0.5; } }
   if (holoRing) { holoRing.rotation.z += dt * 0.6; }
   if (holoText) { holoText.rotation.y += dt * 0.5; holoText.position.y += Math.sin(t * 1.2) * 0.004; }
@@ -1582,7 +1976,7 @@ function loop() {
   clubLights.forEach((L, i) => { L.intensity = party ? L.userData.base * (1.2 + Math.sin(t * 6 + i)) : L.userData.base * (0.9 + 0.1 * Math.sin(t * 0.8 + i)); });
   stripes.forEach((s, i) => { s.material.emissiveIntensity = party ? (Math.sin(t * 12 + i) > 0 ? 3.5 : 0.2) : s.userData.base * (0.8 + 0.2 * Math.sin(t * 2 + i * 0.6)); });
   const focusOn = hold && hold.s.still && !fly;
-  bloom.strength += ((focusOn ? 0.18 : party ? 1.15 : 0.9) - bloom.strength) * Math.min(1, dt * 4);   // keep focused screens crisp
+  if (!TR.on) bloom.strength += ((focusOn ? 0.18 : party ? 1.15 : ZONES.cur === 'city' ? 0.9 : 0.85) - bloom.strength) * Math.min(1, dt * 4);   // keep focused screens crisp
   avatarTick(t, dt);
   const avIn = avWorldBegin();
   composer.render();
@@ -2284,7 +2678,7 @@ if (bc) bc.onmessage = e => {
 loop();
 window.__grw = (i) => { if (guideRW && guideRW.route) { const n = guideRW.route[i]; guideRW.i = i; guideRW.p.set(n[0], 0, n[1]); } };
 window.__rw = i => { const r = walkRW || (walkRW = makeRW(new THREE.Vector3(), 0)); r.i = i; r.p.set(ROUTE[i][0], 0, ROUTE[i][1]); r.wait = 0; r.look = null; r.spin = false; };
-window.LSC = { musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
+window.LSC = { zones: () => ({ cur: ZONES.cur, tr: TR.on }), camAt: (p, l) => { const s = { name: 'T', label: 'test', pos: new THREE.Vector3(...p), quat: lookQuat(new THREE.Vector3(...p), new THREE.Vector3(...l)), fov: 50, still: true }; cam.position.copy(s.pos); cam.quaternion.copy(s.quat); hold = { s, t: 0 }; fly = null; }, skipMove: () => { if (fly) fly.t = 1; if (TR.on) TR.t = 99; }, musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
 </script>
 <script>
@@ -2442,8 +2836,10 @@ if (window.LSC_CONTROL) {
     {k:'tower',n:'Media Tower',c:'#38e8ff',shots:['Tower'],screens:['Tower gameplay','Tower cam','Tower chat','Tower commands']},
     {k:'zc',n:'Zero Cool',c:'#d0102a',shots:['Club outside','Zero Cool','Club floor','Green Room'],screens:['Zero Cool main','Zero Cool cam','Zero Cool chat','Zero Cool commands','Green Room screen']},
     {k:'fc',n:'Fight Club',c:'#ff8a1a',shots:['Fight Club outside','Fight stage','Fight Club floor','K.O. Lounge','Hall of Champions'],screens:['Hall of Champions','Fight Club main','Fight Club cam','Fight Club chat','Fight Club commands','Bracket board','Fight Club door screen','Versus TV 1','Versus TV 2','Versus TV 3']},
+    {k:'space',n:'Space',c:'#38e8ff',shots:['Space station','Space wide','Planets view'],screens:['Space main screen','Space cam','Space chat','Space commands']},
+    {k:'planet',n:'Planet Lucida',c:'#ff4fd8',shots:['Planet landing','Planet sky view','Crystal fields'],screens:['Planet main screen','Planet cam','Planet chat','Planet commands']},
     {k:'bit',n:'B.I.T.',c:'#9a5aff',shots:['B.I.T. outside','Giant CRT','CRT stations','B.I.T. floor','Y2K Lounge'],screens:['B.I.T. giant CRT','CRT 1','CRT 2','CRT 3','B.I.T. door screen','B.I.T. cam','B.I.T. chat','B.I.T. commands']}];
-  const SHORT={'Street walk':'Walk the city','Follow player':'Follow a player','Fight Club outside':'Outside','B.I.T. outside':'Outside','Club outside':'Outside','Fight Club floor':'Floor','B.I.T. floor':'Floor','Club floor':'Floor','Zero Cool':'Entrance',
+  const SHORT={'Space station':'Station','Space wide':'Wide','Planets view':'Planets','Planet landing':'Landing','Planet sky view':'Sky view','Space main screen':'Main screen','Space cam':'Cam','Space chat':'Chat','Space commands':'Commands','Planet main screen':'Main screen','Planet cam':'Cam','Planet chat':'Chat','Planet commands':'Commands','Street walk':'Walk the city','Follow player':'Follow a player','Fight Club outside':'Outside','B.I.T. outside':'Outside','Club outside':'Outside','Fight Club floor':'Floor','B.I.T. floor':'Floor','Club floor':'Floor','Zero Cool':'Entrance',
     'Tower gameplay':'Gameplay','Tower cam':'Cam','Tower chat':'Chat','Tower commands':'Commands','Zero Cool main':'Main screen','Zero Cool cam':'Cam','Zero Cool chat':'Chat','Zero Cool commands':'Commands',
     'Fight Club main':'Main screen','Fight Club cam':'Cam','Fight Club chat':'Chat','Fight Club commands':'Commands','Fight Club door screen':'Door screen','B.I.T. giant CRT':'Giant CRT','B.I.T. door screen':'Door screen','B.I.T. cam':'Cam','B.I.T. chat':'Chat','B.I.T. commands':'Commands'};
   let sel=null;try{sel=localStorage.getItem('lsc_place');}catch(e){}
@@ -2472,6 +2868,7 @@ if (window.LSC_CONTROL) {
   $('placeTiles').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel=b.dataset.p;try{localStorage.setItem('lsc_place',sel);}catch(err){}
     const P=lists().find(p=>p.k===sel);if(P&&P.sh[0])P.sh[0].b.click();render();setTimeout(render,200);};
   $('tourBig').onclick=()=>{$('tour').click();setTimeout(render,200);};
+  $('travelRow').onclick=e=>{const b=e.target.closest('button');if(!b)return;const x=shotBtns().find(y=>y.l===b.dataset.go);if(x){x.b.click();const p={'Space station':'space','Planet landing':'planet','Gateway':'streets'}[b.dataset.go];sel=p;try{localStorage.setItem('lsc_place',sel);}catch(err){}}setTimeout(render,200);};
   $('orbitBig').onclick=()=>{const ob=shotBtns().find(x=>x.l==='Orbit');if(ob)ob.b.click();setTimeout(render,200);};
   // tabs
   document.querySelector('#panel .tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.tab;
