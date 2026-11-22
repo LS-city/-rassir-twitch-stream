@@ -42,7 +42,7 @@ button:disabled{opacity:.4;cursor:default}
 <div class="top">
   <div>
     <h1>Zero Cool cinema</h1>
-    <p class="hint">Inside Zero Cool in Lucid State City. Load an MP4: the house lights go down, the screen lights up the room, and the sound comes from the screen. In VR, trigger plays or pauses and grip toggles the crowd.</p>
+    <p class="hint">Inside Zero Cool in Lucid State City. Load an MP4: the house lights go down, the screen lights up the room, and the sound comes from the screen. In VR, pinch to play or pause, or tap the floating buttons by your hand. Controllers work too.</p>
   </div>
   
 </div>
@@ -177,11 +177,74 @@ const crowdBtn = document.getElementById('crowd');
 crowdBtn.addEventListener('click', () => { crowdOn = !crowdOn; crowdBtn.textContent = crowdOn ? 'Crowd: on' : 'Crowd: off'; applyCrowd(); });
 function togglePlay(){ if(!videoTex) return; playBtn.click(); }
 
+let lastPinch = 0;
 for(let i = 0; i < 2; i++){
   const c = renderer.xr.getController(i);
-  c.addEventListener('selectstart', togglePlay);
+  c.addEventListener('selectstart', () => { const n = performance.now(); if(n - lastPinch > 800){ lastPinch = n; togglePlay(); } });
   c.addEventListener('squeezestart', () => crowdBtn.click());
   rig.add(c);
+}
+
+const JOINT_GEO = new THREE.SphereGeometry(0.008, 8, 6);
+const JOINT_MAT = new THREE.MeshBasicMaterial({color:0xff5a6e});
+const TIP_MAT = new THREE.MeshBasicMaterial({color:0x7ff3ff});
+const hands = [];
+for(let i = 0; i < 2; i++){
+  const h = renderer.xr.getHand(i);
+  h.userData.dots = {};
+  rig.add(h); hands.push(h);
+}
+function drawHands(){
+  hands.forEach(h => {
+    if(!h.joints) return;
+    Object.entries(h.joints).forEach(([name, j]) => {
+      let d = h.userData.dots[name];
+      if(!d){ d = new THREE.Mesh(JOINT_GEO, name === 'index-finger-tip' ? TIP_MAT : JOINT_MAT); h.userData.dots[name] = d; j.add(d); }
+      d.visible = j.visible;
+    });
+  });
+}
+
+function label(text, on){
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = on ? '#e0213a' : '#1a0a12'; x.fillRect(0,0,256,128);
+  x.strokeStyle = '#ff5a6e'; x.lineWidth = 8; x.strokeRect(4,4,248,120);
+  x.fillStyle = '#fff'; x.font = 'bold 40px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, 128, 66);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+}
+const panel = new THREE.Group();
+panel.position.set(0.28, 1.0, -0.42); panel.rotation.set(-0.6, -0.35, 0);
+panel.visible = false; rig.add(panel);
+const panelButtons = [];
+[['Play', togglePlay], ['Crowd', () => crowdBtn.click()], ['-10s', () => { video.currentTime = Math.max(0, video.currentTime - 10); }], ['+10s', () => { video.currentTime = Math.min(video.duration || 0, video.currentTime + 10); }]]
+  .forEach(([name, fn], i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.055), new THREE.MeshBasicMaterial({map: label(name), toneMapped:false}));
+    m.position.set((i % 2) * 0.125 - 0.0625, -Math.floor(i / 2) * 0.07, 0);
+    m.userData = {name, fn, cool: 0};
+    panel.add(m); panelButtons.push(m);
+  });
+function setPanelLabel(btn, text, on){ btn.material.map.dispose(); btn.material.map = label(text, on); btn.material.needsUpdate = true; }
+const tipPos = new THREE.Vector3(), btnPos = new THREE.Vector3(), local = new THREE.Vector3();
+function pokePanel(){
+  const now = performance.now();
+  hands.forEach(h => {
+    const tip = h.joints && h.joints['index-finger-tip'];
+    if(!tip || !tip.visible) return;
+    tip.getWorldPosition(tipPos);
+    panelButtons.forEach(b => {
+      local.copy(tipPos); b.worldToLocal(local);
+      if(Math.abs(local.x) < 0.06 && Math.abs(local.y) < 0.032 && Math.abs(local.z) < 0.02 && now > b.userData.cool){
+        b.userData.cool = now + 900; b.userData.fn();
+        b.scale.setScalar(0.9); setTimeout(() => b.scale.setScalar(1), 150);
+      }
+    });
+  });
+  const play = panelButtons[0], crowd = panelButtons[1];
+  const pl = video.paused ? 'Play' : 'Pause', cr = crowdOn ? 'Crowd on' : 'Crowd off';
+  if(play.userData.shown !== pl){ play.userData.shown = pl; setPanelLabel(play, pl, !video.paused); }
+  if(crowd.userData.shown !== cr){ crowd.userData.shown = cr; setPanelLabel(crowd, cr, crowdOn); }
 }
 
 const sampler = document.createElement('canvas'); sampler.width = 16; sampler.height = 9;
@@ -213,14 +276,14 @@ if(navigator.xr){
 vrBtn.addEventListener('click', async () => {
   if(xrSession){ xrSession.end(); return; }
   try {
-    xrSession = await navigator.xr.requestSession('immersive-vr', {optionalFeatures:['local-floor']});
+    xrSession = await navigator.xr.requestSession('immersive-vr', {optionalFeatures:['local-floor','hand-tracking']});
     xrSession.addEventListener('end', () => { xrSession = null; vrBtn.textContent = 'Enter VR'; });
     await renderer.xr.setSession(xrSession);
     vrBtn.textContent = 'Exit VR';
   } catch(err) { statusEl.textContent = 'Could not start VR in this browser.'; }
 });
-renderer.xr.addEventListener('sessionstart', () => { rig.position.copy(SEAT); rig.rotation.y = Math.PI/2; });
-renderer.xr.addEventListener('sessionend', () => { rig.position.set(0,0,0); rig.rotation.y = 0; resetSeat(); });
+renderer.xr.addEventListener('sessionstart', () => { rig.position.copy(SEAT); rig.rotation.y = Math.PI/2; panel.visible = true; });
+renderer.xr.addEventListener('sessionend', () => { rig.position.set(0,0,0); rig.rotation.y = 0; panel.visible = false; resetSeat(); });
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
@@ -229,6 +292,7 @@ addEventListener('resize', () => {
 
 renderer.setAnimationLoop(() => {
   if(!renderer.xr.isPresenting) controls.update();
+  else { drawHands(); pokePanel(); }
   const playing = videoTex && !video.paused;
   if(++tick % 4 === 0) sampleScreen();
   const dt = Math.min(clock.getDelta(), 0.1);
