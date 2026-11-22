@@ -42,7 +42,7 @@ button:disabled{opacity:.4;cursor:default}
 <div class="top">
   <div>
     <h1>Zero Cool cinema</h1>
-    <p class="hint">Inside Zero Cool in Lucid State City. Load an MP4 and it plays on the main screen over the DJ stage and in the Green Room.</p>
+    <p class="hint">Inside Zero Cool in Lucid State City. Load an MP4: the house lights go down, the screen lights up the room, and the sound comes from the screen. In VR, trigger plays or pauses and grip toggles the crowd.</p>
   </div>
   
 </div>
@@ -51,6 +51,7 @@ button:disabled{opacity:.4;cursor:default}
   <button id="play" disabled>Play</button>
   <button id="mute" disabled>Sound on</button>
   <button id="seat">Reset seat</button>
+  <button id="crowd">Crowd: on</button>
   <span id="vrslot"></span>
   <p id="status">No video loaded yet</p>
 </div>
@@ -104,10 +105,41 @@ const idleTex = new THREE.CanvasTexture(idle); idleTex.flipY = false; idleTex.en
 const screenMat = new THREE.MeshBasicMaterial({map:idleTex, toneMapped:false});
 
 const SCREENS = ['SCREEN_GAMEPLAY_ZC1','SCREEN_GAMEPLAY_ZC2'];
+const ambient = scene.children.find(o => o.isAmbientLight);
+const glowL = new THREE.PointLight(0xffffff, 0, 34), glowR = new THREE.PointLight(0xffffff, 0, 34);
+glowL.position.set(-29, 6, -26); glowR.position.set(-29, 6, -19); scene.add(glowL, glowR);
+const screenCenter = new THREE.Vector3(-33.4, 6.9, -22.5);
+const listener = new THREE.AudioListener(); camera.add(listener);
+const sound = new THREE.PositionalAudio(listener);
+sound.setRefDistance(10); sound.setRolloffFactor(0.6);
+let glowMats = [], citizens = [], crowdOn = true;
+
+function applyCrowd(){
+  citizens.forEach(c => {
+    const p = new THREE.Vector3(); c.getWorldPosition(p);
+    const blocking = p.x < SEAT.x + 1.5 && Math.abs(p.z - SEAT.z) < 3.2;
+    c.visible = crowdOn && !blocking;
+  });
+}
 new THREE.GLTFLoader().load('world.glb', gltf => {
   const root = gltf.scene;
   SCREENS.forEach(n => { const o = root.getObjectByName(n); if(o) o.traverse(m => { if(m.isMesh) m.material = screenMat; }); });
+  const main = root.getObjectByName('SCREEN_GAMEPLAY_ZC1');
+  if(main){ main.updateWorldMatrix(true,true); new THREE.Box3().setFromObject(main).getCenter(screenCenter); }
+  sound.position.copy(screenCenter).add(new THREE.Vector3(0.5,0,0)); scene.add(sound);
+  const seen = new Set();
+  root.traverse(m => {
+    if(!m.isMesh || m.material === screenMat) return;
+    (Array.isArray(m.material) ? m.material : [m.material]).forEach(mt => {
+      if(seen.has(mt)) return; seen.add(mt);
+      if(mt.emissive) mt.userData.e0 = mt.emissiveIntensity;
+      if(mt.isMeshBasicMaterial || (mt.emissive && mt.emissive.getHex() > 0)) mt.userData.c0 = mt.color.clone();
+      glowMats.push(mt);
+    });
+  });
+  root.children.forEach(c => { if(/^CITIZEN/.test(c.name)) citizens.push(c); });
   scene.add(root);
+  applyCrowd();
   loadingEl.remove();
 }, p => {
   if(p.total) loadingEl.textContent = 'Loading Zero Cool… ' + Math.round(p.loaded/p.total*100) + '%';
@@ -122,6 +154,7 @@ document.getElementById('file').addEventListener('change', e => {
   if(lastUrl) URL.revokeObjectURL(lastUrl);
   lastUrl = URL.createObjectURL(f);
   video.src = lastUrl; video.muted = false;
+  try { listener.context.resume(); if(!sound.source) sound.setMediaElementSource(video); } catch(err) {}
   statusEl.textContent = 'Loading ' + f.name + '…';
   const fail = () => { statusEl.textContent = 'This browser could not play that file. Try an H.264 MP4.'; };
   video.onerror = fail;
@@ -140,6 +173,33 @@ playBtn.addEventListener('click', () => {
 });
 muteBtn.addEventListener('click', () => { video.muted = !video.muted; muteBtn.textContent = video.muted ? 'Sound on' : 'Mute'; });
 document.getElementById('seat').addEventListener('click', resetSeat);
+const crowdBtn = document.getElementById('crowd');
+crowdBtn.addEventListener('click', () => { crowdOn = !crowdOn; crowdBtn.textContent = crowdOn ? 'Crowd: on' : 'Crowd: off'; applyCrowd(); });
+function togglePlay(){ if(!videoTex) return; playBtn.click(); }
+
+for(let i = 0; i < 2; i++){
+  const c = renderer.xr.getController(i);
+  c.addEventListener('selectstart', togglePlay);
+  c.addEventListener('squeezestart', () => crowdBtn.click());
+  rig.add(c);
+}
+
+const sampler = document.createElement('canvas'); sampler.width = 16; sampler.height = 9;
+const sctx = sampler.getContext('2d', {willReadFrequently:true});
+const leftC = new THREE.Color(), rightC = new THREE.Color();
+let tick = 0, house = 1, glowAmt = 0; const clock = new THREE.Clock();
+function sampleScreen(){
+  if(!videoTex || video.readyState < 2) return;
+  sctx.drawImage(video, 0, 0, 16, 9);
+  const d = sctx.getImageData(0, 0, 16, 9).data;
+  const sum = [[0,0,0],[0,0,0]];
+  for(let y = 0; y < 9; y++) for(let x = 0; x < 16; x++){
+    const k = (y*16+x)*4, s = sum[x < 8 ? 0 : 1];
+    s[0] += d[k]; s[1] += d[k+1]; s[2] += d[k+2];
+  }
+  leftC.setRGB(sum[0][0]/18360, sum[0][1]/18360, sum[0][2]/18360);
+  rightC.setRGB(sum[1][0]/18360, sum[1][1]/18360, sum[1][2]/18360);
+}
 
 const vrBtn = document.createElement('button');
 vrBtn.textContent = 'Enter VR'; vrBtn.disabled = true;
@@ -169,6 +229,20 @@ addEventListener('resize', () => {
 
 renderer.setAnimationLoop(() => {
   if(!renderer.xr.isPresenting) controls.update();
+  const playing = videoTex && !video.paused;
+  if(++tick % 4 === 0) sampleScreen();
+  const dt = Math.min(clock.getDelta(), 0.1);
+  house += ((playing ? 0 : 1) - house) * Math.min(1, dt * 1.2);
+  glowAmt += ((playing ? 1 : 0) - glowAmt) * Math.min(1, dt * 2);
+  const lvl = 0.04 + 0.96 * house;
+  glowMats.forEach(m => {
+    if(m.userData.e0 !== undefined) m.emissiveIntensity = m.userData.e0 * lvl;
+    if(m.userData.c0 && m.isMeshBasicMaterial) m.color.copy(m.userData.c0).multiplyScalar(lvl);
+  });
+  ambient.intensity = 0.06 + 0.29 * house;
+  red.intensity = 1.2 * house;
+  glowL.color.lerp(leftC, 0.25); glowR.color.lerp(rightC, 0.25);
+  glowL.intensity = glowR.intensity = 3.2 * glowAmt;
   renderer.render(scene, camera);
 });
 }
