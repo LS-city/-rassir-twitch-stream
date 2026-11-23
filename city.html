@@ -134,6 +134,7 @@ canvas#c.pick{cursor:pointer}
 </div>
   </section>
   <section data-tab="show" hidden>  <h3>Show</h3>
+  <div class="row" style="margin-bottom:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">Intro</span><select id="showStyle" style="flex:1"><option value="random">Random each stream</option><option value="neon">Neon city (classic)</option><option value="horror">Horror: Ashen Hollow</option><option value="tour">World tour (synthwave)</option></select></div>
   <div class="row"><select id="showLen" style="flex:1 1 90px;width:auto"><option value="60">1 min</option><option value="120">2 min</option><option value="180" selected>3 min</option><option value="300">5 min</option><option value="600">10 min</option></select><button id="showIntro">Start intro</button></div>
   <div class="row" style="margin-top:6px" id="showBtns"><button id="showBrb">BRB</button><button id="showLive">We're live</button><button id="showOutro">Outro</button></div>
   <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><label class="note" style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="musOn" style="width:18px;min-height:18px"> Techno music</label><input type="range" id="musVol" min="0" max="100" style="flex:1;min-height:30px;padding:0"></div>
@@ -288,7 +289,10 @@ const store = {
 };
 const params = new URLSearchParams(location.search);
 let SS = store.get('stats', null); if (!SS || typeof SS !== 'object' || !SS.games) SS = { game: '', preset: 'fighting', start: Date.now(), games: {}, feed: [], show: 'rotate', hud: true, hudPos: 'tr', mods: true, custom: ['Stat 1', 'Stat 2'] };
-SS.feed = SS.feed || []; if (SS.last && Date.now() - SS.last > 6 * 3600e3) { SS.games = {}; SS.feed = []; SS.start = Date.now(); }     // a new stream day starts a fresh session
+SS.feed = SS.feed || [];
+const INTRO_STYLES = { neon: 'Neon city (classic)', horror: 'Horror: Ashen Hollow', tour: 'World tour (synthwave)', random: 'Random each stream' };
+let introStyle = store.get('introStyle', 'random');
+ if (SS.last && Date.now() - SS.last > 6 * 3600e3) { SS.games = {}; SS.feed = []; SS.start = Date.now(); }     // a new stream day starts a fresh session
 const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('lscCity') : null;     // talks to the LSC Control dock
 const setStatus = t => { $('status').textContent = t; if (bc) try { bc.postMessage({ cmd: 'status', data: { msg: t } }); } catch (e) {} };
 let toastT = 0;
@@ -2200,7 +2204,7 @@ function trTick(dt, t) {
   setTimeout(postState, 50); return false;
 }
 function zoneTick(dt, t) {
-  if (SHOW.mode !== 'live' && (ZONES.cur !== 'city' || TR.on)) { if (TR.on) { TR.on = false; renderPass.camera = cam; } setZone('city'); }      // intro / BRB / outro always play in the city
+  if (SHOW.mode !== 'live' && !(SHOW.mode === 'intro' && SHOW.style !== 'neon') && (ZONES.cur !== 'city' || TR.on)) { if (TR.on) { TR.on = false; renderPass.camera = cam; } setZone('city'); }      // intro / BRB / outro always play in the city
   harborTick(dt, t); cityHeliTick(dt, t);
   if (!TR.on) { if (ZONES.cur === 'space') spaceTick(dt, t); else if (ZONES.cur === 'planet') planetTick(dt, t); else if (ZONES.cur === 'bay') bayTick(dt, t); else if (ZONES.cur === 'summit') summitTick(dt, t); else if (ZONES.cur === 'hollow') hollowTick(dt, t); else if (ZONES.cur === 'zero') zeroTick(dt, t); }
 }
@@ -3663,8 +3667,9 @@ const nowS = () => performance.now() / 1000;
 const inOBS = !!window.obsstudio;
 function obsScene(n) { if (!autoScene || !n || !window.obsstudio || !window.obsstudio.setCurrentScene) return; try { window.obsstudio.setCurrentScene(n); } catch (e) {} }
 function topChatters(n) { const list = Object.entries(chatCount).sort((a, b) => b[1] - a[1]).slice(0, n).map(e => e[0]); return list.length ? list : spawned.slice(-n).map(w => w.user); }
-function startShow(mode, len, fromObs) {
+function startShow(mode, len, fromObs, style) {
   const prev = SHOW.mode; SHOW.mode = mode; SHOW.t0 = nowS(); musInit();
+  if (mode === 'intro') { SHOW.style = pickIntroStyle(style); Object.assign(SHOW, { hScare: false, hStatic: false, hEnd: null, tourI: -1, tourWarped: false, holdFrom: null, diveFrom: null }); introReset(); if (TR.on) { TR.on = false; renderPass.camera = cam; } if (SHOW.style === 'neon') setZone('city'); }
   SHOW.from = cam.position.clone(); SHOW.fromQ = cam.quaternion.clone(); SHOW.fromF = cam.fov;
   if (mode !== 'live') { tourOn = false; $('tour').classList.remove('on'); fly = null; }
   if (mode === 'intro') { SHOW.len = +len || SHOW.len; SHOW.end = SHOW.t0 + SHOW.len; store.set('introLen', SHOW.len); if (!fromObs) obsScene(showScenes.intro); }
@@ -3675,10 +3680,11 @@ function startShow(mode, len, fromObs) {
     else if (prev === 'brb' || prev === 'outro') { SHOW.mode = 'return'; }
     if (!fromObs) obsScene(showScenes.main);
   }
-  setStatus({ intro: 'Intro running', brb: 'BRB mode', outro: 'Outro running', live: 'Going live', return: 'Back to the city' }[SHOW.mode] || '');
+  setStatus({ intro: 'Intro running (' + (INTRO_STYLES[SHOW.style] || 'neon') + ')', brb: 'BRB mode', outro: 'Outro running', live: 'Going live', return: 'Back to the city' }[SHOW.mode] || '');
   postState();
 }
 function landLive() {
+  introReset(); if (ZONES.cur !== 'city') setZone('city');
   SHOW.mode = 'live'; MUS.landT = nowS(); $('showOv').style.display = 'none';
   goShot(0, true); setTour(true);
   fwQueue += 10; toast("WE'RE LIVE!"); avReact('excited', 'wave', 6);
@@ -3693,6 +3699,8 @@ function showTick(dt, t) {
   const ov = $('showOv'), T1 = $('sovT'), T2 = $('sovC'), T3 = $('sovS');
   if (SHOW.mode === 'live') { if (ov.style.display !== 'none') ov.style.display = 'none'; return false; }
   const n = nowS();
+  if (SHOW.mode === 'intro' && SHOW.style === 'horror') return horrorIntro(n, SHOW.end - n);
+  if (SHOW.mode === 'intro' && SHOW.style === 'tour') return tourIntro(n, SHOW.end - n);
   if (SHOW.mode === 'intro') {
     const R = SHOW.end - n, ts = n * 0.05;
     ov.style.display = R > 12 ? 'block' : 'none';
@@ -3788,7 +3796,7 @@ async function musPreview(plan) {
   const sr = 44100, total = plan.reduce((a, p) => a + p.bars * 16 * TSPB, 0) + 2;
   const c = new OfflineAudioContext(2, Math.ceil(sr * total), sr); const keep = MUS.ctx; musBuild(c); MUS.master.gain.value = 0.42;
   let t = 0.05, s = 0;
-  for (const p of plan) { SHOW.mode = p.mode || 'live'; for (let i = 0; i < p.bars * 16; i++) { if (p.sec === 'climb' || p.sec === 'dive') SHOW.end = nowS() + (p.sec === 'climb' ? 12 - 8 * i / (p.bars * 16) : 45 - 15 * i / (p.bars * 16)); musStep(p.sec, s, t); s++; t += TSPB; } if (p.impact) tImpact(t); }
+  for (const p of plan) { SHOW.mode = p.mode || 'live'; for (let i = 0; i < p.bars * 16; i++) { if (p.sec === 'climb' || p.sec === 'dive') SHOW.end = nowS() + (p.sec === 'climb' ? 12 - 8 * i / (p.bars * 16) : 45 - 15 * i / (p.bars * 16)); musStep(p.sec, s, t); s++; t += p.sec.startsWith('h_') ? H_SPB : p.sec.startsWith('w_') ? W_SPB : TSPB; } if (p.impact) tImpact(t); }
   const buf = await c.startRendering(); MUS.ctx = keep; SHOW.mode = 'live';
   const L = buf.getChannelData(0), Rr = buf.getChannelData(1), n = L.length, out = new DataView(new ArrayBuffer(44 + n * 4));
   const w = (o, str) => { for (let i = 0; i < str.length; i++) out.setUint8(o + i, str.charCodeAt(i)); };
@@ -3837,6 +3845,8 @@ const ROOTS = [0, 0, -4, -2];                                       // A  A  F  
 const CH = r => [57 + r, 60 + r, 64 + r + (r === -2 ? -1 : 0)];      // Am, Am, F, G (with B)
 function musSection() {
   const m = SHOW.mode, n = nowS();
+  if (m === 'intro' && SHOW.style === 'horror') { const R = SHOW.end - n; return R > 40 ? 'h_creep' : R > 20 ? 'h_stalk' : R > 8 ? 'h_chase' : R > 2.5 ? 'h_reveal' : 'h_end'; }
+  if (m === 'intro' && SHOW.style === 'tour') { const R = SHOW.end - n; return R > 14 ? 'w_cruise' : R > 4 ? 'w_climb' : 'w_hold'; }
   if (m === 'intro') { const R = SHOW.end - n; return R > 45 ? 'space' : R > 30 ? 'dive' : R > 12 ? 'street' : R > 4 ? 'climb' : 'hold'; }
   if (m === 'live') return n - MUS.landT < 9 ? 'land' : 'off';
   if (m === 'return') return 'land';
@@ -3849,7 +3859,9 @@ function musSched() {
     const t0 = Math.max(c.currentTime, MUS.next);
     if (sec === 'dive') tRiser(t0, 14, 0.18);
     if (sec === 'climb') tRiser(t0, 8, 0.3);
-    if (sec === 'land' && (MUS.lastSec === 'hold' || MUS.lastSec === 'climb' || MUS.lastSec === 'brb' || MUS.lastSec === 'outro')) { tImpact(t0); MUS.step = 0; MUS.next = t0; }
+    if (sec === 'h_reveal') { tRiser(t0, 5, 0.16); tScreech(t0 + 4.2, 1.1, 0.05); }
+    if (sec === 'w_climb') tRiser(t0, 10, 0.26);
+    if (sec === 'land' && MUS.lastSec !== 'off' && MUS.lastSec !== 'land') { tImpact(t0); MUS.step = 0; MUS.next = t0; }
     if (MUS.lastSec === 'off' && sec !== 'off') { MUS.step = 0; MUS.next = c.currentTime + 0.05; }
     MUS.lastSec = sec;
   }
@@ -3859,9 +3871,11 @@ function musSched() {
   if (sec === 'outro') tgt *= Math.max(0.25, 1 - (n - SHOW.t0 - 60) / 60);
   MUS.master.gain.setTargetAtTime(tgt, c.currentTime, sec === 'off' ? 0.7 : 0.15);
   if (sec === 'off') { MUS.next = c.currentTime + 0.05; return; }
-  while (MUS.next < c.currentTime + 0.15) { musStep(sec, MUS.step, MUS.next); MUS.step++; MUS.next += TSPB; }
+  while (MUS.next < c.currentTime + 0.15) { musStep(sec, MUS.step, MUS.next); MUS.step++; MUS.next += musSPB(); }
 }
 function musStep(sec, s, t) {
+  if (sec.startsWith('h_')) return horrorStep(sec, s, t);
+  if (sec.startsWith('w_')) return tourStep(sec, s, t);
   const b = s % 16, bar = Math.floor(s / 16) % 4, r = ROOTS[bar], R = SHOW.mode === 'intro' ? SHOW.end - nowS() : 0;
   const lfo = 0.5 + 0.5 * Math.sin(s / 64 * Math.PI);
   const cut = { space: 260 + lfo * 120, dive: 300 + Math.min(1, (45 - R) / 15) * 1200, street: 1300 + lfo * 900, climb: 1800 + Math.min(1, (12 - R) / 8) * 3200,
@@ -3886,7 +3900,8 @@ function musStep(sec, s, t) {
 }
 // panel wiring
 $('showLen').value = String(SHOW.len);
-$('showIntro').onclick = () => startShow('intro', +$('showLen').value);
+$('showStyle').value = introStyle; $('showStyle').onchange = () => { introStyle = $('showStyle').value; store.set('introStyle', introStyle); postState(); };
+$('showIntro').onclick = () => startShow('intro', +$('showLen').value, false, $('showStyle').value);
 $('showBrb').onclick = () => startShow('brb'); $('showLive').onclick = () => startShow('live'); $('showOutro').onclick = () => startShow('outro');
 $('musOn').checked = MUS.on; $('musVol').value = Math.round(MUS.vol * 100);
 function setMusic(on, vol) { MUS.on = !!on; MUS.vol = Math.max(0, Math.min(1, vol)); store.set('musOn', MUS.on); store.set('musVol', Math.round(MUS.vol * 100)); $('musOn').checked = MUS.on; $('musVol').value = Math.round(MUS.vol * 100); postState(); }
@@ -3896,6 +3911,98 @@ function setScenes(sc, auto) { showScenes = Object.assign({}, SC_DEF, sc); autoS
 setScenes(showScenes, autoScene);
 ['scIntro', 'scBrb', 'scOutro', 'scMain', 'scAuto'].forEach(id => $(id).onchange = () => setScenes({ intro: $('scIntro').value.trim(), brb: $('scBrb').value.trim(), outro: $('scOutro').value.trim(), main: $('scMain').value.trim() }, $('scAuto').checked));
 
+// ---------------------------------------------------------------- INTRO STYLES: neon city (classic), horror (Ashen Hollow, eerie techno), world tour (synthwave across every map)
+function pickIntroStyle(st) { st = st || introStyle; if (st !== 'random') return INTRO_STYLES[st] ? st : 'neon';
+  const last = store.get('introLast', ''), opts = ['neon', 'horror', 'tour'].filter(x => x !== last); const p = opts[Math.random() * opts.length | 0]; store.set('introLast', p); return p; }
+const hVhs = document.createElement('div'); hVhs.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1;display:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,rgba(0,0,0,0) 2px 4px),radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(0,0,0,.75) 100%)';
+hVhs.innerHTML = '<div style="position:absolute;left:3%;top:4%;font:700 clamp(14px,2vw,34px) \'Courier New\',monospace;color:#e8e8e8;text-shadow:2px 0 #ff2a1a,-2px 0 #2affff">&#9654; PLAY</div><div id="hVhsT" style="position:absolute;right:3%;bottom:5%;font:700 clamp(14px,2vw,34px) \'Courier New\',monospace;color:#e8e8e8;text-shadow:2px 0 #ff2a1a,-2px 0 #2affff">AM 3:13</div>';
+document.body.appendChild(hVhs);
+function introReset() { hVhs.style.display = 'none'; ['sovT', 'sovC', 'sovS'].forEach(id => { $(id).style.transform = ''; $(id).style.filter = ''; }); $('sovC').style.textShadow = ''; }
+function introSettle(R, dur) {                    // shared ending: glide into the opening city shot and go live
+  const s0 = shots[0], k = sEase((dur - R) / dur);
+  if (!SHOW.holdFrom) { SHOW.holdFrom = cam.position.clone(); SHOW.holdQ = cam.quaternion.clone(); SHOW.holdF = cam.fov; }
+  cam.position.copy(SHOW.holdFrom).lerp(s0.pos, k); cam.quaternion.slerpQuaternions(SHOW.holdQ, s0.quat, k); cam.fov = SHOW.holdF + (s0.fov - SHOW.holdF) * k; cam.updateProjectionMatrix();
+  if (R <= 0) { SHOW.holdFrom = null; landLive(); } }
+// ---- horror: creep through the fog, climb to the mansion, run the graveyard, something behind you, static
+function horrorIntro(n, R) {
+  const T1 = $('sovT'), T2 = $('sovC'), T3 = $('sovS'), ov = $('showOv');
+  if (ZONES.cur !== 'hollow' && R > 2.5) setZone('hollow');
+  hVhs.style.display = R > 2.5 ? 'block' : 'none'; const clk = new Date(); $('hVhsT').textContent = 'AM 3:13:' + String(clk.getSeconds()).padStart(2, '0');
+  ov.style.display = R > 9 ? 'block' : 'none';
+  const glitch = Math.random() < 0.06;
+  T1.textContent = glitch ? (Math.random() < 0.5 ? "DON'T LOOK BEHIND YOU" : 'ST4RT1NG S00N') : 'STARTING SOON'; T1.style.color = '#ff2a1a';
+  T1.style.transform = glitch ? `translate(${(Math.random() - 0.5) * 18}px,${(Math.random() - 0.5) * 6}px) skewX(${(Math.random() - 0.5) * 20}deg)` : '';
+  T1.style.filter = glitch ? 'blur(1px)' : ''; T2.textContent = fmtT(R); T2.style.textShadow = '0 0 30px #ff2a1a, 3px 0 #2affff';
+  T3.textContent = R > 20 ? 'Ashen Hollow  ·  type !spawn in chat... if you dare' : 'It knows you are watching  ·  !spawn to survive';
+  const shake = (amt, f) => new THREE.Vector3(Math.sin(n * f) * amt, Math.sin(n * f * 1.3 + 1) * amt * 0.7, Math.cos(n * f * 0.8) * amt);
+  if (R > 40) { const a = n * 0.028; const p = new THREE.Vector3(Math.sin(a) * 17, 2.3, 4 + Math.cos(a) * 17).add(shake(0.06, 1.1)); camAt(p, new THREE.Vector3(Math.sin(a + 0.7) * 4, 2.6, 4 + Math.cos(a + 0.7) * 4), 52); SHOW.hPh = null; }
+  else if (R > 20) { const k = sEase((40 - R) / 20), p = new THREE.Vector3(4, 3, 30).lerp(new THREE.Vector3(10, 21, -50), k); p.y += Math.sin(k * Math.PI) * 4; p.add(shake(0.05, 1.4));
+    camAt(p, new THREE.Vector3(0, 6, -10).lerp(new THREE.Vector3(0, 25, -92), Math.min(1, k * 1.3)), 56 - k * 8); }
+  else if (R > 8) { const k = (20 - R) / 12, p = new THREE.Vector3(20, 2.1, 24).lerp(new THREE.Vector3(44, 2.1, -4), k).add(shake(0.16, 9)); p.y += Math.abs(Math.sin(n * 7.5)) * 0.12;
+    const look = p.clone().add(new THREE.Vector3(0.72 + Math.sin(n * 1.7) * 0.5, -0.2, -0.7)); camAt(p, look, 66); SHOW.hEnd = p.clone(); }
+  else if (R > 2.5) { const k = sEase((8 - R) / 4), base = SHOW.hEnd || new THREE.Vector3(44, 2.1, -4), fwd = new THREE.Vector3(0.72, 0, -0.7).normalize();
+    const yaw = Math.atan2(fwd.x, fwd.z) + Math.PI * k, dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    camAt(base.clone().add(shake(0.03 + k * 0.05, 3)), base.clone().addScaledVector(dir, 6).setY(base.y + 0.1), 60 - k * 18);
+    if (HW.ghost) { const behind = base.clone().addScaledVector(fwd, -2.6); HW.ghostI = 1; HW.ghostT = 2; HW.ghost.g.position.set(behind.x, 0, behind.z); HW.ghost.g.lookAt(base.x, 0, base.z); }
+    if (k > 0.97 && !SHOW.hScare) { SHOW.hScare = true; flash(0.7, 0.4); HW.bolt = clockT(); } }
+  else { if (!SHOW.hStatic) { SHOW.hStatic = true; staticWipe(2.6); } if (R <= 1.4) { if (ZONES.cur !== 'city') { setZone('city'); camAt(shots[0].pos.clone().add(new THREE.Vector3(0, 30, 40)), shots[0].pos, 60); } introSettle(R, 1.4); } }
+  return true; }
+const clockT = () => clock.getElapsedTime();
+// ---- world tour: warp through every map, then dive into the city
+const TOUR = [['space', 'ORBITAL STATION', { c: [0, 4, 2], r: 30, h: 9, look: 4.5 }], ['planet', 'PLANET LUCIDA', { c: [0, 0, -2], r: 46, h: 15, look: 9 }], ['bay', 'LUCID BAY', { c: [0, 3, 2], r: 48, h: 11, look: 7 }],
+  ['summit', 'CRIMSON SUMMIT', { c: [0, 2, -4], r: 42, h: 14, look: 5 }], ['zero', 'ZONE ZERO', { c: [0, 2, -2], r: 46, h: 14, look: 5 }], ['hollow', 'ASHEN HOLLOW', { c: [0, 2, 4], r: 24, h: 17, look: 3 }]];
+function tourIntro(n, R) {
+  const T1 = $('sovT'), T2 = $('sovC'), T3 = $('sovS'), ov = $('showOv'), seg = 18, el = SHOW.len - R;
+  ov.style.display = R > 14 ? 'block' : 'none'; T1.textContent = 'STARTING SOON'; T1.style.color = Math.floor(n * 0.5) % 2 ? '#38e8ff' : '#ff2d8f'; T2.textContent = fmtT(R);
+  if (R > 14) { const i = Math.floor(el / seg) % TOUR.length, k = (el % seg) / seg, [z, name, C] = TOUR[i];
+    if (SHOW.tourI !== i) { SHOW.tourI = i; setZone(z); flash(0.85, 0.9); if (SHOW.tourWarped) whoosh(1.6); SHOW.tourWarped = true; }
+    T3.textContent = 'NOW TOURING  ✦  ' + name + '  ✦  type !spawn to join the world';
+    const a = i * 1.7 + k * 1.5, c = new THREE.Vector3(...C.c), up = Math.sin(k * Math.PI) * C.h * 0.35;
+    camAt(new THREE.Vector3(c.x + Math.sin(a) * C.r, c.y + C.h + up, c.z + Math.cos(a) * C.r), new THREE.Vector3(c.x, c.y + C.look, c.z), 54 - Math.sin(k * Math.PI) * 6); return true; }
+  if (ZONES.cur !== 'city') { setZone('city'); flash(1, 1.1); whoosh(2.2); SHOW.tourI = -1; T3.textContent = 'WELCOME HOME  ✦  LUCID STATE CITY'; }
+  if (R > 4) { const k = sEase((14 - R) / 10), s0 = shots[0], from = new THREE.Vector3(150, 120, 230), to = s0.pos.clone().add(new THREE.Vector3(0, 10, 30));
+    const p = from.clone().lerp(to, k); p.x += Math.sin(k * Math.PI) * 40; camAt(p, new THREE.Vector3(0, 6, 0).lerp(s0.pos.clone().add(new THREE.Vector3(0, -2, -20)), k), 50 + k * 8); SHOW.holdFrom = null; return true; }
+  introSettle(R, 4); return true; }
+// ---- music: horror (eerie dark techno, 118 BPM, E phrygian) + world tour (synthwave, 108 BPM, A minor)
+const H_SPB = 60 / 118 / 4, W_SPB = 60 / 108 / 4;
+function musSPB() { const sec = MUS.lastSec || ''; return sec.startsWith('h_') ? H_SPB : sec.startsWith('w_') ? W_SPB : TSPB; }
+function tBell(nn, t, lvl) { const c = MUS.ctx, g = c.createGain(); g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.0008, t + 2.4); mOut(g, 0.9, 0.5);
+  [[1, 1], [2.76, 0.45], [5.4, 0.22], [8.93, 0.1]].forEach(([r, a]) => { const o = c.createOscillator(), og = c.createGain(); o.type = 'sine'; o.frequency.value = mtof(nn) * r; o.detune.value = (Math.random() - 0.5) * 18; og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 2.6); }); }
+function tDrone(notes, t, len, lvl, cut) { const c = MUS.ctx, f = c.createBiquadFilter(), g = c.createGain(), lf = c.createOscillator(), lg = c.createGain(); f.type = 'lowpass'; f.frequency.value = cut; f.Q.value = 6;
+  lf.frequency.value = 0.13; lg.gain.value = cut * 0.6; lf.connect(lg); lg.connect(f.frequency); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(lvl, t + len * 0.25); g.gain.setTargetAtTime(0.0001, t + len * 0.85, len * 0.12); f.connect(g); mOut(g, 0.7);
+  notes.forEach(nn => [-14, 7].forEach(dt => { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(nn); o.detune.value = dt; o.connect(f); o.start(t); o.stop(t + len * 1.3); })); lf.start(t); lf.stop(t + len * 1.3); }
+function tMetal(t, lvl) { tNoise(t, 0.5, 'bandpass', 3100 + Math.random() * 900, 22, lvl, 0.35, 0.8, 0.3); tNoise(t, 0.2, 'highpass', 6000, 1, lvl * 0.4, 0.08, 0.3); }
+function tScreech(t, len, lvl) { const c = MUS.ctx, o = c.createOscillator(), o2 = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(); o.type = o2.type = 'sawtooth';
+  o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(2600, t + len); o2.frequency.setValueAtTime(940, t); o2.frequency.exponentialRampToValueAtTime(2480, t + len);
+  f.type = 'bandpass'; f.frequency.value = 2000; f.Q.value = 2; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(lvl, t + len * 0.9); g.gain.setTargetAtTime(0.0001, t + len, 0.03);
+  o.connect(f); o2.connect(f); f.connect(g); mOut(g, 0.8); o.start(t); o2.start(t); o.stop(t + len + 0.2); o2.stop(t + len + 0.2); }
+function tSnare(t, lvl) { tNoise(t, 0.5, 'bandpass', 1900, 0.9, lvl, 0.32, 0.9); const c = MUS.ctx, o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(210, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.12);
+  g.gain.setValueAtTime(lvl * 0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18); o.connect(g); mOut(g, 0.5); o.start(t); o.stop(t + 0.2); }
+function tPluck(nn, t, lvl, cut) { const c = MUS.ctx, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(); o.type = 'square'; o.frequency.value = mtof(nn); f.type = 'lowpass'; f.frequency.setValueAtTime(cut, t); f.frequency.exponentialRampToValueAtTime(cut * 0.25, t + 0.18);
+  g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.0008, t + 0.26); o.connect(f); f.connect(g); mOut(g, 0.25, 0.45); o.start(t); o.stop(t + 0.3); }
+const HPH = [0, 1, 0, 0, 7, 0, 6, 1, 0, 0, 1, 0, 10, 0, 6, 1], HBELL = [76, 77, 82, 79, 76, 83, 77, 70];
+function horrorStep(sec, s, t) { const b = s % 16, bar = Math.floor(s / 16), lfo = 0.5 + 0.5 * Math.sin(s / 48 * Math.PI);
+  if (b === 0 && bar % 2 === 0 && sec !== 'h_end') tDrone(bar % 4 === 0 ? [28, 40, 41] : [28, 43, 46], t, H_SPB * 32, sec === 'h_chase' ? 0.05 : 0.075, 380 + lfo * 300);
+  if (sec === 'h_end') return;
+  if (sec === 'h_reveal') { if (b === 0 && bar % 2 === 0) tBell(HBELL[bar % 8] - 12, t, 0.09); if (b % 8 === 4) tKick(t, 0.35); return; }
+  if (b % 4 === 2 && Math.random() < (sec === 'h_creep' ? 0.5 : 0.8)) tBell(HBELL[(s / 4 | 0) % 8], t, sec === 'h_creep' ? 0.035 : 0.025);
+  if (sec === 'h_creep') { if (b === 0) tKick(t, 0.38); if (b === 3) tKick(t, 0.26); if (b === 8 && bar % 4 === 3) tNoise(t, 3, 'bandpass', 1400 + Math.random() * 1600, 3, 0.05, 2.6, 1); if (b === 12 && bar % 2) tMetal(t, 0.03); return; }
+  const chase = sec === 'h_chase';
+  if (b % 4 === 0) tKick(t, chase ? 1.0 : 0.7);
+  if (b % 4 === 1 && chase) tRumble(t, 0.32);
+  if (b % 4 !== 0) tAcid(28 + 12 + HPH[b], t, chase ? 0.06 : 0.04, chase ? 900 + lfo * 1600 : 380 + lfo * 300, 16, HPH[b] > 0, b === 7 || b === 15);
+  if (chase) { tHat(t, b % 2 ? 0.03 : 0.055, b % 4 === 2); if (b === 4 || b === 12) { tClap(t, 0.16); tMetal(t, 0.05); } if (b === 14 && bar % 4 === 3) tScreech(t, H_SPB * 2, 0.04); }
+  else { if (b % 4 === 2) tHat(t, 0.04, true); if (b === 12) tMetal(t, 0.06); } }
+const WCH = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], WROOT = [33, 29, 36, 31], WARP_ = [0, 1, 2, 1, 0, 2, 1, 2, 0, 1, 2, 1, 2, 1, 0, 1];
+function tourStep(sec, s, t) { const b = s % 16, bar = Math.floor(s / 16) % 4, ch = WCH[bar], r = WROOT[bar];
+  if (b === 0) tPad(ch.map(x => x - 12).concat([ch[0]]), t, W_SPB * 16, sec === 'w_hold' ? 0.06 : 0.045, sec === 'w_hold' ? 2600 : 1600);
+  if (sec === 'w_hold') { if (b % 2 === 0) tHat(t, 0.04, false); return; }
+  tPluck(ch[WARP_[b]] + 12 + (b >= 8 && bar % 2 ? 12 : 0), t, 0.05, 2400 + (sec === 'w_climb' ? 3000 : 0));
+  if (b % 2 === 0) tBass(r + (b % 4 === 2 ? 12 : 0), t, 0.13, 700);
+  if (b % 4 === 0) tKick(t, 0.85);
+  if (b === 4 || b === 12) tSnare(t, 0.2);
+  if (sec === 'w_climb') { if (b % 2 === 1) tSnare(t, 0.05 + (s % 64) / 64 * 0.12); }
+  else tHat(t, b % 4 === 2 ? 0.07 : 0.03, b % 4 === 2); }
 // ---- ported from the Rooftop Arena (same character, toon look, faces, gestures) ----
 const softTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'#fff');g.addColorStop(0.55,'#888');g.addColorStop(1,'#000');x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})();
 const AV={};
@@ -4303,7 +4410,7 @@ function postState() {
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
       al: alState(), ver: (location.pathname.match(/[0-9a-f]{40}/) || ['dev'])[0],
-      show: SHOW.mode, showLen: SHOW.len, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, vault: vaultItems, stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
+      show: SHOW.mode, showLen: SHOW.len, introStyle, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, vault: vaultItems, stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -4328,7 +4435,8 @@ if (bc) bc.onmessage = e => {
       setStatus(store.set('ads', ads) ? d.slot + ' updated and saved.' : d.slot + ' updated (storage full, resets on reload).'); break; }
     case 'adreset': { const ads = store.get('ads', {}); delete ads[d.slot]; store.set('ads', ads); setAdImage(d.slot, null); makeThumb(d.slot); renderPaGrid(); setStatus(d.slot + ' reset.'); break; }
     case 'adshow': if (adSlots[d.slot]) focusMesh(adSlots[d.slot], d.slot.replace(/_/g, ' ')); break;
-    case 'show': startShow(d.mode, d.len); break;
+    case 'show': startShow(d.mode, d.len, false, d.style); break;
+    case 'introstyle': introStyle = d.style; store.set('introStyle', introStyle); $('showStyle').value = introStyle; postState(); break;
     case 'avmic': $('avMic').value = d.label; $('avSens').value = d.sens; avSens = +d.sens; store.set('avsens', avSens);
       if (d.label !== avMicLabel || d.restart) { avMicLabel = d.label; store.set('avmic', d.label); startAvatarMic(d.label); } break;
     case 'expr': setExpr(d.e); break;
@@ -4352,7 +4460,7 @@ if (bc) bc.onmessage = e => {
 loop();
 window.__grw = (i) => { if (guideRW && guideRW.route) { const n = guideRW.route[i]; guideRW.i = i; guideRW.p.set(n[0], 0, n[1]); } };
 window.__rw = i => { const r = walkRW || (walkRW = makeRW(new THREE.Vector3(), 0)); r.i = i; r.p.set(ROUTE[i][0], 0, ROUTE[i][1]); r.wait = 0; r.look = null; r.spin = false; };
-window.LSC = { scene, bay: () => BAY, summit: () => SM, hollow: () => HW, zero: () => ZZ, vault: () => vaultItems, statsCmd, ss: () => SS, addVault, vaultShowUser, airdrop, runCommand, zones: () => ({ cur: ZONES.cur, tr: TR.on }), camAt: (p, l) => { const s = { name: 'T', label: 'test', pos: new THREE.Vector3(...p), quat: lookQuat(new THREE.Vector3(...p), new THREE.Vector3(...l)), fov: 50, still: true }; cam.position.copy(s.pos); cam.quaternion.copy(s.quat); hold = { s, t: 0 }; fly = null; }, skipMove: () => { if (fly) fly.t = 1; if (TR.on) { TR.t = 99; TR.k = 99; } }, musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
+window.LSC = { scene, bay: () => BAY, summit: () => SM, hollow: () => HW, zero: () => ZZ, vault: () => vaultItems, statsCmd, ss: () => SS, startShow, show: () => SHOW, addVault, vaultShowUser, airdrop, runCommand, zones: () => ({ cur: ZONES.cur, tr: TR.on }), camAt: (p, l) => { const s = { name: 'T', label: 'test', pos: new THREE.Vector3(...p), quat: lookQuat(new THREE.Vector3(...p), new THREE.Vector3(...l)), fov: 50, still: true }; cam.position.copy(s.pos); cam.quaternion.copy(s.quat); hold = { s, t: 0 }; fly = null; }, skipMove: () => { if (fly) fly.t = 1; if (TR.on) { TR.t = 99; TR.k = 99; } }, musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
 </script>
 <script>
@@ -4392,6 +4500,7 @@ if (window.LSC_CONTROL) {
     if (st.status) status(st.status);
     $('status').className = '';
     if (document.activeElement !== $('showLen')) $('showLen').value = String(st.showLen);
+    if (st.introStyle && document.activeElement !== $('showStyle')) $('showStyle').value = st.introStyle;
     $('showIntro').classList.toggle('on', st.show === 'intro'); $('showBrb').classList.toggle('on', st.show === 'brb');
     $('showOutro').classList.toggle('on', st.show === 'outro'); $('showLive').classList.toggle('on', st.show === 'live' || st.show === 'return');
     if (document.activeElement !== $('musVol')) { $('musOn').checked = st.musOn; $('musVol').value = st.musVol; }
@@ -4436,7 +4545,8 @@ if (window.LSC_CONTROL) {
   $('adSlot').addEventListener('change', () => { $('adAddr').value = ((st && st.adAddr) || {})[$('adSlot').value] || ''; });
   $('adAddrSave').onclick = () => send('adaddr', { slot: $('adSlot').value, addr: $('adAddr').value.trim() });
   $('adReset').onclick = () => send('adreset', { slot: $('adSlot').value });
-  $('showIntro').onclick = () => send('show', { mode: 'intro', len: +$('showLen').value });
+  $('showIntro').onclick = () => send('show', { mode: 'intro', len: +$('showLen').value, style: $('showStyle').value });
+  $('showStyle').onchange = () => send('introstyle', { style: $('showStyle').value });
   $('showBrb').onclick = () => send('show', { mode: 'brb' }); $('showLive').onclick = () => send('show', { mode: 'live' }); $('showOutro').onclick = () => send('show', { mode: 'outro' });
   const avSend = restart => send('avmic', { label: $('avMic').value, sens: +$('avSens').value, restart });
   $('avMic').onchange = () => avSend(true); $('avSens').onchange = () => avSend(false);
