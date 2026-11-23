@@ -3847,7 +3847,7 @@ const CH = r => [57 + r, 60 + r, 64 + r + (r === -2 ? -1 : 0)];      // Am, Am, 
 function musSection() {
   const m = SHOW.mode, n = nowS();
   if (m === 'intro' && SHOW.style === 'horror') { const R = SHOW.end - n; return R > 40 ? 'h_creep' : R > 20 ? 'h_stalk' : R > 8 ? 'h_chase' : R > 2.5 ? 'h_reveal' : 'h_end'; }
-  if (m === 'intro' && SHOW.style === 'fight') { const R = SHOW.end - n; return R > 34 ? 'f_ring' : R > 16.9 ? 'f_talk' : 'f_drop'; }
+  if (m === 'intro' && SHOW.style === 'fight') { const R = SHOW.end - n; return R > 24 ? 'f_ring' : R > 16.9 ? 'f_talk' : 'f_drop'; }
   if (m === 'live' && SHOW.landStyle === 'fight') return n - MUS.landT < 9 ? 'f_land' : 'off';
   if (m === 'intro' && SHOW.style === 'tour') { const R = SHOW.end - n; return R > 14 ? 'w_cruise' : R > 4 ? 'w_climb' : 'w_hold'; }
   if (m === 'intro') { const R = SHOW.end - n; return R > 45 ? 'space' : R > 30 ? 'dive' : R > 12 ? 'street' : R > 4 ? 'climb' : 'hold'; }
@@ -4010,7 +4010,7 @@ function tourStep(sec, s, t) { const b = s % 16, bar = Math.floor(s / 16) % 4, c
   if (sec === 'w_climb') { if (b % 2 === 1) tSnare(t, 0.05 + (s % 64) / 64 * 0.12); }
   else tHat(t, b % 4 === 2 ? 0.07 : 0.03, b % 4 === 2); }
 // ---------------------------------------------------------------- FIGHTING-GAME INTRO: arcade attract mode on Crimson Summit, ring announcer, hits, crowd, ROUND ONE... FIGHT!
-const VOX = { buf: {}, loading: false, names: ['welcome', 'invite', 'ready', 'scuffle', 'challenger', 'round1', 'fight', 'ko', 'perfect', 'excellent'] };
+const VOX = { buf: {}, loading: false, names: ['welcome', 'ready', 'scuffle', 'challenger', 'round1', 'fight', 'ko', 'perfect', 'excellent'] };
 function voxLoad() { if (VOX.loading || !MUS.ctx) return; VOX.loading = true;
   VOX.names.forEach(n => fetch('sfx/announcer_' + n + '.mp3').then(r => r.arrayBuffer()).then(a => MUS.ctx.decodeAudioData(a)).then(b => { VOX.buf[n] = b; }).catch(e => console.warn('announcer', n, e))); }
 function voxPlay(n, lvl) { const c = MUS.ctx, b = VOX.buf[n]; if (!c || !b) return 0; const s = c.createBufferSource(), g = c.createGain(); s.buffer = b; g.gain.value = (lvl || 1) * (MUS.on ? Math.max(0.35, MUS.vol) : 0.6) * 1.15;
@@ -4050,9 +4050,9 @@ function fightIntro(n, R) {
   if (!SHOW.fg) { SHOW.fg = { said: {}, nextCall: n + 6, cam: -1 }; FG.hp = [100, 100]; voxLoad(); fgTitle('STARTING SOON'); fgCheer(0.05, 3); setTimeout(() => voxPlay('challenger'), 1600); }
   const F = SHOW.fg, once = (k, at, fn) => { if (R <= at && !F.said[k]) { F.said[k] = true; if (R > at - 1.2) fn(); } };
   $('fgClock').textContent = R > 99 ? fmtT(R) : String(Math.max(0, Math.ceil(R))); $('fgB0').style.width = FG.hp[0] + '%'; $('fgB1').style.width = FG.hp[1] + '%';
-  $('fgCoin').style.visibility = R > 34 ? (Math.floor(n * 1.6) % 2 ? 'visible' : 'hidden') : 'hidden'; $('fgSub').style.visibility = R > 34 ? 'visible' : 'hidden';
+  $('fgCoin').style.visibility = R > 24 ? (Math.floor(n * 1.6) % 2 ? 'visible' : 'hidden') : 'hidden'; $('fgSub').style.visibility = R > 24 ? 'visible' : 'hidden';
   const shake = a => new THREE.Vector3(Math.sin(n * 23) * a, Math.sin(n * 31 + 1) * a, Math.cos(n * 19) * a);
-  if (R > 34) {                                                             // attract mode: cut between the sparring fights
+  if (R > 24) {                                                             // attract mode: cut between the sparring fights
     const i = Math.floor((SHOW.len - R) / 7) % FG_CAMS.length, k = ((SHOW.len - R) % 7) / 7, [kind, lab] = FG_CAMS[i];
     if (F.cam !== i) { F.cam = i; if (i) flash(0.45, 0.35); }
     const M = SM.main ? SM.main.c : new THREE.Vector3(0, 0.8, 0);
@@ -4062,16 +4062,15 @@ function fightIntro(n, R) {
     if (n > F.nextCall) { F.nextCall = n + 22 + Math.random() * 14; voxPlay(['challenger', 'excellent', 'perfect'][Math.random() * 3 | 0], 0.85); fgCheer(0.07, 2.6); }
     $('fgCap').textContent = ''; return true; }
   // the announcer takes the ring
-  once('a0', 34, () => { flash(0.8, 0.6); fgTitle('SCUFFLE HOURS', '#ffd23a'); fgCheer(0.09, 3); });
-  once('a1', 33, () => { voxPlay('welcome'); $('fgCap').textContent = '"Welcome all, to Lucid State City Scuffle Hours!"'; });
-  once('a2', 26.4, () => { voxPlay('invite'); $('fgCap').textContent = '"We invite those who seek a fight and chill vibes to come fight in our community."'; });
+  once('a0', 24, () => { flash(0.8, 0.6); fgTitle('SCUFFLE HOURS', '#ffd23a'); fgCheer(0.09, 3); });
+  once('a1', 23, () => { voxPlay('welcome'); $('fgCap').textContent = '"Welcome, FIGHTERS!"'; fgTitle('WELCOME FIGHTERS!', '#ffd23a'); });
   once('a3', 19.4, () => { voxPlay('ready'); $('fgCap').textContent = '"So... who\'s ready..."'; fgTitle('WHO\'S READY?', '#ffffff'); });
   once('a4', 16.9, () => { voxPlay('scuffle', 1.1); fgSlam(); flash(1, 0.9); fgCheer(0.16, 5); $('fgCap').textContent = '"...to SCUFFLE!!!"'; fgTitle('SCUFFLE!!!', '#ff3a2a', 'clamp(60px,13vw,240px)'); if (SM.fx) for (let k = 0; k < 6; k++) smSpark(SM.scene, new THREE.Vector3((Math.random() - 0.5) * 6, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 6)); });
   once('a5', 10, () => { $('fgCap').textContent = ''; fgTitle('LUCID STATE CITY', '#38e8ff'); });
   once('a6', 5.2, () => { voxPlay('round1'); fgTitle('ROUND 1', '#ffd23a'); fgPunch(0.5, true); });
   once('a7', 1.7, () => { voxPlay('fight', 1.1); fgSlam(); fgTitle('FIGHT!', '#ff3a2a', 'clamp(70px,15vw,280px)'); flash(1, 1); fgCheer(0.18, 4.5); setZone('city'); camAt(shots[0].pos.clone().add(new THREE.Vector3(0, 18, 30)), shots[0].pos, 64); SHOW.holdFrom = null; });
   const M = SM.main ? SM.main.c : new THREE.Vector3(0, 0.8, 0);
-  if (R > 16.9) { const k = sEase((34 - R) / 17), a = 0.2 + k * 0.8, r = 26 - k * 17; camAt(new THREE.Vector3(Math.sin(a) * r, 8 - k * 5.2, Math.cos(a) * r).add(shake(0.02)), M.clone().add(new THREE.Vector3(0, 1.3 + (1 - k) * 2, 0)), 50 - k * 8); }
+  if (R > 16.9) { const k = sEase((24 - R) / 7.1), a = 0.2 + k * 0.8, r = 26 - k * 17; camAt(new THREE.Vector3(Math.sin(a) * r, 8 - k * 5.2, Math.cos(a) * r).add(shake(0.02)), M.clone().add(new THREE.Vector3(0, 1.3 + (1 - k) * 2, 0)), 50 - k * 8); }
   else if (R > 1.7) { const k = sEase((16.9 - R) / 15.2), a = 1 + k * 2.6, r = 6 + k * 22; camAt(new THREE.Vector3(Math.sin(a) * r, 2.2 + k * 14, Math.cos(a) * r).add(shake(R > 15.5 ? 0.25 : 0.01)), M.clone().add(new THREE.Vector3(0, 1.4, 0)), 46 + k * 10); }
   else introSettle(R, 1.7);
   return true; }
