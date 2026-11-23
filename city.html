@@ -3797,7 +3797,7 @@ async function musPreview(plan) {
   const sr = 44100, total = plan.reduce((a, p) => a + p.bars * 16 * TSPB, 0) + 2;
   const c = new OfflineAudioContext(2, Math.ceil(sr * total), sr); const keep = MUS.ctx; musBuild(c); MUS.master.gain.value = 0.42;
   let t = 0.05, s = 0;
-  for (const p of plan) { SHOW.mode = p.mode || 'live'; for (let i = 0; i < p.bars * 16; i++) { if (p.sec === 'climb' || p.sec === 'dive') SHOW.end = nowS() + (p.sec === 'climb' ? 12 - 8 * i / (p.bars * 16) : 45 - 15 * i / (p.bars * 16)); musStep(p.sec, s, t); s++; t += p.sec.startsWith('h_') ? H_SPB : p.sec.startsWith('w_') ? W_SPB : TSPB; } if (p.impact) tImpact(t); }
+  for (const p of plan) { SHOW.mode = p.mode || 'live'; for (let i = 0; i < p.bars * 16; i++) { if (p.sec === 'climb' || p.sec === 'dive') SHOW.end = nowS() + (p.sec === 'climb' ? 12 - 8 * i / (p.bars * 16) : 45 - 15 * i / (p.bars * 16)); musStep(p.sec, s, t); s++; t += p.sec.startsWith('f_') ? F_SPB : p.sec.startsWith('h_') ? H_SPB : p.sec.startsWith('w_') ? W_SPB : TSPB; } if (p.impact) tImpact(t); }
   const buf = await c.startRendering(); MUS.ctx = keep; SHOW.mode = 'live';
   const L = buf.getChannelData(0), Rr = buf.getChannelData(1), n = L.length, out = new DataView(new ArrayBuffer(44 + n * 4));
   const w = (o, str) => { for (let i = 0; i < str.length; i++) out.setUint8(o + i, str.charCodeAt(i)); };
@@ -3847,8 +3847,8 @@ const CH = r => [57 + r, 60 + r, 64 + r + (r === -2 ? -1 : 0)];      // Am, Am, 
 function musSection() {
   const m = SHOW.mode, n = nowS();
   if (m === 'intro' && SHOW.style === 'horror') { const R = SHOW.end - n; return R > 40 ? 'h_creep' : R > 20 ? 'h_stalk' : R > 8 ? 'h_chase' : R > 2.5 ? 'h_reveal' : 'h_end'; }
-  if (m === 'intro' && SHOW.style === 'fight') return 'f_ring';
-  if (m === 'live' && SHOW.landStyle === 'fight') return 'off';
+  if (m === 'intro' && SHOW.style === 'fight') { const R = SHOW.end - n; return R > 34 ? 'f_ring' : R > 16.9 ? 'f_talk' : 'f_drop'; }
+  if (m === 'live' && SHOW.landStyle === 'fight') return n - MUS.landT < 9 ? 'f_land' : 'off';
   if (m === 'intro' && SHOW.style === 'tour') { const R = SHOW.end - n; return R > 14 ? 'w_cruise' : R > 4 ? 'w_climb' : 'w_hold'; }
   if (m === 'intro') { const R = SHOW.end - n; return R > 45 ? 'space' : R > 30 ? 'dive' : R > 12 ? 'street' : R > 4 ? 'climb' : 'hold'; }
   if (m === 'live') return n - MUS.landT < 9 ? 'land' : 'off';
@@ -3864,20 +3864,22 @@ function musSched() {
     if (sec === 'climb') tRiser(t0, 8, 0.3);
     if (sec === 'h_reveal') { tRiser(t0, 5, 0.16); tScreech(t0 + 4.2, 1.1, 0.05); }
     if (sec === 'w_climb') tRiser(t0, 10, 0.26);
+    if (sec === 'f_talk') tRiser(t0, 0.9, 0.12);
     if (sec === 'land' && MUS.lastSec !== 'off' && MUS.lastSec !== 'land') { tImpact(t0); MUS.step = 0; MUS.next = t0; }
     if (MUS.lastSec === 'off' && sec !== 'off') { MUS.step = 0; MUS.next = c.currentTime + 0.05; }
     MUS.lastSec = sec;
   }
   let tgt = MUS.on ? MUS.vol * 0.42 : 0;
   if (sec === 'off') tgt = 0;
-  if (sec === 'land' && SHOW.mode === 'live') tgt *= Math.max(0, 1 - (n - MUS.landT - 3) / 6);
+  if ((sec === 'land' || sec === 'f_land') && SHOW.mode === 'live') tgt *= Math.max(0, 1 - (n - MUS.landT - 3) / 6);
+  if (MUS.duckUntil && c.currentTime < MUS.duckUntil) tgt *= 0.4;
   if (sec === 'outro') tgt *= Math.max(0.25, 1 - (n - SHOW.t0 - 60) / 60);
   MUS.master.gain.setTargetAtTime(tgt, c.currentTime, sec === 'off' ? 0.7 : 0.15);
   if (sec === 'off') { MUS.next = c.currentTime + 0.05; return; }
   while (MUS.next < c.currentTime + 0.15) { musStep(sec, MUS.step, MUS.next); MUS.step++; MUS.next += musSPB(); }
 }
 function musStep(sec, s, t) {
-  if (sec.startsWith('f_')) return;
+  if (sec.startsWith('f_')) return fightStep(sec, s, t);
   if (sec.startsWith('h_')) return horrorStep(sec, s, t);
   if (sec.startsWith('w_')) return tourStep(sec, s, t);
   const b = s % 16, bar = Math.floor(s / 16) % 4, r = ROOTS[bar], R = SHOW.mode === 'intro' ? SHOW.end - nowS() : 0;
@@ -3969,7 +3971,7 @@ function tourIntro(n, R) {
   introSettle(R, 4); return true; }
 // ---- music: horror (eerie dark techno, 118 BPM, E phrygian) + world tour (synthwave, 108 BPM, A minor)
 const H_SPB = 60 / 118 / 4, W_SPB = 60 / 108 / 4;
-function musSPB() { const sec = MUS.lastSec || ''; return sec.startsWith('h_') ? H_SPB : sec.startsWith('w_') ? W_SPB : TSPB; }
+function musSPB() { const sec = MUS.lastSec || ''; return sec.startsWith('f_') ? F_SPB : sec.startsWith('h_') ? H_SPB : sec.startsWith('w_') ? W_SPB : TSPB; }
 function tBell(nn, t, lvl) { const c = MUS.ctx, g = c.createGain(); g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.0008, t + 2.4); mOut(g, 0.9, 0.5);
   [[1, 1], [2.76, 0.45], [5.4, 0.22], [8.93, 0.1]].forEach(([r, a]) => { const o = c.createOscillator(), og = c.createGain(); o.type = 'sine'; o.frequency.value = mtof(nn) * r; o.detune.value = (Math.random() - 0.5) * 18; og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 2.6); }); }
 function tDrone(notes, t, len, lvl, cut) { const c = MUS.ctx, f = c.createBiquadFilter(), g = c.createGain(), lf = c.createOscillator(), lg = c.createGain(); f.type = 'lowpass'; f.frequency.value = cut; f.Q.value = 6;
@@ -4012,7 +4014,7 @@ const VOX = { buf: {}, loading: false, names: ['welcome', 'invite', 'ready', 'sc
 function voxLoad() { if (VOX.loading || !MUS.ctx) return; VOX.loading = true;
   VOX.names.forEach(n => fetch('sfx/announcer_' + n + '.mp3').then(r => r.arrayBuffer()).then(a => MUS.ctx.decodeAudioData(a)).then(b => { VOX.buf[n] = b; }).catch(e => console.warn('announcer', n, e))); }
 function voxPlay(n, lvl) { const c = MUS.ctx, b = VOX.buf[n]; if (!c || !b) return 0; const s = c.createBufferSource(), g = c.createGain(); s.buffer = b; g.gain.value = (lvl || 1) * (MUS.on ? Math.max(0.35, MUS.vol) : 0.6) * 1.15;
-  s.connect(g); g.connect(c.destination); s.start(c.currentTime + 0.02); return b.duration; }
+  s.connect(g); g.connect(c.destination); s.start(c.currentTime + 0.02); MUS.duckUntil = Math.max(MUS.duckUntil || 0, c.currentTime + b.duration - 1.0); return b.duration; }
 function fgPunch(lvl, heavy) { const c = MUS.ctx; if (!c) return; const t = c.currentTime + 0.01, o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(heavy ? 120 : 160, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
   g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.25);
   const n = c.createBufferSource(), f = c.createBiquadFilter(), ng = c.createGain(); n.buffer = MUS.noise; f.type = 'bandpass'; f.frequency.value = heavy ? 1500 : 2600; f.Q.value = 0.9; ng.gain.setValueAtTime(lvl * 0.9, t); ng.gain.exponentialRampToValueAtTime(0.001, t + (heavy ? 0.12 : 0.06));
@@ -4073,6 +4075,24 @@ function fightIntro(n, R) {
   else if (R > 1.7) { const k = sEase((16.9 - R) / 15.2), a = 1 + k * 2.6, r = 6 + k * 22; camAt(new THREE.Vector3(Math.sin(a) * r, 2.2 + k * 14, Math.cos(a) * r).add(shake(R > 15.5 ? 0.25 : 0.01)), M.clone().add(new THREE.Vector3(0, 1.4, 0)), 46 + k * 10); }
   else introSettle(R, 1.7);
   return true; }
+// ---- Scuffle Hours music: hard fighting-game techno (140 BPM, E minor) that ducks under the announcer
+const F_SPB = 60 / 140 / 4, FROOT = [0, 0, -4, -2], FLEAD = [64, 67, 71, 67, 72, 71, 67, 64, 62, 67, 71, 74, 72, 71, 67, 66];
+function tTom(t, f0, lvl) { const c = MUS.ctx, o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 0.55, t + 0.22);
+  g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.3); o.connect(g); mOut(g, 0.35); o.start(t); o.stop(t + 0.32); }
+function fightStep(sec, s, t) { const b = s % 16, bar = Math.floor(s / 16) % 4, r = FROOT[bar], ch = [52 + r, 55 + r, 59 + r + (r === -4 ? 1 : 0)];
+  if (sec === 'f_talk') {                                                  // under the announcer: low pulse + pads, room for the voice
+    if (b === 0) { tPad(ch.map(x => x - 12), t, F_SPB * 16, 0.035, 700); tKick(t, 0.45); }
+    if (b === 8) tKick(t, 0.3); if (b % 4 === 2) tHat(t, 0.025, false); return; }
+  const drop = sec === 'f_drop' || sec === 'f_land';
+  if (b % 4 === 0) tKick(t, drop ? 1.05 : 0.9);
+  if (b % 4 === 1) tRumble(t, drop ? 0.34 : 0.26);
+  if (b % 4 !== 0) tBass(28 + r + (b % 4 === 2 ? 12 : 0), t, drop ? 0.15 : 0.12, drop ? 900 : 650);
+  tHat(t, b % 4 === 2 ? 0.08 : b % 2 ? 0.03 : 0.05, b % 4 === 2);
+  if (b === 4 || b === 12) { tSnare(t, drop ? 0.24 : 0.18); tClap(t, 0.1); }
+  if ((b === 0 || b === 3 || b === 6 || b === 10) && (drop || bar % 2 === 1)) tStab(ch, t, drop ? 0.07 : 0.05, drop ? 3400 : 2200);
+  if (drop) tPluck(FLEAD[b] + (bar === 3 ? 2 : 0), t, 0.045, 3200);
+  if (bar === 3 && b >= 12) tTom(t, [220, 180, 150, 120][b - 12], drop ? 0.35 : 0.25);
+  if (drop && b === 0 && bar === 0) tImpact(t); }
 // ---- ported from the Rooftop Arena (same character, toon look, faces, gestures) ----
 const softTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'#fff');g.addColorStop(0.55,'#888');g.addColorStop(1,'#000');x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})();
 const AV={};
