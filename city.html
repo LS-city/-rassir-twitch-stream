@@ -134,7 +134,7 @@ canvas#c.pick{cursor:pointer}
 </div>
   </section>
   <section data-tab="show" hidden>  <h3>Show</h3>
-  <div class="row" style="margin-bottom:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">Intro</span><select id="showStyle" style="flex:1"><option value="random">Random each stream</option><option value="neon">Neon city (classic)</option><option value="horror">Horror: Ashen Hollow</option><option value="tour">World tour (synthwave)</option></select></div>
+  <div class="row" style="margin-bottom:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">Intro</span><select id="showStyle" style="flex:1"><option value="random">Random each stream</option><option value="neon">Neon city (classic)</option><option value="horror">Horror: Ashen Hollow</option><option value="tour">World tour (synthwave)</option><option value="fight">Fighting games: Scuffle Hours</option></select></div>
   <div class="row"><select id="showLen" style="flex:1 1 90px;width:auto"><option value="60">1 min</option><option value="120">2 min</option><option value="180" selected>3 min</option><option value="300">5 min</option><option value="600">10 min</option></select><button id="showIntro">Start intro</button></div>
   <div class="row" style="margin-top:6px" id="showBtns"><button id="showBrb">BRB</button><button id="showLive">We're live</button><button id="showOutro">Outro</button></div>
   <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><label class="note" style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="musOn" style="width:18px;min-height:18px"> Techno music</label><input type="range" id="musVol" min="0" max="100" style="flex:1;min-height:30px;padding:0"></div>
@@ -290,7 +290,7 @@ const store = {
 const params = new URLSearchParams(location.search);
 let SS = store.get('stats', null); if (!SS || typeof SS !== 'object' || !SS.games) SS = { game: '', preset: 'fighting', start: Date.now(), games: {}, feed: [], show: 'rotate', hud: true, hudPos: 'tr', mods: true, custom: ['Stat 1', 'Stat 2'] };
 SS.feed = SS.feed || [];
-const INTRO_STYLES = { neon: 'Neon city (classic)', horror: 'Horror: Ashen Hollow', tour: 'World tour (synthwave)', random: 'Random each stream' };
+const INTRO_STYLES = { neon: 'Neon city (classic)', horror: 'Horror: Ashen Hollow', tour: 'World tour (synthwave)', fight: 'Fighting games: Scuffle Hours', random: 'Random each stream' };
 let introStyle = store.get('introStyle', 'random');
  if (SS.last && Date.now() - SS.last > 6 * 3600e3) { SS.games = {}; SS.feed = []; SS.start = Date.now(); }     // a new stream day starts a fresh session
 const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('lscCity') : null;     // talks to the LSC Control dock
@@ -2575,7 +2575,7 @@ function poseFighter(F, t, dt, foe) {
     else if (a.type === 'spin') { F.g.rotation.y = yaw + Math.PI * 2 * Math.min(1, u * 1.2); hR = -1.2 * kk; kR = 0.2; lean = -0.2 * kk; }
     else if (a.type === 'block') { sL = -1.6; eL = -1.4; sR = -1.6; eR = -1.4; lean = -0.05; }
     else if (a.type === 'hop') F.hips.position.y += kk * 0.45;
-    if (!a.landed && u > 0.33 && a.type !== 'block' && a.type !== 'hop') { a.landed = true; if (Math.random() < 0.7) { foe.hit = t; const p = new THREE.Vector3(); (a.type === 'kick' || a.type === 'spin' ? F.lR.foot : a.type === 'jab' ? F.aL.fist : F.aR.fist).getWorldPosition(p); smSpark(F.g.parent, p); } }
+    if (!a.landed && u > 0.33 && a.type !== 'block' && a.type !== 'hop') { a.landed = true; if (Math.random() < 0.7) { foe.hit = t; const p = new THREE.Vector3(); (a.type === 'kick' || a.type === 'spin' ? F.lR.foot : a.type === 'jab' ? F.aL.fist : F.aR.fist).getWorldPosition(p); smSpark(F.g.parent, p); fgHitNear(p); } }
     if (u >= 1) F.act = null; }
   const h = t - F.hit; if (h < 0.35) { lean = -0.35 * Math.sin(h / 0.35 * Math.PI); F.g.position.addScaledVector(new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), -dt * 1.2); }
   F.aL.s.rotation.set(sL, 0, -0.25 + sideL); F.aL.e.rotation.x = eL; F.aR.s.rotation.set(sR, 0, 0.25 + sideR); F.aR.e.rotation.x = eR;
@@ -3669,7 +3669,7 @@ function obsScene(n) { if (!autoScene || !n || !window.obsstudio || !window.obss
 function topChatters(n) { const list = Object.entries(chatCount).sort((a, b) => b[1] - a[1]).slice(0, n).map(e => e[0]); return list.length ? list : spawned.slice(-n).map(w => w.user); }
 function startShow(mode, len, fromObs, style) {
   const prev = SHOW.mode; SHOW.mode = mode; SHOW.t0 = nowS(); musInit();
-  if (mode === 'intro') { SHOW.style = pickIntroStyle(style); Object.assign(SHOW, { hScare: false, hStatic: false, hEnd: null, tourI: -1, tourWarped: false, holdFrom: null, diveFrom: null }); introReset(); if (TR.on) { TR.on = false; renderPass.camera = cam; } if (SHOW.style === 'neon') setZone('city'); }
+  if (mode === 'intro') { SHOW.style = pickIntroStyle(style); if (SHOW.style === 'fight') voxLoad(); Object.assign(SHOW, { hScare: false, hStatic: false, hEnd: null, tourI: -1, tourWarped: false, holdFrom: null, diveFrom: null }); introReset(); if (TR.on) { TR.on = false; renderPass.camera = cam; } if (SHOW.style === 'neon') setZone('city'); }
   SHOW.from = cam.position.clone(); SHOW.fromQ = cam.quaternion.clone(); SHOW.fromF = cam.fov;
   if (mode !== 'live') { tourOn = false; $('tour').classList.remove('on'); fly = null; }
   if (mode === 'intro') { SHOW.len = +len || SHOW.len; SHOW.end = SHOW.t0 + SHOW.len; store.set('introLen', SHOW.len); if (!fromObs) obsScene(showScenes.intro); }
@@ -3684,7 +3684,7 @@ function startShow(mode, len, fromObs, style) {
   postState();
 }
 function landLive() {
-  introReset(); if (ZONES.cur !== 'city') setZone('city');
+  SHOW.landStyle = SHOW.mode === 'intro' ? SHOW.style : null; introReset(); if (ZONES.cur !== 'city') setZone('city');
   SHOW.mode = 'live'; MUS.landT = nowS(); $('showOv').style.display = 'none';
   goShot(0, true); setTour(true);
   fwQueue += 10; toast("WE'RE LIVE!"); avReact('excited', 'wave', 6);
@@ -3701,6 +3701,7 @@ function showTick(dt, t) {
   const n = nowS();
   if (SHOW.mode === 'intro' && SHOW.style === 'horror') return horrorIntro(n, SHOW.end - n);
   if (SHOW.mode === 'intro' && SHOW.style === 'tour') return tourIntro(n, SHOW.end - n);
+  if (SHOW.mode === 'intro' && SHOW.style === 'fight') return fightIntro(n, SHOW.end - n);
   if (SHOW.mode === 'intro') {
     const R = SHOW.end - n, ts = n * 0.05;
     ov.style.display = R > 12 ? 'block' : 'none';
@@ -3846,6 +3847,8 @@ const CH = r => [57 + r, 60 + r, 64 + r + (r === -2 ? -1 : 0)];      // Am, Am, 
 function musSection() {
   const m = SHOW.mode, n = nowS();
   if (m === 'intro' && SHOW.style === 'horror') { const R = SHOW.end - n; return R > 40 ? 'h_creep' : R > 20 ? 'h_stalk' : R > 8 ? 'h_chase' : R > 2.5 ? 'h_reveal' : 'h_end'; }
+  if (m === 'intro' && SHOW.style === 'fight') return 'f_ring';
+  if (m === 'live' && SHOW.landStyle === 'fight') return 'off';
   if (m === 'intro' && SHOW.style === 'tour') { const R = SHOW.end - n; return R > 14 ? 'w_cruise' : R > 4 ? 'w_climb' : 'w_hold'; }
   if (m === 'intro') { const R = SHOW.end - n; return R > 45 ? 'space' : R > 30 ? 'dive' : R > 12 ? 'street' : R > 4 ? 'climb' : 'hold'; }
   if (m === 'live') return n - MUS.landT < 9 ? 'land' : 'off';
@@ -3874,6 +3877,7 @@ function musSched() {
   while (MUS.next < c.currentTime + 0.15) { musStep(sec, MUS.step, MUS.next); MUS.step++; MUS.next += musSPB(); }
 }
 function musStep(sec, s, t) {
+  if (sec.startsWith('f_')) return;
   if (sec.startsWith('h_')) return horrorStep(sec, s, t);
   if (sec.startsWith('w_')) return tourStep(sec, s, t);
   const b = s % 16, bar = Math.floor(s / 16) % 4, r = ROOTS[bar], R = SHOW.mode === 'intro' ? SHOW.end - nowS() : 0;
@@ -3917,7 +3921,7 @@ function pickIntroStyle(st) { st = st || introStyle; if (st !== 'random') return
 const hVhs = document.createElement('div'); hVhs.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1;display:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,rgba(0,0,0,0) 2px 4px),radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(0,0,0,.75) 100%)';
 hVhs.innerHTML = '<div style="position:absolute;left:3%;top:4%;font:700 clamp(14px,2vw,34px) \'Courier New\',monospace;color:#e8e8e8;text-shadow:2px 0 #ff2a1a,-2px 0 #2affff">&#9654; PLAY</div><div id="hVhsT" style="position:absolute;right:3%;bottom:5%;font:700 clamp(14px,2vw,34px) \'Courier New\',monospace;color:#e8e8e8;text-shadow:2px 0 #ff2a1a,-2px 0 #2affff">AM 3:13</div>';
 document.body.appendChild(hVhs);
-function introReset() { hVhs.style.display = 'none'; ['sovT', 'sovC', 'sovS'].forEach(id => { $(id).style.transform = ''; $(id).style.filter = ''; }); $('sovC').style.textShadow = ''; }
+function introReset() { hVhs.style.display = 'none'; fgHud.style.display = 'none'; SHOW.fg = null; ['sovT', 'sovC', 'sovS'].forEach(id => { $(id).style.transform = ''; $(id).style.filter = ''; }); $('sovC').style.textShadow = ''; }
 function introSettle(R, dur) {                    // shared ending: glide into the opening city shot and go live
   const s0 = shots[0], k = sEase((dur - R) / dur);
   if (!SHOW.holdFrom) { SHOW.holdFrom = cam.position.clone(); SHOW.holdQ = cam.quaternion.clone(); SHOW.holdF = cam.fov; }
@@ -4003,6 +4007,72 @@ function tourStep(sec, s, t) { const b = s % 16, bar = Math.floor(s / 16) % 4, c
   if (b === 4 || b === 12) tSnare(t, 0.2);
   if (sec === 'w_climb') { if (b % 2 === 1) tSnare(t, 0.05 + (s % 64) / 64 * 0.12); }
   else tHat(t, b % 4 === 2 ? 0.07 : 0.03, b % 4 === 2); }
+// ---------------------------------------------------------------- FIGHTING-GAME INTRO: arcade attract mode on Crimson Summit, ring announcer, hits, crowd, ROUND ONE... FIGHT!
+const VOX = { buf: {}, loading: false, names: ['welcome', 'invite', 'ready', 'scuffle', 'challenger', 'round1', 'fight', 'ko', 'perfect', 'excellent'] };
+function voxLoad() { if (VOX.loading || !MUS.ctx) return; VOX.loading = true;
+  VOX.names.forEach(n => fetch('sfx/announcer_' + n + '.mp3').then(r => r.arrayBuffer()).then(a => MUS.ctx.decodeAudioData(a)).then(b => { VOX.buf[n] = b; }).catch(e => console.warn('announcer', n, e))); }
+function voxPlay(n, lvl) { const c = MUS.ctx, b = VOX.buf[n]; if (!c || !b) return 0; const s = c.createBufferSource(), g = c.createGain(); s.buffer = b; g.gain.value = (lvl || 1) * (MUS.on ? Math.max(0.35, MUS.vol) : 0.6) * 1.15;
+  s.connect(g); g.connect(c.destination); s.start(c.currentTime + 0.02); return b.duration; }
+function fgPunch(lvl, heavy) { const c = MUS.ctx; if (!c) return; const t = c.currentTime + 0.01, o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(heavy ? 120 : 160, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+  g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.25);
+  const n = c.createBufferSource(), f = c.createBiquadFilter(), ng = c.createGain(); n.buffer = MUS.noise; f.type = 'bandpass'; f.frequency.value = heavy ? 1500 : 2600; f.Q.value = 0.9; ng.gain.setValueAtTime(lvl * 0.9, t); ng.gain.exponentialRampToValueAtTime(0.001, t + (heavy ? 0.12 : 0.06));
+  n.connect(f); f.connect(ng); ng.connect(c.destination); n.start(t, Math.random()); n.stop(t + 0.15);
+  if (heavy && MUS.verb) { const v = c.createGain(); v.gain.value = lvl * 0.5; ng.connect(v); v.connect(MUS.verb); } }
+function fgCheer(lvl, len) { const c = MUS.ctx; if (!c) return; const t = c.currentTime + 0.02; len = len || 3;
+  [700, 1300, 2300].forEach((fr, i) => { const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); s.buffer = MUS.noise; s.loop = true; f.type = 'bandpass'; f.frequency.value = fr; f.Q.value = 0.8;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(lvl * [1, 0.7, 0.35][i], t + 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + len); s.connect(f); f.connect(g); g.connect(c.destination); if (MUS.verb) { const v = c.createGain(); v.gain.value = 0.4; g.connect(v); v.connect(MUS.verb); } s.start(t, Math.random()); s.stop(t + len + 0.1); });
+  for (let k = 0; k < 6; k++) { const o = c.createOscillator(), g = c.createGain(), t0 = t + Math.random() * len * 0.5; o.type = 'triangle'; o.frequency.setValueAtTime(500 + Math.random() * 400, t0); o.frequency.exponentialRampToValueAtTime(900 + Math.random() * 500, t0 + 0.5);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(lvl * 0.06, t0 + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.7); o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + 0.8); } }
+function fgSlam() { const c = MUS.ctx; if (!c) return; const t = c.currentTime + 0.01, o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(26, t + 1.6);
+  g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.8); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 1.9); fgPunch(0.7, true); }
+function fgHitNear(pos) { if (SHOW.mode !== 'intro' || SHOW.style !== 'fight' || ZONES.cur !== 'summit') return; const d = cam.position.distanceTo(pos); if (d > 26) return; const heavy = Math.random() < 0.3; fgPunch(Math.min(0.7, 5 / (d + 2)), heavy);
+  const H = FG.hp; if (H) { const i = Math.random() < 0.5 ? 0 : 1; H[i] = Math.max(0, H[i] - (heavy ? 14 : 6)); if (H[i] <= 0) { H[i] = 100; if (Math.random() < 0.6) { voxPlay(Math.random() < 0.5 ? 'ko' : 'perfect', 0.8); fgCheer(0.08, 2.5); } } } }
+// ---- on-screen arcade HUD
+const FG = { hp: [100, 100] };
+const fgHud = document.createElement('div'); fgHud.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2;display:none;font-family:Anton,Impact,sans-serif;color:#fff';
+fgHud.innerHTML = `<div style="position:absolute;left:3%;right:3%;top:3.5%;display:flex;align-items:center;gap:1.5%">
+  <div style="flex:1"><div style="font-size:clamp(14px,2vw,34px);letter-spacing:.06em;text-shadow:0 2px 0 #000">RASSIR</div><div style="height:clamp(12px,2.2vw,36px);border:3px solid #fff;background:#3a0a0a;transform:skewX(-14deg);overflow:hidden;box-shadow:0 0 12px #000"><i id="fgB0" style="display:block;height:100%;width:100%;margin-left:auto;background:linear-gradient(#ffe36a,#ff9a1a);transition:width .25s"></i></div></div>
+  <div id="fgClock" style="min-width:9%;text-align:center;font-size:clamp(30px,5.2vw,92px);line-height:1;color:#ffd23a;text-shadow:0 0 4px #000,3px 3px 0 #a0180a,-2px -2px 0 #000">99</div>
+  <div style="flex:1;text-align:right"><div style="font-size:clamp(14px,2vw,34px);letter-spacing:.06em;text-shadow:0 2px 0 #000">CHAT</div><div style="height:clamp(12px,2.2vw,36px);border:3px solid #fff;background:#3a0a0a;transform:skewX(14deg);overflow:hidden;box-shadow:0 0 12px #000"><i id="fgB1" style="display:block;height:100%;width:100%;background:linear-gradient(#ffe36a,#ff9a1a);transition:width .25s"></i></div></div></div>
+  <div id="fgTitle" style="position:absolute;left:0;right:0;top:20%;text-align:center;font-size:clamp(38px,7.5vw,140px);line-height:1;color:#ffd23a;letter-spacing:.03em;text-shadow:4px 4px 0 #b0140a,-3px -3px 0 #000,0 0 30px rgba(255,120,30,.8)">STARTING SOON</div>
+  <div id="fgCap" style="position:absolute;left:8%;right:8%;bottom:17%;text-align:center;font:700 clamp(16px,2.4vw,42px)/1.25 Poppins,sans-serif;text-shadow:0 3px 8px #000,0 0 2px #000"></div>
+  <div id="fgCoin" style="position:absolute;left:0;right:0;bottom:6%;text-align:center;font-size:clamp(18px,2.8vw,50px);letter-spacing:.12em;color:#fff;text-shadow:3px 3px 0 #b0140a">INSERT COIN</div>
+  <div id="fgSub" style="position:absolute;left:0;right:0;bottom:2.2%;text-align:center;font:700 clamp(11px,1.3vw,22px) Poppins,sans-serif;color:#ffe0b0;text-shadow:0 2px 6px #000">type !spawn to enter the tournament</div>`;
+document.body.appendChild(fgHud);
+function fgTitle(txt, col, size) { const el = $('fgTitle'); el.textContent = txt; el.style.color = col || '#ffd23a'; el.style.fontSize = size || 'clamp(38px,7.5vw,140px)'; el.style.transition = 'none'; el.style.transform = 'scale(1.9)'; el.style.opacity = '0'; void el.offsetWidth;
+  el.style.transition = 'transform .35s cubic-bezier(.2,1.6,.4,1), opacity .2s'; el.style.transform = 'scale(1)'; el.style.opacity = '1'; }
+const FG_CAMS = [['main', null], ['shot', 'Lava arena'], ['wide', null], ['shot', 'Ice peak'], ['main2', null], ['shot', 'Waterfall']];
+function fightIntro(n, R) {
+  $('showOv').style.display = 'none'; fgHud.style.display = 'block';
+  if (ZONES.cur !== 'summit' && R > 1.6) setZone('summit');
+  if (!SHOW.fg) { SHOW.fg = { said: {}, nextCall: n + 6, cam: -1 }; FG.hp = [100, 100]; voxLoad(); fgTitle('STARTING SOON'); fgCheer(0.05, 3); setTimeout(() => voxPlay('challenger'), 1600); }
+  const F = SHOW.fg, once = (k, at, fn) => { if (R <= at && !F.said[k]) { F.said[k] = true; if (R > at - 1.2) fn(); } };
+  $('fgClock').textContent = R > 99 ? fmtT(R) : String(Math.max(0, Math.ceil(R))); $('fgB0').style.width = FG.hp[0] + '%'; $('fgB1').style.width = FG.hp[1] + '%';
+  $('fgCoin').style.visibility = R > 34 ? (Math.floor(n * 1.6) % 2 ? 'visible' : 'hidden') : 'hidden'; $('fgSub').style.visibility = R > 34 ? 'visible' : 'hidden';
+  const shake = a => new THREE.Vector3(Math.sin(n * 23) * a, Math.sin(n * 31 + 1) * a, Math.cos(n * 19) * a);
+  if (R > 34) {                                                             // attract mode: cut between the sparring fights
+    const i = Math.floor((SHOW.len - R) / 7) % FG_CAMS.length, k = ((SHOW.len - R) % 7) / 7, [kind, lab] = FG_CAMS[i];
+    if (F.cam !== i) { F.cam = i; if (i) flash(0.45, 0.35); }
+    const M = SM.main ? SM.main.c : new THREE.Vector3(0, 0.8, 0);
+    if (kind === 'shot') { const s = shots.find(x => x.label === lab); if (s) { const look = new THREE.Vector3(0, 0, -1).applyQuaternion(s.quat).multiplyScalar(12).add(s.pos); camAt(s.pos.clone().lerp(look, k * 0.22), look, s.fov - k * 6); } }
+    else if (kind === 'wide') { const a = 0.6 - k * 1.2; camAt(new THREE.Vector3(Math.sin(a) * 24, 7 - k * 2, Math.cos(a) * 24), M.clone().add(new THREE.Vector3(0, 1.6, 0)), 48); }
+    else { const a = (kind === 'main' ? 0.4 : 2.6) + k * 0.9; camAt(new THREE.Vector3(M.x + Math.sin(a) * 5.4, M.y + 1.1, M.z + Math.cos(a) * 5.4), M.clone().add(new THREE.Vector3(0, 1.25, 0)), 42); }
+    if (n > F.nextCall) { F.nextCall = n + 22 + Math.random() * 14; voxPlay(['challenger', 'excellent', 'perfect'][Math.random() * 3 | 0], 0.85); fgCheer(0.07, 2.6); }
+    $('fgCap').textContent = ''; return true; }
+  // the announcer takes the ring
+  once('a0', 34, () => { flash(0.8, 0.6); fgTitle('SCUFFLE HOURS', '#ffd23a'); fgCheer(0.09, 3); });
+  once('a1', 33, () => { voxPlay('welcome'); $('fgCap').textContent = '"Welcome all, to Lucid State City Scuffle Hours!"'; });
+  once('a2', 26.4, () => { voxPlay('invite'); $('fgCap').textContent = '"We invite those who seek a fight and chill vibes to come fight in our community."'; });
+  once('a3', 19.4, () => { voxPlay('ready'); $('fgCap').textContent = '"So... who\'s ready..."'; fgTitle('WHO\'S READY?', '#ffffff'); });
+  once('a4', 16.9, () => { voxPlay('scuffle', 1.1); fgSlam(); flash(1, 0.9); fgCheer(0.16, 5); $('fgCap').textContent = '"...to SCUFFLE!!!"'; fgTitle('SCUFFLE!!!', '#ff3a2a', 'clamp(60px,13vw,240px)'); if (SM.fx) for (let k = 0; k < 6; k++) smSpark(SM.scene, new THREE.Vector3((Math.random() - 0.5) * 6, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 6)); });
+  once('a5', 10, () => { $('fgCap').textContent = ''; fgTitle('LUCID STATE CITY', '#38e8ff'); });
+  once('a6', 5.2, () => { voxPlay('round1'); fgTitle('ROUND 1', '#ffd23a'); fgPunch(0.5, true); });
+  once('a7', 1.7, () => { voxPlay('fight', 1.1); fgSlam(); fgTitle('FIGHT!', '#ff3a2a', 'clamp(70px,15vw,280px)'); flash(1, 1); fgCheer(0.18, 4.5); setZone('city'); camAt(shots[0].pos.clone().add(new THREE.Vector3(0, 18, 30)), shots[0].pos, 64); SHOW.holdFrom = null; });
+  const M = SM.main ? SM.main.c : new THREE.Vector3(0, 0.8, 0);
+  if (R > 16.9) { const k = sEase((34 - R) / 17), a = 0.2 + k * 0.8, r = 26 - k * 17; camAt(new THREE.Vector3(Math.sin(a) * r, 8 - k * 5.2, Math.cos(a) * r).add(shake(0.02)), M.clone().add(new THREE.Vector3(0, 1.3 + (1 - k) * 2, 0)), 50 - k * 8); }
+  else if (R > 1.7) { const k = sEase((16.9 - R) / 15.2), a = 1 + k * 2.6, r = 6 + k * 22; camAt(new THREE.Vector3(Math.sin(a) * r, 2.2 + k * 14, Math.cos(a) * r).add(shake(R > 15.5 ? 0.25 : 0.01)), M.clone().add(new THREE.Vector3(0, 1.4, 0)), 46 + k * 10); }
+  else introSettle(R, 1.7);
+  return true; }
 // ---- ported from the Rooftop Arena (same character, toon look, faces, gestures) ----
 const softTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'#fff');g.addColorStop(0.55,'#888');g.addColorStop(1,'#000');x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})();
 const AV={};
