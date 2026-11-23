@@ -106,7 +106,7 @@ canvas#c.pick{cursor:pointer}
 
   <div id="status"></div>
   <div id="verBanner" style="display:none;margin:8px 0;padding:10px;border:2px solid #ffd23a;border-radius:10px;background:rgba(255,210,58,.1)"><b style="color:#ffd23a">The city in OBS is running an older version.</b><br><span class="note">New features (like the newest places) will not work until it updates.</span><button id="verBtn" class="big" style="margin-top:8px;width:100%">Update the city now</button></div>
-  <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="alerts">Alerts</button><button data-tab="trophy">Trophies</button><button data-tab="vault">Vault</button><button data-tab="setup">Setup</button></div>
+  <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="alerts">Alerts</button><button data-tab="trophy">Trophies</button><button data-tab="vault">Vault</button><button data-tab="stats">Stats</button><button data-tab="setup">Setup</button></div>
   <section data-tab="places">
     <div class="row"><button id="tourBig" class="big">Auto tour</button><button id="orbitBig" class="big">Orbit</button></div>
     <div class="row" id="travelRow" style="margin-top:6px"><button data-go="Space station" class="big" style="--pc:#38e8ff">&#x1F680; Space</button><button data-go="Planet landing" class="big" style="--pc:#ff4fd8">&#x1FA90; Planet</button><button data-go="Bay stage" class="big" style="--pc:#ffb04a">&#x1F334; Bay</button><button data-go="Summit arena" class="big" style="--pc:#ff3a3a">&#x1F681; Summit</button><button data-go="Hollow square" class="big" style="--pc:#8a2a20">&#x1F68C; Hollow</button><button data-go="Firebase" class="big" style="--pc:#c87a2a">&#x1FA96; Warzone</button><button data-go="Gateway" class="big" style="--pc:#ff2d8f">&#x1F3D9; City</button></div>
@@ -204,6 +204,20 @@ canvas#c.pick{cursor:pointer}
     <h3>In the Vault</h3>
     <div id="vtList"></div>
   </section>
+  <section data-tab="stats" hidden>
+    <h3>Session stats</h3>
+    <p class="note">Track wins, KOs, kills and more while you play. The numbers show on the stats screen in every map and in a stats box on stream.</p>
+    <div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="ssGame" placeholder="Game (e.g. Tekken 8)" maxlength="28" style="flex:1.5"><select id="ssPreset" style="flex:1"></select></div>
+    <div class="row" id="ssCustom" style="margin-top:6px;flex-wrap:nowrap;display:none"><input id="ssC1" placeholder="Custom stat 1 (e.g. Assists)" maxlength="14" style="flex:1"><input id="ssC2" placeholder="Custom stat 2" maxlength="14" style="flex:1"></div>
+    <div class="row" style="margin-top:6px"><button id="ssSet" class="big">Set game</button></div>
+    <div id="ssBtns"></div>
+    <div class="row" style="margin-top:8px"><button id="ssUndo">Undo last</button><button id="ssShowNow">Show stats now</button><button id="ssReset">Reset session</button></div>
+    <h3>On stream</h3>
+    <div class="row" style="flex-wrap:nowrap;align-items:center"><span class="note" style="flex:1">Commands screens</span><select id="ssShow" style="flex:1.4"><option value="rotate">Switch with commands</option><option value="stats">Always stats</option><option value="commands">Commands only</option></select></div>
+    <div class="row" style="margin-top:6px;flex-wrap:nowrap;align-items:center"><label class="note" style="display:flex;gap:6px;align-items:center;flex:1.3"><input type="checkbox" id="ssHud" style="width:18px;min-height:18px"> Stats box on stream</label><select id="ssHudPos" style="flex:1"><option value="tr">Top right</option><option value="tl">Top left</option><option value="bl">Bottom left</option></select></div>
+    <label class="note" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="ssMods" style="width:18px;min-height:18px"> Let my mods update stats from chat</label>
+    <p class="note">Mod chat commands: <b>!win</b> <b>!loss</b> <b>!ko</b> <b>!perfect</b> <b>!kill</b> <b>!death</b> <b>!top10</b> <b>!goal</b> <b>!mvp</b> <b>!undo</b>. Viewers can type <b>!stats</b> to put the stats on screen.</p>
+  </section>
   <section data-tab="setup" hidden>  <h3>Twitch chat</h3>
   <div class="row"><input id="chan" placeholder="your channel name" autocomplete="off"><button id="chanGo">Connect</button></div>
   <p class="note" id="chatState" style="margin-top:6px"><span class="dot"></span> Chat not connected</p>
@@ -240,6 +254,29 @@ canvas#c.pick{cursor:pointer}
 window.vtFillSelects = (keepStyle) => { const $ = id => document.getElementById(id), D = window.VDEF; if (!$('vtType')) return; if (!$('vtType').options.length) { $('vtType').innerHTML = Object.entries(D.types).map(([k, v]) => `<option value="${k}">${v.n}</option>`).join('');
     $('vtRarity').innerHTML = Object.entries(D.rar).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join(''); $('vtRarity').value = 'legendary'; }
   const T = D.types[$('vtType').value]; $('vtStyle').innerHTML = Object.entries(T.s).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''); };
+window.STATS_PRESETS = { fighting: { n: 'Fighting', x: [['ko', 'KOs'], ['perfect', 'Perfects']] }, shooter: { n: 'Shooter', x: [['kill', 'Kills'], ['death', 'Deaths']] }, br: { n: 'Battle royale', x: [['kill', 'Kills'], ['top10', 'Top 10s']] },
+  sports: { n: 'Sports / racing', x: [['goal', 'Goals'], ['mvp', 'MVPs']] }, custom: { n: 'Custom', x: [['c1', 'Stat 1'], ['c2', 'Stat 2']] } };
+window.ssRenderPanel = (S, act) => { const $ = id => document.getElementById(id), P = window.STATS_PRESETS; if (!$('ssBtns') || !S) return;
+  if (!$('ssPreset').options.length) $('ssPreset').innerHTML = Object.entries(P).map(([k, v]) => `<option value="${k}">${v.n}</option>`).join('');
+  const keep = (id, v) => { if (document.activeElement !== $(id) && !$(id)._dirty) $(id).value = v; };
+  keep('ssGame', S.game || ''); keep('ssPreset', S.preset || 'fighting'); keep('ssC1', (S.custom || [])[0] || ''); keep('ssC2', (S.custom || [])[1] || '');
+  $('ssCustom').style.display = $('ssPreset').value === 'custom' ? 'flex' : 'none';
+  $('ssShow').value = S.show || 'rotate'; $('ssHud').checked = !!S.hud; $('ssHudPos').value = S.hudPos || 'tr'; $('ssMods').checked = !!S.mods;
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const rows = [['w', 'Wins', '#7dff6a'], ['l', 'Losses', '#ff5a6a']].concat(S.labels.map(([k, l], i) => [k, l, i ? '#ffd23a' : '#38e8ff']));
+  const h = (S.game ? `<p class="note" style="margin:6px 0">Tracking <b>${esc(S.game)}</b> · streak ${S.streak || 0} · best ${S.best || 0}</p>` : '<p class="note" style="margin:6px 0">Set the game you are playing first.</p>') +
+    rows.map(([k, l, c]) => `<div class="row" style="margin-top:6px;flex-wrap:nowrap;align-items:center"><span style="flex:1.3;font-weight:600;color:${c}">${l}</span><span style="flex:0.6;font:700 20px Poppins,sans-serif;text-align:center">${(S.c || {})[k] || 0}</span><button data-k="${k}" data-d="1" class="big" style="flex:1.2;--pc:${c}">+1</button><button data-k="${k}" data-d="-1" style="flex:0.6">−1</button></div>`).join('');
+  if ($('ssBtns')._h !== h) { $('ssBtns')._h = h; $('ssBtns').innerHTML = h; }
+  if (!$('ssBtns')._wired) { $('ssBtns')._wired = true;
+    $('ssBtns').onclick = e => { const b = e.target.closest('button'); if (b) act('add', { k: b.dataset.k, d: +b.dataset.d }); };
+    ['ssGame', 'ssC1', 'ssC2'].forEach(id => $(id).oninput = () => $(id)._dirty = true);
+    $('ssPreset').onchange = () => { $('ssCustom').style.display = $('ssPreset').value === 'custom' ? 'flex' : 'none'; $('ssPreset')._dirty = true; };
+    $('ssSet').onclick = () => { const name = $('ssGame').value.trim(); if (!name) { $('ssGame').focus(); return; } ['ssGame', 'ssC1', 'ssC2', 'ssPreset'].forEach(id => $(id)._dirty = false);
+      act('game', { name, preset: $('ssPreset').value, custom: [$('ssC1').value.trim() || 'Stat 1', $('ssC2').value.trim() || 'Stat 2'] }); };
+    $('ssUndo').onclick = () => act('undo', {}); $('ssReset').onclick = () => { const b = $('ssReset'); if (b._arm && Date.now() - b._arm < 4000) { b._arm = 0; b.textContent = 'Reset session'; act('reset', {}); return; } b._arm = Date.now(); b.textContent = 'Tap again to reset'; setTimeout(() => { if (b._arm) { b._arm = 0; b.textContent = 'Reset session'; } }, 4000); };
+    $('ssShowNow').onclick = () => act('shownow', {});
+    const cfg = () => act('cfg', { show: $('ssShow').value, hud: $('ssHud').checked, hudPos: $('ssHudPos').value, mods: $('ssMods').checked });
+    ['ssShow', 'ssHud', 'ssHudPos', 'ssMods'].forEach(id => $(id).onchange = cfg); } };
 window.LSC_CONTROL = new URLSearchParams(location.search).get('control') === '1';
 window.LSC_AVATAR = new URLSearchParams(location.search).get('avatar') === '1';</script>
 <script>
@@ -250,6 +287,8 @@ const store = {
   set(k, v) { try { localStorage.setItem('lsc_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } }
 };
 const params = new URLSearchParams(location.search);
+let SS = store.get('stats', null); if (!SS || typeof SS !== 'object' || !SS.games) SS = { game: '', preset: 'fighting', start: Date.now(), games: {}, feed: [], show: 'rotate', hud: true, hudPos: 'tr', mods: true, custom: ['Stat 1', 'Stat 2'] };
+SS.feed = SS.feed || []; if (SS.last && Date.now() - SS.last > 6 * 3600e3) { SS.games = {}; SS.feed = []; SS.start = Date.now(); }     // a new stream day starts a fresh session
 const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('lscCity') : null;     // talks to the LSC Control dock
 const setStatus = t => { $('status').textContent = t; if (bc) try { bc.postMessage({ cmd: 'status', data: { msg: t } }); } catch (e) {} };
 let toastT = 0;
@@ -917,7 +956,7 @@ const chatLines = [];
 let chatCanvas, chatTex, cmdCanvas, cmdTex;
 const COMMANDS = [
   ['!spawn', 'join the city as a citizen'], ['!club', 'walk into Zero Cool'], ['!fight', 'walk into Fight Club'], ['!bit', 'walk into Back In Time'], ['!dance', 'start a dance at Zero Cool'], ['!rain', 'make it rain on the city'],
-  ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard'], ['!airdrop', 'call a supply drop in Zone Zero'], ['!vault', 'show your best Vault item']
+  ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard'], ['!airdrop', 'call a supply drop in Zone Zero'], ['!vault', 'show your best Vault item'], ['!stats', "show tonight's game stats"]
 ];
 function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; return [c, t]; }
 function applyTex(mesh, tex) { if (!mesh) return; mesh.material = mesh.material.clone(); mesh.material.color.setRGB(0, 0, 0); mesh.material.roughness = 1; mesh.material.map = tex; mesh.material.emissiveMap = tex; mesh.material.emissive = new THREE.Color(0xffffff); mesh.material.emissiveIntensity = 1.0; mesh.material.needsUpdate = true; }
@@ -937,6 +976,7 @@ function buildScreens() {
 }
 function frame(x, w, h, col) { x.strokeStyle = col; x.lineWidth = 10; x.strokeRect(8, 8, w - 16, h - 16); }
 function drawCommands() {
+  if (statsOnCmd()) { drawStatsCanvas(cmdCanvas.getContext('2d'), 1280, 720); cmdTex.needsUpdate = true; return; }
   const x = cmdCanvas.getContext('2d'), w = 1280, h = 720;
   const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, '#05051a'); g.addColorStop(1, '#1e002d'); x.fillStyle = g; x.fillRect(0, 0, w, h);
   x.textAlign = 'center'; x.font = '120px Anton, Impact, sans-serif'; x.shadowColor = '#38e8ff'; x.shadowBlur = 24; x.fillStyle = '#fff';
@@ -1497,7 +1537,8 @@ function startDance(t) {
 
 // ---------------------------------------------------------------- commands
 const cooldown = {};
-function runCommand(cmd, user, color) {
+function runCommand(cmd, user, color, isMod) {
+  if (ssChat(cmd, user || 'Rassir', isMod === undefined ? true : isMod)) return;
   const t = clock.getElapsedTime(), now = performance.now();
   const cd = { '!spawn': 0, '!club': 0, '!fight': 0, '!bit': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000, '!airdrop': 20000, '!vault': 8000 }[cmd];
   if (cd === undefined) return;
@@ -1571,7 +1612,7 @@ function handleLine(line) {
   chatCount[user] = (chatCount[user] || 0) + 1; chatMsgs++; if (chatMsgs <= 3 || chatMsgs % 10 === 0) showChatState(chatState, chanName, chatMsgs);
   chatCanvas && drawChat();
   const cmd = text.trim().split(/\s+/)[0].toLowerCase();
-  if (cmd.startsWith('!')) runCommand(cmd, user, color);
+  if (cmd.startsWith('!')) runCommand(cmd, user, color, tags.mod === '1' || /broadcaster|moderator/.test(tags.badges || ''));
 }
 $('chanGo').onclick = () => connectChat($('chan').value);
 $('chan').addEventListener('keydown', e => { if (e.key === 'Enter') connectChat($('chan').value); });
@@ -1711,6 +1752,7 @@ $('vtAdd').onclick = () => { const name = $('vtName').value.trim(); if (!name) {
   $('vtName').value = ''; addVault(it, $('vtPop').checked, $('vtSpot').checked); setStatus('Gave ' + it.name + ' a ' + VDEF.rar[it.rarity][0] + ' ' + VDEF.types[it.type].n + '.'); };
 $('vtList').onclick = e => { const b = e.target.closest('button'); if (b) delVault(+b.dataset.i); };
 $('vtShow').onclick = () => { if (VT.mesh) focusMesh(VT.mesh, 'Operator Vault'); };
+ssRenderPanel(ssState(), statsCmd);
 $('camBg').value = store.get('cambg', 'lsc'); $('camBg').onchange = e => applyCamBg(e.target.value, true); setTimeout(() => avatarBg(camBgOn()), 0);
 let gpipMode = store.get('gpip', 'walk'), gpipSrc = null;
 $('gpipMode').value = gpipMode;
@@ -3518,6 +3560,77 @@ function vaultShowUser(user) { const mine = vaultItems.filter(v => v.name.toLowe
   const order = ['mythic', 'legendary', 'epic', 'rare', 'common'], best = mine.slice().sort((a, b) => order.indexOf(a.rarity) - order.indexOf(b.rarity))[0];
   vaultPopShow(best, (user + "'s vault").toUpperCase(), mine.length + ' item' + (mine.length === 1 ? '' : 's') + ' · best: ' + ((VD.types[best.type] || {}).s || {})[best.style]); }
 
+// ---------------------------------------------------------------- SESSION STATS: wins, losses, KOs, kills... per game, on the commands screens + a stats box on stream + streak pop-ups
+function ssGameObj(create) { if (!SS.game) { if (!create) return null; SS.game = 'Game'; } let g = SS.games[SS.game]; if (!g) { g = SS.games[SS.game] = { preset: SS.preset || 'fighting', c: {}, streak: 0, best: 0, at: Date.now() }; } return g; }
+function ssLabels(g) { const P = STATS_PRESETS[(g && g.preset) || SS.preset] || STATS_PRESETS.fighting; return P.x.map(([k, l], i) => [k, (g && g.preset || SS.preset) === 'custom' ? ((SS.custom || [])[i] || l) : l]); }
+function ssState() { const g = ssGameObj(false); return { game: SS.game, preset: (g && g.preset) || SS.preset, c: g ? g.c : {}, streak: g ? g.streak : 0, best: g ? g.best : 0, labels: ssLabels(g), show: SS.show, hud: SS.hud, hudPos: SS.hudPos, mods: SS.mods, custom: SS.custom }; }
+function ssSave() { SS.last = Date.now(); store.set('stats', SS); ssDirty = true; ssRedraw(); if (typeof ssRenderPanel === 'function') ssRenderPanel(ssState(), statsCmd); postState(); }
+let ssDirty = true, ssHist = [];
+function ssFeed(txt, col) { SS.feed.unshift({ t: Date.now(), txt, col }); SS.feed.length = Math.min(SS.feed.length, 8); }
+function statsCmd(op, d) { d = d || {};
+  if (op === 'game') { SS.game = d.name; SS.preset = d.preset || SS.preset; if (d.custom) SS.custom = d.custom; const g = ssGameObj(true); g.preset = SS.preset; ssFeed('Now playing ' + d.name, '#38e8ff'); toast('Now tracking ' + d.name); }
+  else if (op === 'add') ssAdd(d.k, d.d || 1, d.who);
+  else if (op === 'undo') { const h = ssHist.pop(); if (!h) { toast('Nothing to undo'); return; } const g = SS.games[h.game]; if (g) { g.c[h.k] = h.prev; g.streak = h.streak; g.best = h.best; } ssFeed('Undo', '#9aa3ad'); }
+  else if (op === 'reset') { SS.games = {}; SS.feed = []; SS.start = Date.now(); ssHist = []; if (SS.game) ssGameObj(true); ssFeed('New session started', '#38e8ff'); toast('Stats reset'); }
+  else if (op === 'cfg') { ['show', 'hud', 'hudPos', 'mods'].forEach(k => { if (d[k] !== undefined) SS[k] = d[k]; }); }
+  else if (op === 'shownow') { SS.forceUntil = Date.now() + 20000; toast('Session stats on screen'); }
+  ssSave(); }
+function ssAdd(k, delta, who) { const g = ssGameObj(true), labels = ssLabels(g); const lab = k === 'w' ? 'Win' : k === 'l' ? 'Loss' : ((labels.find(x => x[0] === k) || [])[1] || k);
+  if (k !== 'w' && k !== 'l' && !labels.some(x => x[0] === k)) return false;
+  ssHist.push({ game: SS.game, k, prev: g.c[k] || 0, streak: g.streak || 0, best: g.best || 0 }); if (ssHist.length > 60) ssHist.shift();
+  g.c[k] = Math.max(0, (g.c[k] || 0) + delta);
+  if (delta > 0 && k === 'w') { g.streak = (g.streak || 0) + 1; g.best = Math.max(g.best || 0, g.streak); }
+  if (delta > 0 && k === 'l') g.streak = 0;
+  const col = k === 'w' ? '#7dff6a' : k === 'l' ? '#ff5a6a' : '#38e8ff';
+  ssFeed((delta > 0 ? '+' : '−') + Math.abs(delta) + ' ' + (Math.abs(delta) === 1 ? lab.replace(/s$/, '') : lab) + (who ? ' · ' + who : ''), col);
+  if (delta > 0) { if (k === 'w') ssPop(g.streak >= 3 && [3, 5, 7, 10, 15, 20, 25].includes(g.streak) ? g.streak + ' WIN STREAK' : 'VICTORY', g.streak >= 3 ? 'ON FIRE · ' + SS.game.toUpperCase() : SS.game.toUpperCase() + ' · ' + g.c.w + ' WIN' + (g.c.w === 1 ? '' : 'S') + ' TONIGHT', '#7dff6a', g.streak >= 3);
+    else if (k !== 'l' && g.c[k] % 10 === 0) ssPop(g.c[k] + ' ' + lab.toUpperCase(), 'TONIGHT IN ' + SS.game.toUpperCase(), '#38e8ff', true); }
+  return true; }
+// ---- drawing
+function ssClock() { const s = Math.max(0, (Date.now() - (SS.start || Date.now())) / 1000 | 0); return (s / 3600 | 0) + ':' + String((s / 60 | 0) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+function ssDerived(g) { const c = (g && g.c) || {}, w = c.w || 0, l = c.l || 0, P = (g && g.preset) || SS.preset; return { w, l, rate: w + l ? Math.round(w / (w + l) * 100) : 0, kd: P === 'shooter' ? ((c.kill || 0) / Math.max(1, c.death || 0)).toFixed(2) : null }; }
+function statsOnCmd() { return Date.now() < (SS.forceUntil || 0) || SS.show === 'stats' || (SS.show === 'rotate' && Math.floor(Date.now() / 15000) % 2 === 1); }
+function drawStatsCanvas(x, w, h) { const g = ssGameObj(false), D = ssDerived(g), labels = ssLabels(g), c = (g && g.c) || {};
+  const bg = x.createLinearGradient(0, 0, w, h); bg.addColorStop(0, '#05051a'); bg.addColorStop(1, '#1a0026'); x.fillStyle = bg; x.fillRect(0, 0, w, h);
+  x.textAlign = 'left'; x.font = '84px Anton, Impact, sans-serif'; x.shadowColor = '#ff2d8f'; x.shadowBlur = 22; x.fillStyle = '#fff'; x.fillText('SESSION STATS', 60, 118); x.shadowBlur = 0;
+  x.textAlign = 'right'; x.fillStyle = '#ff3a5a'; x.beginPath(); x.arc(w - 300, 86, 11, 0, 7); x.fill(); x.font = 'bold 40px Poppins, sans-serif'; x.fillStyle = '#e6e6ff'; x.fillText('LIVE ' + ssClock(), w - 60, 100);
+  x.textAlign = 'left'; x.font = 'bold 40px Poppins, sans-serif'; x.fillStyle = '#38e8ff'; x.fillText(g ? SS.game : 'Set the game in the Stats tab', 60, 176, 820);
+  if (g) { x.textAlign = 'right'; x.font = 'bold 30px Poppins, sans-serif'; x.fillStyle = '#b8a8e8'; x.fillText((STATS_PRESETS[g.preset] || {}).n || '', w - 60, 176); }
+  const tiles = [['WINS', D.w, '#7dff6a'], ['LOSSES', D.l, '#ff5a6a']].concat(labels.map(([k, l], i) => [l.toUpperCase(), c[k] || 0, i ? '#ffd23a' : '#38e8ff']));
+  tiles.forEach(([l, v, col], i) => { const X = 60 + i * 295, Y = 206, W = 275, H = 196; x.fillStyle = 'rgba(255,255,255,0.05)'; x.beginPath(); x.roundRect ? x.roundRect(X, Y, W, H, 16) : x.rect(X, Y, W, H); x.fill(); x.strokeStyle = col; x.lineWidth = 3; x.stroke();
+    x.textAlign = 'center'; x.font = 'bold 30px Poppins, sans-serif'; x.fillStyle = col; x.fillText(l, X + W / 2, Y + 50, W - 20); x.font = '112px Anton, Impact, sans-serif'; x.shadowColor = col; x.shadowBlur = 18; x.fillStyle = '#fff'; x.fillText(String(v), X + W / 2, Y + 168); x.shadowBlur = 0; });
+  x.textAlign = 'left'; const y2 = 458; x.font = 'bold 30px Poppins, sans-serif'; x.fillStyle = '#e6e6ff';
+  x.fillText('WIN RATE ' + D.rate + '%', 60, y2); x.fillStyle = 'rgba(255,255,255,0.12)'; x.fillRect(60, y2 + 14, 520, 16); x.fillStyle = '#7dff6a'; x.fillRect(60, y2 + 14, 520 * D.rate / 100, 16);
+  x.fillStyle = (g && g.streak >= 3) ? '#ffb02e' : '#e6e6ff'; x.fillText('STREAK ' + ((g && g.streak) || 0) + ((g && g.streak >= 3) ? '  🔥' : ''), 640, y2); x.fillStyle = '#b8a8e8'; x.fillText('BEST ' + ((g && g.best) || 0), 900, y2); if (D.kd) { x.fillStyle = '#38e8ff'; x.fillText('K/D ' + D.kd, 1080, y2); }
+  const games = Object.entries(SS.games).sort((a, b) => b[1].at - a[1].at).slice(0, 3); x.font = 'bold 26px Poppins, sans-serif'; x.fillStyle = '#ff50c8'; x.fillText("TONIGHT'S GAMES", 60, 540); x.fillText('FEED', 700, 540);
+  games.forEach(([n, G], i) => { const L = ssLabels(G), y = 584 + i * 40; x.font = 'bold 28px Poppins, sans-serif'; x.fillStyle = n === SS.game ? '#fff' : '#b8b8d8'; x.fillText(n, 60, y, 300); x.font = '26px Poppins, sans-serif'; x.fillStyle = '#c8c8e8';
+    x.fillText((G.c.w || 0) + 'W ' + (G.c.l || 0) + 'L · ' + L.map(([k, l]) => (G.c[k] || 0) + ' ' + l).join(' · '), 370, y, 300); });
+  SS.feed.slice(0, 4).forEach((f, i) => { x.font = 'bold 28px Poppins, sans-serif'; x.fillStyle = f.col || '#fff'; x.fillText(f.txt, 700, 584 + i * 34, 520); });
+  x.strokeStyle = '#ff2d8f'; x.lineWidth = 6; x.strokeRect(14, 14, w - 28, h - 28); }
+function ssRedraw() { if (!cmdCanvas) return; const on = statsOnCmd(); if (on) { drawStatsCanvas(cmdCanvas.getContext('2d'), 1280, 720); cmdTex.needsUpdate = true; } else if (ssWasOn) drawCommands(); ssWasOn = on; }
+let ssWasOn = false;
+// ---- stats box overlay + pop-ups
+const ssHud = document.createElement('canvas'); ssHud.width = 640; ssHud.height = 190; ssHud.style.cssText = 'position:fixed;width:27%;z-index:3;pointer-events:none;display:none;transition:transform .25s'; document.body.appendChild(ssHud);
+function ssDrawHud() { const on = SS.hud && SHOW.mode === 'live' && !!ssGameObj(false); ssHud.style.display = on ? 'block' : 'none'; if (!on) return;
+  const P = { tr: 'right:1.6%;top:2.5%', tl: 'left:1.6%;top:2.5%', bl: 'left:1.6%;bottom:3.5%' }[SS.hudPos] || 'right:1.6%;top:2.5%'; if (ssHud._p !== P) { ssHud._p = P; ssHud.style.left = ssHud.style.right = ssHud.style.top = ssHud.style.bottom = ''; P.split(';').forEach(kv => { const [a, b] = kv.split(':'); ssHud.style[a] = b; }); }
+  const x = ssHud.getContext('2d'), w = 640, h = 190, g = ssGameObj(false), D = ssDerived(g), L = ssLabels(g); x.clearRect(0, 0, w, h);
+  x.fillStyle = 'rgba(8,4,20,0.82)'; x.beginPath(); x.roundRect ? x.roundRect(4, 4, w - 8, h - 8, 18) : x.rect(4, 4, w - 8, h - 8); x.fill(); x.strokeStyle = '#ff2d8f'; x.lineWidth = 4; x.shadowColor = '#ff2d8f'; x.shadowBlur = 14; x.stroke(); x.shadowBlur = 0;
+  x.textAlign = 'left'; x.font = 'bold 32px Poppins, sans-serif'; x.fillStyle = '#38e8ff'; x.fillText(SS.game, 26, 50, 400); x.textAlign = 'right'; x.font = 'bold 26px Poppins, sans-serif'; x.fillStyle = '#ff7a9a'; x.fillText('● ' + ssClock(), w - 26, 48);
+  const cells = [['W', D.w, '#7dff6a'], ['L', D.l, '#ff5a6a']].concat(L.map(([k, l], i) => [l.toUpperCase(), g.c[k] || 0, i ? '#ffd23a' : '#38e8ff'])); x.textAlign = 'center';
+  cells.forEach(([l, v, c], i) => { const X = 26 + i * 148 + 66; x.font = '64px Anton, Impact, sans-serif'; x.fillStyle = '#fff'; x.shadowColor = c; x.shadowBlur = 12; x.fillText(String(v), X, 128); x.shadowBlur = 0; x.font = 'bold 20px Poppins, sans-serif'; x.fillStyle = c; x.fillText(l, X, 160, 140); });
+  if (g.streak >= 2) { x.textAlign = 'right'; x.font = 'bold 22px Poppins, sans-serif'; x.fillStyle = '#ffb02e'; x.fillText(g.streak + ' WIN STREAK', w - 26, 80); } }
+const ssPopEl = document.createElement('div'); ssPopEl.style.cssText = 'position:fixed;left:50%;top:16%;transform:translate(-50%,-30px) scale(.8);opacity:0;z-index:8;pointer-events:none;text-align:center;transition:opacity .3s,transform .4s cubic-bezier(.2,1.6,.4,1);font-family:Anton,Impact,sans-serif;letter-spacing:.04em';
+document.body.appendChild(ssPopEl); let ssPopT = 0;
+function ssPop(big, small, col, fire) { ssPopEl.innerHTML = `<div style="font-size:clamp(40px,7vw,120px);line-height:1;color:#fff;text-shadow:0 0 18px ${col},0 0 46px ${col},0 4px 0 #000">${fire ? '🔥 ' : ''}${big}${fire ? ' 🔥' : ''}</div><div style="margin-top:8px;display:inline-block;padding:6px 18px;border-radius:8px;background:${col};color:#08040f;font-size:clamp(16px,2vw,34px)">${small}</div>`;
+  ssPopEl.style.opacity = 1; ssPopEl.style.transform = 'translate(-50%,0) scale(1)'; clearTimeout(ssPopT); ssPopT = setTimeout(() => { ssPopEl.style.opacity = 0; ssPopEl.style.transform = 'translate(-50%,-30px) scale(.9)'; }, fire ? 4200 : 2800);
+  try { zAC = zAC || new (window.AudioContext || window.webkitAudioContext)(); if (zAC.state === 'suspended') zAC.resume(); const a = zAC, t0 = a.currentTime + 0.02; (fire ? [523, 659, 784, 1047, 1319] : [659, 988]).forEach((f, i) => { const o = a.createOscillator(), gg = a.createGain(); o.type = 'square'; o.frequency.value = f; gg.gain.setValueAtTime(0.0001, t0 + i * 0.08); gg.gain.exponentialRampToValueAtTime(0.05, t0 + i * 0.08 + 0.02); gg.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.08 + 0.35); o.connect(gg); gg.connect(a.destination); o.start(t0 + i * 0.08); o.stop(t0 + i * 0.08 + 0.4); }); } catch (e) {} }
+setInterval(() => { ssRedraw(); ssDrawHud(); }, 1000);
+// ---- chat: mods (and you) update stats, anyone can put them on screen
+const SS_MOD_CMDS = { '!win': 'w', '!loss': 'l', '!ko': 'ko', '!perfect': 'perfect', '!kill': 'kill', '!death': 'death', '!top10': 'top10', '!goal': 'goal', '!mvp': 'mvp' };
+function ssChat(cmd, user, isMod) { if (cmd === '!stats') { if (SS.statsCd && Date.now() - SS.statsCd < 15000) return true; SS.statsCd = Date.now(); statsCmd('shownow'); return true; }
+  if (!(cmd in SS_MOD_CMDS) && cmd !== '!undo') return false; if (!isMod || !SS.mods) return true;
+  if (cmd === '!undo') { statsCmd('undo'); return true; } if (ssAdd(SS_MOD_CMDS[cmd], 1, user)) ssSave(); return true; }
+
 function loop() {
   requestAnimationFrame(loop);
   if (window.LSC_AVATAR) { const dt0 = Math.min(clock.getDelta(), 0.05); avatarTick(clock.getElapsedTime(), dt0); return; }
@@ -4190,7 +4303,7 @@ function postState() {
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
       al: alState(), ver: (location.pathname.match(/[0-9a-f]{40}/) || ['dev'])[0],
-      show: SHOW.mode, showLen: SHOW.len, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, vault: vaultItems, adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
+      show: SHOW.mode, showLen: SHOW.len, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, vault: vaultItems, stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -4226,6 +4339,7 @@ if (bc) bc.onmessage = e => {
     case 'champdel': delChamp(d.i); break;
     case 'vault': addVault(d.item, d.pop, d.spot); break;
     case 'vaultdel': delVault(d.i); break;
+    case 'stats': statsCmd(d.op, d); break;
     case 'vaultshow': if (VT.mesh) focusMesh(VT.mesh, 'Operator Vault'); break;
     case 'hallshow': if (hall.mesh) focusMesh(hall.mesh, 'Hall of Champions'); break;
     case 'cambg': applyCamBg(d.v, true); break;
@@ -4238,7 +4352,7 @@ if (bc) bc.onmessage = e => {
 loop();
 window.__grw = (i) => { if (guideRW && guideRW.route) { const n = guideRW.route[i]; guideRW.i = i; guideRW.p.set(n[0], 0, n[1]); } };
 window.__rw = i => { const r = walkRW || (walkRW = makeRW(new THREE.Vector3(), 0)); r.i = i; r.p.set(ROUTE[i][0], 0, ROUTE[i][1]); r.wait = 0; r.look = null; r.spin = false; };
-window.LSC = { scene, bay: () => BAY, summit: () => SM, hollow: () => HW, zero: () => ZZ, vault: () => vaultItems, addVault, vaultShowUser, airdrop, runCommand, zones: () => ({ cur: ZONES.cur, tr: TR.on }), camAt: (p, l) => { const s = { name: 'T', label: 'test', pos: new THREE.Vector3(...p), quat: lookQuat(new THREE.Vector3(...p), new THREE.Vector3(...l)), fov: 50, still: true }; cam.position.copy(s.pos); cam.quaternion.copy(s.quat); hold = { s, t: 0 }; fly = null; }, skipMove: () => { if (fly) fly.t = 1; if (TR.on) { TR.t = 99; TR.k = 99; } }, musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
+window.LSC = { scene, bay: () => BAY, summit: () => SM, hollow: () => HW, zero: () => ZZ, vault: () => vaultItems, statsCmd, ss: () => SS, addVault, vaultShowUser, airdrop, runCommand, zones: () => ({ cur: ZONES.cur, tr: TR.on }), camAt: (p, l) => { const s = { name: 'T', label: 'test', pos: new THREE.Vector3(...p), quat: lookQuat(new THREE.Vector3(...p), new THREE.Vector3(...l)), fov: 50, still: true }; cam.position.copy(s.pos); cam.quaternion.copy(s.quat); hold = { s, t: 0 }; fly = null; }, skipMove: () => { if (fly) fly.t = 1; if (TR.on) { TR.t = 99; TR.k = 99; } }, musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
 </script>
 <script>
@@ -4297,6 +4411,7 @@ if (window.LSC_CONTROL) {
       ['paDur', 'paPos', 'paAuto'].forEach((id, i) => { if (document.activeElement !== $(id)) $(id).value = String([P.dur, P.pos, P.auto][i]); }); }
     if (st.champs) { const key = JSON.stringify(st.champs); if (key !== $('chList')._k) { $('chList')._k = key; $('chList').innerHTML = st.champs.length ? '' : '<p class="note">No champions yet.</p>';
       st.champs.forEach((c, i) => { const row = document.createElement('div'); row.className = 'chrow'; row.innerHTML = `<span><b>${esc(c.name)}</b> · ${esc(CHT[c.type] || c.type)} · ${esc(c.award || '')}<br><i>${esc(c.game || '')}</i></span><button data-i="${i}">✕</button>`; $('chList').appendChild(row); }); } }
+    if (st.stats) ssRenderPanel(st.stats, (op, d) => send('stats', Object.assign({ op }, d)));
     if (st.vault) { const key = JSON.stringify(st.vault); if (key !== $('vtList')._k) { $('vtList')._k = key; const D = VDEF; $('vtList').innerHTML = st.vault.length ? '' : '<p class="note">No items given yet.</p>';
       st.vault.forEach((c, i) => { const T = D.types[c.type] || {}, R = D.rar[c.rarity] || D.rar.epic, row = document.createElement('div'); row.className = 'chrow'; row.innerHTML = `<span><b>${esc(c.name)}</b> · <span style="color:${R[1]}">${R[0]}</span> ${esc(T.n || c.type)}<br><i>${esc((T.s || {})[c.style] || c.style)}${c.title ? ' · ' + esc(c.title) : ''}</i></span><button data-i="${i}">✕</button>`; $('vtList').appendChild(row); }); } }
   }
