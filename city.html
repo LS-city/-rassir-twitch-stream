@@ -962,26 +962,27 @@ const COMMANDS = [
   ['!spawn', 'join the city as a citizen'], ['!club', 'walk into Zero Cool'], ['!fight', 'walk into Fight Club'], ['!bit', 'walk into Back In Time'], ['!dance', 'start a dance at Zero Cool'], ['!rain', 'make it rain on the city'],
   ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard'], ['!airdrop', 'call a supply drop in Zone Zero'], ['!vault', 'show your best Vault item'], ['!stats', "show tonight's game stats"]
 ];
-function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; return [c, t]; }
+function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return [c, t]; }
+function hd2d(c) { const x = c.getContext('2d'); x.setTransform(c.width / 1280, 0, 0, c.height / 720, 0, 0); return x; }     // draw in 1280x720 units onto a 1920x1080 canvas
 function applyTex(mesh, tex) { if (!mesh) return; mesh.material = mesh.material.clone(); mesh.material.color.setRGB(0, 0, 0); mesh.material.roughness = 1; mesh.material.map = tex; mesh.material.emissiveMap = tex; mesh.material.emissive = new THREE.Color(0xffffff); mesh.material.emissiveIntensity = 1.0; mesh.material.needsUpdate = true; }
 const screenOrig = {};
 function setGroup(type, tex) {          // put one texture on every screen of a type (tower + Zero Cool + floating)
   const g = screens[type]; if (!g.length) return;
   if (!screenOrig[type]) screenOrig[type] = g[0].material;
   let m = screenOrig[type];
-  if (tex) { m = screenOrig[type].clone(); m.map = tex; m.emissiveMap = tex; m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 1.0; m.needsUpdate = true; }
+  if (tex) { tex.encoding = THREE.sRGBEncoding; m = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: screenOrig[type].side }); m.name = 'screen_' + type; }
   g.forEach(s => s.material = m);
   if (type === 'GAMEPLAY' && floatScreen) floatScreen.userData.plane.material = m;
 }
 function buildScreens() {
-  [chatCanvas, chatTex] = canvasTex(1280, 720); setGroup('CHAT', chatTex); drawChat();
-  [cmdCanvas, cmdTex] = canvasTex(1280, 720); setGroup('COMMANDS', cmdTex); drawCommands();
+  [chatCanvas, chatTex] = canvasTex(1920, 1080); setGroup('CHAT', chatTex); drawChat();
+  [cmdCanvas, cmdTex] = canvasTex(1920, 1080); setGroup('COMMANDS', cmdTex); drawCommands();
   buildFloatScreen();
 }
 function frame(x, w, h, col) { x.strokeStyle = col; x.lineWidth = 10; x.strokeRect(8, 8, w - 16, h - 16); }
 function drawCommands() {
-  if (statsOnCmd()) { drawStatsCanvas(cmdCanvas.getContext('2d'), 1280, 720); cmdTex.needsUpdate = true; return; }
-  const x = cmdCanvas.getContext('2d'), w = 1280, h = 720;
+  if (statsOnCmd()) { drawStatsCanvas(hd2d(cmdCanvas), 1280, 720); cmdTex.needsUpdate = true; return; }
+  const x = hd2d(cmdCanvas), w = 1280, h = 720;
   const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, '#05051a'); g.addColorStop(1, '#1e002d'); x.fillStyle = g; x.fillRect(0, 0, w, h);
   x.textAlign = 'center'; x.font = '120px Anton, Impact, sans-serif'; x.shadowColor = '#38e8ff'; x.shadowBlur = 24; x.fillStyle = '#fff';
   x.fillText('INTERACTIVE WORLD', w / 2, 150); x.shadowBlur = 0; x.textAlign = 'left';
@@ -992,7 +993,7 @@ function drawCommands() {
   frame(x, w, h, '#38e8ff'); cmdTex.needsUpdate = true;
 }
 function drawChat() {
-  const x = chatCanvas.getContext('2d'), w = 1280, h = 720;
+  const x = hd2d(chatCanvas), w = 1280, h = 720;
   if (AL.cur && AL.cfg.screens) { drawAlertCard(x, w, h); chatTex.needsUpdate = true; return; }
   x.fillStyle = '#0a0716'; x.fillRect(0, 0, w, h);
   x.fillStyle = '#1a1033'; x.fillRect(0, 0, w, 96);
@@ -1016,7 +1017,7 @@ const streams = {};
 const segs = {};
 function camTexture(screenName, v) {           // live cam gets the Lucid State City background (person cut out); everything else is plain video
   if (screenName === 'SCREEN_LIVECAM' && camBgOn()) { const st = makeSegCam(v, () => { if (segs[screenName] && segs[screenName].tex) segs[screenName].tex.needsUpdate = true; }); st.tex = new THREE.CanvasTexture(st.canvas); segs[screenName] = st; return st.tex; }
-  return new THREE.VideoTexture(v);
+  const vt = new THREE.VideoTexture(v); vt.encoding = THREE.sRGBEncoding; vt.minFilter = THREE.LinearFilter; vt.magFilter = THREE.LinearFilter; vt.generateMipmaps = false; return vt;
 }
 async function setVideo(screenName, deviceId) {
   const type = screenName.replace('SCREEN_', '');
@@ -1024,7 +1025,7 @@ async function setVideo(screenName, deviceId) {
   if (streams[screenName]) { streams[screenName].getTracks().forEach(t => t.stop()); delete streams[screenName]; }
   if (!screens[type] || !screens[type].length) return;
   if (!deviceId) { setGroup(type, null); return; }
-  if (deviceId === 'avatar') { setGroup(type, AVC.camTex); screens[type][0].material.emissiveIntensity = 0.62; if (!avAn) startAvatarMic(avMicLabel); setStatus('Live cam: 3D avatar'); return; }
+  if (deviceId === 'avatar') { setGroup(type, AVC.camTex); screens[type][0].material.color.setScalar(0.9); if (!avAn) startAvatarMic(avMicLabel); setStatus('Live cam: 3D avatar'); return; }
   try {
     const st = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
     streams[screenName] = st;
@@ -1223,13 +1224,17 @@ const FOCUS = [
   ['B.I.T. door screen', 'SCREEN_GAMEPLAY_BIT5'], ['B.I.T. cam', 'SCREEN_LIVECAM_BIT'], ['B.I.T. chat', 'SCREEN_CHAT_BIT'], ['B.I.T. commands', 'SCREEN_COMMANDS_BIT']
 ];
 let focused = null;
+// while the camera is pointed at a screen, that screen draws on top of everything, so poles, signs or people passing by can't cover it
+let focusTop = null, focusTopMat = null;
+function focusRestore() { if (focusTop) { if (focusTop.material === focusTopMat) focusTop.material = focusTop.userData.mat0; focusTop.renderOrder = 0; } focusTop = null; focusTopMat = null; }
+function focusOnTop(m) { if (focusTop === m && m.material === focusTopMat) return; focusRestore(); focusTop = m; m.userData.mat0 = m.material; focusTopMat = m.material.clone(); focusTopMat.depthTest = false; focusTopMat.depthWrite = false; m.material = focusTopMat; m.renderOrder = 999; }
 function focusMesh(m, label, instant) {
   if (!m) return;
   const c = new THREE.Vector3(), q = new THREE.Quaternion(); m.getWorldPosition(c); m.getWorldQuaternion(q);
   m.geometry.computeBoundingBox(); const bb = m.geometry.boundingBox, sc = new THREE.Vector3(); m.getWorldScale(sc);
   const w = (bb.max.x - bb.min.x) * sc.x, h = (bb.max.y - bb.min.y) * sc.y;
   const fov = 40, tf = Math.tan(THREE.MathUtils.degToRad(fov / 2));
-  const d = Math.max((h / 2) / tf, (w / 2) / (tf * cam.aspect)) * 1.1;
+  const d = Math.max((h / 2) / tf, (w / 2) / (tf * cam.aspect)) * 1.0;
   const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
   const pos = c.clone().addScaledVector(n, d);
   setTour(false);
@@ -1668,12 +1673,12 @@ function drawAward(x, type, m, t, seed) {
   x.restore();
 }
 function buildHall() {
-  const W = 9.2, H = 5.4, c = document.createElement('canvas'); c.width = 1600; c.height = 940;
+  const W = 9.2, H = 5.4, c = document.createElement('canvas'); c.width = 1920; c.height = 1128;
   const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
   const g = new THREE.Group(); g.position.set(-53.45, 6.3, -31.6); g.rotation.y = -Math.PI / 2; scene.add(g);
   const frame = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.5, H + 0.5), new THREE.MeshBasicMaterial({ color: 0xffb02e })); frame.position.z = -0.02; frame.userData.noBlock = true; g.add(frame);
   const back = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.3, H + 0.3), new THREE.MeshBasicMaterial({ color: 0x07040a })); back.position.z = -0.01; back.userData.noBlock = true; g.add(back);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: tex, color: 0xdddddd, toneMapped: false })); m.name = 'SCREEN_TROPHY_FC'; g.add(m);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); m.name = 'SCREEN_TROPHY_FC'; g.add(m);
   // title sign above
   const tc = document.createElement('canvas'); tc.width = 1024; tc.height = 160; const tx = tc.getContext('2d');
   tx.font = '400 104px Anton, Impact, sans-serif'; tx.textAlign = 'center'; tx.textBaseline = 'middle'; tx.shadowColor = '#ffb02e'; tx.shadowBlur = 30; tx.fillStyle = '#fff4d8'; tx.fillText('HALL OF CHAMPIONS', 512, 84);
@@ -1683,7 +1688,7 @@ function buildHall() {
   extraScreens.push(m); hall.mesh = m; hall.c = c; hall.x = c.getContext('2d'); hall.tex = tex; drawHall(0);
 }
 function drawHall(t) {
-  const x = hall.x, w = hall.c.width, h = hall.c.height; if (!x) return;
+  const x = hall.x, w = 1600, h = 940; if (!x) return; x.setTransform(hall.c.width / 1600, 0, 0, hall.c.height / 940, 0, 0);
   const wg = x.createLinearGradient(0, 0, 0, h); wg.addColorStop(0, '#1c0c10'); wg.addColorStop(1, '#0a0406'); x.fillStyle = wg; x.fillRect(0, 0, w, h);
   x.fillStyle = 'rgba(255,255,255,0.03)'; for (let i = 0; i < w; i += 24) x.fillRect(i, 0, 2, h);
   x.textAlign = 'center'; x.font = '400 54px Anton, Impact, sans-serif'; x.fillStyle = '#ffb02e'; x.shadowColor = '#ff6a1a'; x.shadowBlur = 20; x.fillText('FIGHT CLUB  ·  HALL OF CHAMPIONS', w / 2, 66); x.shadowBlur = 0;
@@ -3496,11 +3501,11 @@ function vtDraw(x, it, t, seed) {
 }
 // ---- the 3D vault wall
 function buildVault() {
-  const S = ZZ.scene, W = 10.4, H = 5.85, c = document.createElement('canvas'); c.width = 1600; c.height = 900; const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
+  const S = ZZ.scene, W = 10.4, H = 5.85, c = document.createElement('canvas'); c.width = 1920; c.height = 1080; const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
   const g = new THREE.Group(); g.position.set(-21, 4.4, 9); g.rotation.y = Math.PI / 2; S.add(g);
   const steel = zzM(0x2a2c2e, { metalness: 0.7, roughness: 0.4 }); const box = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, H + 1.4, 1), steel); box.position.z = -0.55; g.add(box);
   const fr = new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffb02e, emissiveIntensity: 1.4 }); [[0, H / 2 + 0.35, W + 0.9, 0.12], [0, -H / 2 - 0.35, W + 0.9, 0.12], [-W / 2 - 0.4, 0, 0.12, H + 0.8], [W / 2 + 0.4, 0, 0.12, H + 0.8]].forEach(([x, y, w, h]) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.2), fr); b.position.set(x, y, 0); g.add(b); });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: tex, color: 0xdddddd, toneMapped: false })); m.name = 'SCREEN_VAULT_ZERO'; m.userData.zone = 'zero'; m.position.z = 0.02; g.add(m);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); m.name = 'SCREEN_VAULT_ZERO'; m.userData.zone = 'zero'; m.position.z = 0.02; g.add(m);
   const sign = zSign('OPERATOR VAULT', 'EPIC ITEMS EARNED ON STREAM', '#ffb02e', 8.4); sign.position.set(0, H / 2 + 1.75, 0.1); g.add(sign);
   [-1, 1].forEach(s => { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.4, 0.5), steel); leg.position.set(s * (W / 2 + 0.2), -H / 2 - 2.2 + 0.3, -0.6); g.add(leg);
     const rack = new THREE.Group(); rack.position.set(s * (W / 2 + 1.6), -2.4, 0.4); g.add(rack); const rb = new THREE.Mesh(new THREE.BoxGeometry(1.4, 3.2, 0.3), steel); rb.position.y = -0.4; rack.add(rb);
@@ -3509,7 +3514,7 @@ function buildVault() {
   extraScreens.push(m); VT.mesh = m; VT.c = c; VT.x = c.getContext('2d'); VT.tex = tex; drawVault(0);
 }
 function drawVault(t) {
-  const x = VT.x, w = VT.c.width, h = VT.c.height; if (!x) return;
+  const x = VT.x, w = 1600, h = 900; if (!x) return; x.setTransform(VT.c.width / 1600, 0, 0, VT.c.height / 900, 0, 0);
   const bg = x.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#1a1812'); bg.addColorStop(1, '#080806'); x.fillStyle = bg; x.fillRect(0, 0, w, h);
   x.strokeStyle = 'rgba(255,176,46,0.06)'; x.lineWidth = 1; for (let i = 0; i < w; i += 40) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); } for (let j = 0; j < h; j += 40) { x.beginPath(); x.moveTo(0, j); x.lineTo(w, j); x.stroke(); }
   x.textAlign = 'center'; x.font = '400 56px Anton, Impact, sans-serif'; x.fillStyle = '#ffb02e'; x.shadowColor = '#ff7a1a'; x.shadowBlur = 18; x.fillText('ZONE ZERO  ·  OPERATOR VAULT', w / 2, 68); x.shadowBlur = 0;
@@ -3611,7 +3616,7 @@ function drawStatsCanvas(x, w, h) { const g = ssGameObj(false), D = ssDerived(g)
     x.fillText((G.c.w || 0) + 'W ' + (G.c.l || 0) + 'L · ' + L.map(([k, l]) => (G.c[k] || 0) + ' ' + l).join(' · '), 370, y, 300); });
   SS.feed.slice(0, 4).forEach((f, i) => { x.font = 'bold 28px Poppins, sans-serif'; x.fillStyle = f.col || '#fff'; x.fillText(f.txt, 700, 584 + i * 34, 520); });
   x.strokeStyle = '#ff2d8f'; x.lineWidth = 6; x.strokeRect(14, 14, w - 28, h - 28); }
-function ssRedraw() { if (!cmdCanvas) return; const on = statsOnCmd(); if (on) { drawStatsCanvas(cmdCanvas.getContext('2d'), 1280, 720); cmdTex.needsUpdate = true; } else if (ssWasOn) drawCommands(); ssWasOn = on; }
+function ssRedraw() { if (!cmdCanvas) return; const on = statsOnCmd(); if (on) { drawStatsCanvas(hd2d(cmdCanvas), 1280, 720); cmdTex.needsUpdate = true; } else if (ssWasOn) drawCommands(); ssWasOn = on; }
 let ssWasOn = false;
 // ---- stats box overlay + pop-ups
 const ssHud = document.createElement('canvas'); ssHud.width = 640; ssHud.height = 190; ssHud.style.cssText = 'position:fixed;width:27%;z-index:3;pointer-events:none;display:none;transition:transform .25s'; document.body.appendChild(ssHud);
@@ -3649,7 +3654,8 @@ function loop() {
   clubLights.forEach((L, i) => { L.intensity = party ? L.userData.base * (1.2 + Math.sin(t * 6 + i)) : L.userData.base * (0.9 + 0.1 * Math.sin(t * 0.8 + i)); });
   stripes.forEach((s, i) => { s.material.emissiveIntensity = party ? (Math.sin(t * 12 + i) > 0 ? 3.5 : 0.2) : s.userData.base * (0.8 + 0.2 * Math.sin(t * 2 + i * 0.6)); });
   const focusOn = hold && hold.s.still && !fly;
-  if (!TR.on) bloom.strength += ((focusOn ? 0.18 : party ? 1.15 : ZONES.cur === 'city' ? 0.9 : ZONES.cur === 'bay' ? 0.55 : ZONES.cur === 'zero' ? 0.6 : 0.85) - bloom.strength) * Math.min(1, dt * 4);   // keep focused screens crisp
+  if (focusOn && focused && focused.isMesh) focusOnTop(focused); else if (focusTop) focusRestore();
+  if (!TR.on) bloom.strength += ((focusOn ? 0 : party ? 1.15 : ZONES.cur === 'city' ? 0.9 : ZONES.cur === 'bay' ? 0.55 : ZONES.cur === 'zero' ? 0.6 : 0.85) - bloom.strength) * Math.min(1, dt * 4);   // keep focused screens crisp
   avatarTick(t, dt);
   const avIn = avWorldBegin();
   composer.render();
@@ -4549,7 +4555,7 @@ if (bc) bc.onmessage = e => {
 loop();
 window.__grw = (i) => { if (guideRW && guideRW.route) { const n = guideRW.route[i]; guideRW.i = i; guideRW.p.set(n[0], 0, n[1]); } };
 window.__rw = i => { const r = walkRW || (walkRW = makeRW(new THREE.Vector3(), 0)); r.i = i; r.p.set(ROUTE[i][0], 0, ROUTE[i][1]); r.wait = 0; r.look = null; r.spin = false; };
-window.LSC = { scene, bay: () => BAY, summit: () => SM, hollow: () => HW, zero: () => ZZ, vault: () => vaultItems, statsCmd, ss: () => SS, startShow, show: () => SHOW, addVault, vaultShowUser, airdrop, runCommand, zones: () => ({ cur: ZONES.cur, tr: TR.on }), camAt: (p, l) => { const s = { name: 'T', label: 'test', pos: new THREE.Vector3(...p), quat: lookQuat(new THREE.Vector3(...p), new THREE.Vector3(...l)), fov: 50, still: true }; cam.position.copy(s.pos); cam.quaternion.copy(s.quat); hold = { s, t: 0 }; fly = null; }, skipMove: () => { if (fly) fly.t = 1; if (TR.on) { TR.t = 99; TR.k = 99; } }, musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
+window.LSC = { scene, rp: () => renderPass, bay: () => BAY, summit: () => SM, hollow: () => HW, zero: () => ZZ, vault: () => vaultItems, statsCmd, ss: () => SS, startShow, show: () => SHOW, addVault, vaultShowUser, airdrop, runCommand, zones: () => ({ cur: ZONES.cur, tr: TR.on }), camAt: (p, l) => { const s = { name: 'T', label: 'test', pos: new THREE.Vector3(...p), quat: lookQuat(new THREE.Vector3(...p), new THREE.Vector3(...l)), fov: 50, still: true }; cam.position.copy(s.pos); cam.quaternion.copy(s.quat); hold = { s, t: 0 }; fly = null; }, skipMove: () => { if (fly) fly.t = 1; if (TR.on) { TR.t = 99; TR.k = 99; } }, musPreview, showMode: () => SHOW.mode, musSec: () => musSection(), musCtx: () => MUS.ctx ? MUS.ctx.state : 'none', sendTo, zoneOf, goShot, runCommand, setTour, shots, spawned, focusMesh, meshByName, pickAt: (x, y) => { const m = pickAt({ clientX: x, clientY: y }); return m && m.name; }, adSlots, get float() { return floatScreen; }, cam };
 }
 </script>
 <script>
