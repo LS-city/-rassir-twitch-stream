@@ -135,8 +135,9 @@ canvas#c.pick{cursor:pointer}
 </div>
   </section>
   <section data-tab="show" hidden>  <h3>Show</h3>
-  <div class="row" style="margin-bottom:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">Intro</span><select id="showStyle" style="flex:1"><option value="random">Random each stream</option><option value="neon">Neon city (classic)</option><option value="horror">Horror: Ashen Hollow</option><option value="tour">World tour (synthwave)</option><option value="fight">Fighting games: Scuffle Hours</option><option value="abyss">Deep sea: The Abyss</option></select></div>
+  <div class="row" style="margin-bottom:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">Intro</span><select id="showStyle" style="flex:1"><option value="random">Random each stream</option><option value="neon">Neon city (classic)</option><option value="horror">Horror: Ashen Hollow</option><option value="tour">World tour (synthwave)</option><option value="fight">Fighting games: Scuffle Hours</option><option value="abyss">Deep sea: The Abyss</option><option value="zero">Warzone: Zone Zero deployment</option></select></div>
   <div class="row"><select id="showLen" style="flex:1 1 90px;width:auto"><option value="60">1 min</option><option value="120">2 min</option><option value="180" selected>3 min</option><option value="300">5 min</option><option value="600">10 min</option></select><button id="showIntro">Start intro</button></div>
+  <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">BRB &amp; End</span><select id="showTheme" style="flex:1"><option value="neon">Neon city (classic)</option><option value="zero">Warzone: Zone Zero</option></select></div>
   <div class="row" style="margin-top:6px" id="showBtns"><button id="showBrb">BRB</button><button id="showLive">We're live</button><button id="showOutro">Outro</button></div>
   <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><label class="note" style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="musOn" style="width:18px;min-height:18px"> Techno music</label><input type="range" id="musVol" min="0" max="100" style="flex:1;min-height:30px;padding:0"></div>
   <details style="margin-top:6px"><summary class="note" style="cursor:pointer">OBS scenes for the show</summary>
@@ -291,7 +292,8 @@ const store = {
 const params = new URLSearchParams(location.search);
 let SS = store.get('stats', null); if (!SS || typeof SS !== 'object' || !SS.games) SS = { game: '', preset: 'fighting', start: Date.now(), games: {}, feed: [], show: 'rotate', hud: true, hudPos: 'tr', mods: true, custom: ['Stat 1', 'Stat 2'] };
 SS.feed = SS.feed || [];
-const INTRO_STYLES = { neon: 'Neon city (classic)', horror: 'Horror: Ashen Hollow', tour: 'World tour (synthwave)', fight: 'Fighting games: Scuffle Hours', abyss: 'Deep sea: The Abyss', random: 'Random each stream' };
+const INTRO_STYLES = { neon: 'Neon city (classic)', horror: 'Horror: Ashen Hollow', tour: 'World tour (synthwave)', fight: 'Fighting games: Scuffle Hours', abyss: 'Deep sea: The Abyss', zero: 'Warzone: Zone Zero deployment', random: 'Random each stream' };
+let showTheme = store.get('showTheme', 'neon');
 let introStyle = store.get('introStyle', 'random');
  if (SS.last && Date.now() - SS.last > 6 * 3600e3) { SS.games = {}; SS.feed = []; SS.start = Date.now(); }     // a new stream day starts a fresh session
 const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('lscCity') : null;     // talks to the LSC Control dock
@@ -2216,7 +2218,7 @@ function trTick(dt, t) {
   setTimeout(postState, 50); return false;
 }
 function zoneTick(dt, t) {
-  if (SHOW.mode !== 'live' && !(SHOW.mode === 'intro' && SHOW.style !== 'neon') && (ZONES.cur !== 'city' || TR.on)) { if (TR.on) { TR.on = false; renderPass.camera = cam; } setZone('city'); }      // intro / BRB / outro always play in the city
+  if (SHOW.mode !== 'live' && !(SHOW.mode === 'intro' && SHOW.style !== 'neon') && !(/^(brb|outro|return)$/.test(SHOW.mode) && SHOW.theme === 'zero') && (ZONES.cur !== 'city' || TR.on)) { if (TR.on) { TR.on = false; renderPass.camera = cam; } setZone('city'); }      // intro / BRB / outro always play in the city
   harborTick(dt, t); cityHeliTick(dt, t);
   if (!TR.on) { if (ZONES.cur === 'space') spaceTick(dt, t); else if (ZONES.cur === 'planet') planetTick(dt, t); else if (ZONES.cur === 'bay') bayTick(dt, t); else if (ZONES.cur === 'summit') summitTick(dt, t); else if (ZONES.cur === 'hollow') hollowTick(dt, t); else if (ZONES.cur === 'zero') zeroTick(dt, t); else if (ZONES.cur === 'abyss') abyssTick(dt, t); }
 }
@@ -3325,7 +3327,7 @@ function zeroTick(dt, t) {
   ZZ.sign.material.opacity = 0.9 + Math.sin(t * 3) * 0.1; ZZ.gasTex.offset.x += dt * 0.004; ZZ.gasTex.offset.y = Math.sin(t * 0.5) * 0.04; ZZ.gas.material.opacity = 0.5 + Math.sin(t * 1.3) * 0.1; const gr = 240 - (Math.sin(t * 0.03) * 0.5 + 0.5) * 30; ZZ.gas.scale.set(gr / 240, 1, gr / 240);
   ZZ.fires.forEach(f => { const k = 0.85 + Math.sin(t * 11 + f.ph) * 0.1 + Math.sin(t * 23 + f.ph) * 0.06; f.s.scale.setScalar(f.b * k); });
   ZZ.fireL.forEach((l, i) => l.intensity = 1.6 + Math.sin(t * 13 + i) * 0.35 + Math.random() * 0.2);
-  heliTick(ZZ.parked, dt, t, 0.12);
+  if (!zeroShowTick(dt, t)) heliTick(ZZ.parked, dt, t, 0.12);
   ZZ.tanks.forEach((T, i) => T.userData.tur.rotation.y = Math.sin(t * 0.18 + i * 2) * 0.9);
   { const a = t * 0.035, r = 72, T = ZZ.patrolTank; T.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); T.rotation.y = -a; T.userData.tur.rotation.y = Math.sin(t * 0.2) * 0.6 + 1.2; }
   ZZ.trucks.forEach(T => { if (!TR.on || !/^truck/.test(TR.mode)) zzTruckTick(T, dt, t, 0); });
@@ -3894,6 +3896,7 @@ function topChatters(n) { const list = Object.entries(chatCount).sort((a, b) => 
 function startShow(mode, len, fromObs, style) {
   const prev = SHOW.mode; SHOW.mode = mode; SHOW.t0 = nowS(); musInit();
   if (mode === 'intro') { SHOW.style = pickIntroStyle(style); if (SHOW.style === 'fight') voxLoad(); Object.assign(SHOW, { hScare: false, hStatic: false, hEnd: null, abScare: false, abP: null, tourI: -1, tourWarped: false, holdFrom: null, diveFrom: null }); introReset(); if (TR.on) { TR.on = false; renderPass.camera = cam; } if (SHOW.style === 'neon') setZone('city'); }
+  if (mode === 'brb' || mode === 'outro') { SHOW.theme = showTheme; zHudOff(); SHOW.zbI = -1; }
   SHOW.from = cam.position.clone(); SHOW.fromQ = cam.quaternion.clone(); SHOW.fromF = cam.fov;
   if (mode !== 'live') { tourOn = false; $('tour').classList.remove('on'); fly = null; }
   if (mode === 'intro') { SHOW.len = +len || SHOW.len; SHOW.end = SHOW.t0 + SHOW.len; store.set('introLen', SHOW.len); if (!fromObs) obsScene(showScenes.intro); }
@@ -3908,9 +3911,10 @@ function startShow(mode, len, fromObs, style) {
   postState();
 }
 function landLive() {
-  SHOW.landStyle = SHOW.mode === 'intro' ? SHOW.style : null; introReset(); if (ZONES.cur !== 'city') setZone('city');
+  const zl = (SHOW.mode === 'intro' && SHOW.style === 'zero') || (SHOW.mode === 'return' && SHOW.theme === 'zero');
+  SHOW.landStyle = SHOW.mode === 'intro' ? SHOW.style : zl ? 'zero' : null; introReset(); if (!zl && ZONES.cur !== 'city') setZone('city');
   SHOW.mode = 'live'; MUS.landT = nowS(); $('showOv').style.display = 'none';
-  goShot(0, true); setTour(true);
+  if (zl) { goShot(shots.findIndex(s => s.label === 'Firebase'), true); setTour(false); } else { goShot(0, true); setTour(true); }
   fwQueue += 10; toast("WE'RE LIVE!"); avReact('excited', 'wave', 6);
   citizens.concat(spawned).forEach(w => { if (Math.random() < 0.4) w.dance = clock.getElapsedTime() + 5; });
   setStatus('Live'); postState();
@@ -3927,6 +3931,8 @@ function showTick(dt, t) {
   if (SHOW.mode === 'intro' && SHOW.style === 'tour') return tourIntro(n, SHOW.end - n);
   if (SHOW.mode === 'intro' && SHOW.style === 'fight') return fightIntro(n, SHOW.end - n);
   if (SHOW.mode === 'intro' && SHOW.style === 'abyss') return abyssIntro(n, SHOW.end - n);
+  if (SHOW.mode === 'intro' && SHOW.style === 'zero') return zeroIntro(n, SHOW.end - n);
+  if ((SHOW.mode === 'brb' || SHOW.mode === 'outro') && SHOW.theme === 'zero') return zeroShow(n);
   if (SHOW.mode === 'intro') {
     const R = SHOW.end - n, ts = n * 0.05;
     ov.style.display = R > 12 ? 'block' : 'none';
@@ -3977,8 +3983,8 @@ function showTick(dt, t) {
     return true;
   }
   if (SHOW.mode === 'return') {
-    const a = n - SHOW.t0, k = sEase(a / 5), s0 = shots[0];
-    ov.style.display = 'none';
+    const a = n - SHOW.t0, k = sEase(a / 5), s0 = SHOW.theme === 'zero' ? zShot('Firebase') : shots[0];
+    ov.style.display = 'none'; zHudOff();
     cam.position.copy(SHOW.from).lerp(s0.pos, k); cam.quaternion.slerpQuaternions(SHOW.fromQ, s0.quat, k);
     cam.fov = SHOW.fromF + (s0.fov - SHOW.fromF) * k; cam.updateProjectionMatrix();
     if (a >= 5) landLive();
@@ -4022,7 +4028,7 @@ async function musPreview(plan) {
   const sr = 44100, total = plan.reduce((a, p) => a + p.bars * 16 * TSPB, 0) + 2;
   const c = new OfflineAudioContext(2, Math.ceil(sr * total), sr); const keep = MUS.ctx; musBuild(c); MUS.master.gain.value = 0.42;
   let t = 0.05, s = 0;
-  for (const p of plan) { SHOW.mode = p.mode || 'live'; for (let i = 0; i < p.bars * 16; i++) { if (p.sec === 'climb' || p.sec === 'dive') SHOW.end = nowS() + (p.sec === 'climb' ? 12 - 8 * i / (p.bars * 16) : 45 - 15 * i / (p.bars * 16)); musStep(p.sec, s, t); s++; t += p.sec.startsWith('f_') ? F_SPB : p.sec.startsWith('h_') ? H_SPB : p.sec.startsWith('w_') ? W_SPB : p.sec.startsWith('a_') ? A_SPB : TSPB; } if (p.impact) tImpact(t); }
+  for (const p of plan) { SHOW.mode = p.mode || 'live'; for (let i = 0; i < p.bars * 16; i++) { if (p.sec === 'climb' || p.sec === 'dive') SHOW.end = nowS() + (p.sec === 'climb' ? 12 - 8 * i / (p.bars * 16) : 45 - 15 * i / (p.bars * 16)); musStep(p.sec, s, t); s++; t += p.sec.startsWith('z_') ? Z_SPB : p.sec.startsWith('f_') ? F_SPB : p.sec.startsWith('h_') ? H_SPB : p.sec.startsWith('w_') ? W_SPB : p.sec.startsWith('a_') ? A_SPB : TSPB; } if (p.impact) tImpact(t); }
   const buf = await c.startRendering(); MUS.ctx = keep; SHOW.mode = 'live';
   const L = buf.getChannelData(0), Rr = buf.getChannelData(1), n = L.length, out = new DataView(new ArrayBuffer(44 + n * 4));
   const w = (o, str) => { for (let i = 0; i < str.length; i++) out.setUint8(o + i, str.charCodeAt(i)); };
@@ -4075,6 +4081,9 @@ function musSection() {
   if (m === 'intro' && SHOW.style === 'fight') { const R = SHOW.end - n; return R > 24 ? 'f_ring' : R > 16.9 ? 'f_talk' : 'f_drop'; }
   if (m === 'live' && SHOW.landStyle === 'fight') return n - MUS.landT < 9 ? 'f_land' : 'off';
   if (m === 'intro' && SHOW.style === 'abyss') { const R = SHOW.end - n; return R > 40 ? 'a_drift' : R > 24 ? 'a_trench' : R > 14 ? 'a_window' : R > 6 ? 'a_dark' : R > 2.5 ? 'a_kraken' : 'a_end'; }
+  if (m === 'intro' && SHOW.style === 'zero') { const R = SHOW.end - n; return R > 40 ? 'z_recon' : R > 22 ? 'z_brief' : R > 8 ? 'z_infil' : R > 2 ? 'z_deploy' : 'z_end'; }
+  if (m === 'live' && SHOW.landStyle === 'zero') return n - MUS.landT < 9 ? 'z_land' : 'off';
+  if ((m === 'brb' || m === 'outro' || m === 'return') && SHOW.theme === 'zero') return m === 'brb' ? 'z_brb' : m === 'outro' ? 'z_outro' : 'z_land';
   if (m === 'intro' && SHOW.style === 'tour') { const R = SHOW.end - n; return R > 14 ? 'w_cruise' : R > 4 ? 'w_climb' : 'w_hold'; }
   if (m === 'intro') { const R = SHOW.end - n; return R > 45 ? 'space' : R > 30 ? 'dive' : R > 12 ? 'street' : R > 4 ? 'climb' : 'hold'; }
   if (m === 'live') return n - MUS.landT < 9 ? 'land' : 'off';
@@ -4093,13 +4102,16 @@ function musSched() {
     if (sec === 'a_kraken') { tRiser(t0, 3.5, 0.2); tRumble(t0, 0.3); }
     if (sec === 'a_dark') tRiser(t0, 2, 0.08);
     if (sec === 'f_talk') tRiser(t0, 0.9, 0.12);
+    if (sec === 'z_brief' || sec === 'z_infil' || sec === 'z_outro') tBraam(t0, 0.1);
+    if (sec === 'z_deploy') tRiser(t0, 6, 0.22);
+    if (sec === 'z_land' && MUS.lastSec !== 'off') { tImpact(t0); tBraam(t0, 0.12); MUS.step = 0; MUS.next = t0; }
     if (sec === 'land' && MUS.lastSec !== 'off' && MUS.lastSec !== 'land') { tImpact(t0); MUS.step = 0; MUS.next = t0; }
     if (MUS.lastSec === 'off' && sec !== 'off') { MUS.step = 0; MUS.next = c.currentTime + 0.05; }
     MUS.lastSec = sec;
   }
   let tgt = MUS.on ? MUS.vol * 0.42 : 0;
   if (sec === 'off') tgt = 0;
-  if ((sec === 'land' || sec === 'f_land') && SHOW.mode === 'live') tgt *= Math.max(0, 1 - (n - MUS.landT - 3) / 6);
+  if ((sec === 'land' || sec === 'f_land' || sec === 'z_land') && SHOW.mode === 'live') tgt *= Math.max(0, 1 - (n - MUS.landT - 3) / 6);
   if (MUS.duckUntil && c.currentTime < MUS.duckUntil) tgt *= 0.4;
   if (sec === 'outro') tgt *= Math.max(0.25, 1 - (n - SHOW.t0 - 60) / 60);
   MUS.master.gain.setTargetAtTime(tgt, c.currentTime, sec === 'off' ? 0.7 : 0.15);
@@ -4107,6 +4119,7 @@ function musSched() {
   while (MUS.next < c.currentTime + 0.15) { musStep(sec, MUS.step, MUS.next); MUS.step++; MUS.next += musSPB(); }
 }
 function musStep(sec, s, t) {
+  if (sec.startsWith('z_')) return zeroStep(sec, s, t);
   if (sec.startsWith('f_')) return fightStep(sec, s, t);
   if (sec.startsWith('h_')) return horrorStep(sec, s, t);
   if (sec.startsWith('w_')) return tourStep(sec, s, t);
@@ -4137,6 +4150,7 @@ function musStep(sec, s, t) {
 $('showLen').value = String(SHOW.len);
 $('showStyle').value = introStyle; $('showStyle').onchange = () => { introStyle = $('showStyle').value; store.set('introStyle', introStyle); postState(); };
 $('showIntro').onclick = () => startShow('intro', +$('showLen').value, false, $('showStyle').value);
+$('showTheme').value = showTheme; $('showTheme').onchange = () => { showTheme = $('showTheme').value; store.set('showTheme', showTheme); postState(); };
 $('showBrb').onclick = () => startShow('brb'); $('showLive').onclick = () => startShow('live'); $('showOutro').onclick = () => startShow('outro');
 $('musOn').checked = MUS.on; $('musVol').value = Math.round(MUS.vol * 100);
 function setMusic(on, vol) { MUS.on = !!on; MUS.vol = Math.max(0, Math.min(1, vol)); store.set('musOn', MUS.on); store.set('musVol', Math.round(MUS.vol * 100)); $('musOn').checked = MUS.on; $('musVol').value = Math.round(MUS.vol * 100); postState(); }
@@ -4152,7 +4166,7 @@ function pickIntroStyle(st) { st = st || introStyle; if (st !== 'random') return
 const hVhs = document.createElement('div'); hVhs.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1;display:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,rgba(0,0,0,0) 2px 4px),radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(0,0,0,.75) 100%)';
 hVhs.innerHTML = '<div style="position:absolute;left:3%;top:4%;font:700 clamp(14px,2vw,34px) \'Courier New\',monospace;color:#e8e8e8;text-shadow:2px 0 #ff2a1a,-2px 0 #2affff">&#9654; PLAY</div><div id="hVhsT" style="position:absolute;right:3%;bottom:5%;font:700 clamp(14px,2vw,34px) \'Courier New\',monospace;color:#e8e8e8;text-shadow:2px 0 #ff2a1a,-2px 0 #2affff">AM 3:13</div>';
 document.body.appendChild(hVhs);
-function introReset() { hVhs.style.display = 'none'; fgHud.style.display = 'none'; SHOW.fg = null; ['sovT', 'sovC', 'sovS'].forEach(id => { $(id).style.transform = ''; $(id).style.filter = ''; }); $('sovC').style.textShadow = ''; }
+function introReset() { zHudOff(); SHOW.zi = null; hVhs.style.display = 'none'; fgHud.style.display = 'none'; SHOW.fg = null; ['sovT', 'sovC', 'sovS'].forEach(id => { $(id).style.transform = ''; $(id).style.filter = ''; }); $('sovC').style.textShadow = ''; }
 function introSettle(R, dur) {                    // shared ending: glide into the opening city shot and go live
   const s0 = shots[0], k = sEase((dur - R) / dur);
   if (!SHOW.holdFrom) { SHOW.holdFrom = cam.position.clone(); SHOW.holdQ = cam.quaternion.clone(); SHOW.holdF = cam.fov; }
@@ -4238,7 +4252,7 @@ function tourIntro(n, R) {
   introSettle(R, 4); return true; }
 // ---- music: horror (eerie dark techno, 118 BPM, E phrygian) + world tour (synthwave, 108 BPM, A minor)
 const H_SPB = 60 / 118 / 4, W_SPB = 60 / 108 / 4;
-function musSPB() { const sec = MUS.lastSec || ''; return sec.startsWith('f_') ? F_SPB : sec.startsWith('h_') ? H_SPB : sec.startsWith('w_') ? W_SPB : sec.startsWith('a_') ? A_SPB : TSPB; }
+function musSPB() { const sec = MUS.lastSec || ''; return sec.startsWith('z_') ? Z_SPB : sec.startsWith('f_') ? F_SPB : sec.startsWith('h_') ? H_SPB : sec.startsWith('w_') ? W_SPB : sec.startsWith('a_') ? A_SPB : TSPB; }
 function tBell(nn, t, lvl) { const c = MUS.ctx, g = c.createGain(); g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.0008, t + 2.4); mOut(g, 0.9, 0.5);
   [[1, 1], [2.76, 0.45], [5.4, 0.22], [8.93, 0.1]].forEach(([r, a]) => { const o = c.createOscillator(), og = c.createGain(); o.type = 'sine'; o.frequency.value = mtof(nn) * r; o.detune.value = (Math.random() - 0.5) * 18; og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 2.6); }); }
 function tDrone(notes, t, len, lvl, cut) { const c = MUS.ctx, f = c.createBiquadFilter(), g = c.createGain(), lf = c.createOscillator(), lg = c.createGain(); f.type = 'lowpass'; f.frequency.value = cut; f.Q.value = 6;
@@ -4359,6 +4373,109 @@ function fightStep(sec, s, t) { const b = s % 16, bar = Math.floor(s / 16) % 4, 
   if (drop) tPluck(FLEAD[b] + (bar === 3 ? 2 : 0), t, 0.045, 3200);
   if (bar === 3 && b >= 12) tTom(t, [220, 180, 150, 120][b - 12], drop ? 0.35 : 0.25);
   if (drop && b === 0 && bar === 0) tImpact(t); }
+// ---------------------------------------------------------------- ZONE ZERO SHOW PACKAGE: deployment intro (UAV recon -> briefing -> convoy infil -> DEPLOY), BRB (redeploying), end (chopper extraction + after-action report)
+const zHud = document.createElement('div'); zHud.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2;display:none;color:#fff;font-family:Anton,Impact,sans-serif';
+zHud.innerHTML = `<div id="zhFrame" style="position:absolute;inset:3.5%;border:2px solid rgba(255,176,46,.0)"></div>
+  ${[['left', 'top'], ['right', 'top'], ['left', 'bottom'], ['right', 'bottom']].map(([h, v]) => `<div style="position:absolute;${h}:3%;${v}:4%;width:5%;height:8%;border-${h}:3px solid #ffb02e;border-${v}:3px solid #ffb02e;opacity:.85"></div>`).join('')}
+  <div id="zhTL" style="position:absolute;left:5%;top:6.5%;font:700 clamp(12px,1.35vw,24px)/1.45 'Courier New',monospace;color:#ffd27a;text-shadow:0 0 8px rgba(0,0,0,.9);white-space:pre"></div>
+  <div id="zhTR" style="position:absolute;right:5%;top:6%;text-align:right"><div id="zhTRl" style="font:700 clamp(11px,1.2vw,22px) 'Courier New',monospace;color:#ffd27a"></div><div id="zhTRv" style="font-size:clamp(30px,5vw,92px);line-height:1;text-shadow:0 0 18px rgba(255,140,30,.7),0 3px 0 #000"></div></div>
+  <div id="zhX" style="position:absolute;left:50%;top:50%;width:7vw;height:7vw;transform:translate(-50%,-50%);display:none"><div style="position:absolute;left:50%;top:0;bottom:0;border-left:2px solid rgba(160,255,160,.8)"></div><div style="position:absolute;top:50%;left:0;right:0;border-top:2px solid rgba(160,255,160,.8)"></div><div style="position:absolute;inset:30%;border:2px solid rgba(160,255,160,.8)"></div></div>
+  <div id="zhC" style="position:absolute;left:0;right:0;top:36%;text-align:center;font-size:clamp(40px,8vw,150px);line-height:1;letter-spacing:.04em;text-shadow:0 0 26px rgba(255,140,30,.75),0 5px 0 #000"></div>
+  <div id="zhSub" style="position:absolute;left:0;right:0;top:53%;text-align:center;font:700 clamp(14px,2vw,36px) 'Courier New',monospace;color:#ffd27a;letter-spacing:.12em;text-shadow:0 2px 8px #000"></div>
+  <div id="zhPanel" style="position:absolute;left:5%;bottom:9%;max-width:52%;padding:1.2% 2%;background:rgba(10,8,4,.78);border:2px solid #ffb02e;display:none;font:700 clamp(12px,1.45vw,26px)/1.6 'Courier New',monospace;color:#f4ead8;white-space:pre"></div>
+  <div id="zhTick" style="position:absolute;left:0;right:0;bottom:3.2%;text-align:center;font:700 clamp(12px,1.4vw,25px) Poppins,sans-serif;color:#ffe6bf;text-shadow:0 2px 8px #000"></div>`;
+document.body.appendChild(zHud);
+const ZS = { canvas: null };
+function zHudOff() { zHud.style.display = 'none'; ['zhTL', 'zhTRl', 'zhTRv', 'zhC', 'zhSub', 'zhTick', 'zhPanel'].forEach(id => $(id).textContent = ''); $('zhPanel').style.display = 'none'; $('zhX').style.display = 'none'; zRecon(false); }
+function zRecon(on) { const c = renderer.domElement; c.style.filter = on ? 'grayscale(.55) sepia(.45) hue-rotate(55deg) saturate(1.6) contrast(1.25) brightness(1.05)' : ''; }
+function zType(txt, el, t0, n, cps) { const k = Math.max(0, Math.floor((n - t0) * (cps || 38))); $(el).textContent = txt.slice(0, k) + (k < txt.length && Math.floor(n * 4) % 2 ? '█' : ''); }
+const zShot = l => shots.find(s => s.label === l);
+function zSettle(R, dur, s0) { const k = sEase((dur - R) / dur);
+  if (!SHOW.holdFrom) { SHOW.holdFrom = cam.position.clone(); SHOW.holdQ = cam.quaternion.clone(); SHOW.holdF = cam.fov; }
+  cam.position.copy(SHOW.holdFrom).lerp(s0.pos, k); cam.quaternion.slerpQuaternions(SHOW.holdQ, s0.quat, k); cam.fov = SHOW.holdF + (s0.fov - SHOW.holdF) * k; cam.updateProjectionMatrix(); }
+// ---- deployment intro
+function zeroIntro(n, R) {
+  if (ZONES.cur !== 'zero') setZone('zero'); $('showOv').style.display = 'none'; zHud.style.display = 'block';
+  if (!SHOW.zi) SHOW.zi = { t0: n, said: {} }; const Z = SHOW.zi, once = (k, at, fn) => { if (R <= at && !Z.said[k]) { Z.said[k] = true; if (R > at - 1.2) fn(); } };
+  $('zhTRl').textContent = R > 8 ? 'DEPLOYMENT IN' : 'DEPLOYING'; $('zhTRv').textContent = fmtT(R);
+  $('zhTick').textContent = R > 8 ? 'STARTING SOON  ·  type !spawn to deploy with the squad  ·  !airdrop to call a supply drop' : '';
+  if (R > 40) {                                                                        // UAV recon over the battlefield
+    zRecon(true); $('zhX').style.display = 'block';
+    const tg = [[0, 4, -10], [0, 2, -40], [-72, 6, -8], [24, 3, 38], [36, 3, -6]], i = Math.floor((n - Z.t0) / 8) % tg.length, k = ((n - Z.t0) % 8) / 8, a = (n - Z.t0) * 0.045;
+    const look = new THREE.Vector3(...tg[i]), p = new THREE.Vector3(Math.sin(a) * 92, 62, Math.cos(a) * 92 - 6);
+    camAt(p, look, 30 - Math.sin(k * Math.PI) * 6);
+    const g = 38 + i, e = 4471 + Math.round(look.x * 3), nn = 2290 + Math.round(look.z * 3);
+    $('zhTL').textContent = `● REC   UAV-07 ONLINE\nALT  ${(1240 + Math.round(Math.sin(a * 3) * 40)).toLocaleString()} FT\nGRID ${g}S MB ${e} ${nn}\nTGT  ${['FIREBASE ZERO', 'ARMOR LINE', 'RUINS WEST', 'DROP ZONE', 'AIRFIELD'][i]}`;
+    $('zhC').textContent = ''; $('zhSub').textContent = Math.floor(n * 1.5) % 2 ? 'RECON IN PROGRESS' : ''; return true; }
+  zRecon(false); $('zhX').style.display = 'none';
+  once('b0', 40, () => { flash(0.6, 0.5); SHOW.ziB = n; });
+  if (R > 22) {                                                                        // briefing: cinematic ground shots + teletype orders
+    const el = 40 - R, i = Math.min(2, Math.floor(el / 6)), k = (el % 6) / 6;
+    const S = [[[0, 2.1, -62], [0, 2.3, -51], [0, 2, -40], 46], [[22, 2.4, 9], [27, 3.2, 3], [36, 3, -6], 44], [[40, 3, 62], [36, 8, 57], [24, 6, 38], 50]][i];
+    camAt(new THREE.Vector3(...S[0]).lerp(new THREE.Vector3(...S[1]), sEase(k)), new THREE.Vector3(...S[2]), S[3]);
+    if (Z.lastB !== i) { Z.lastB = i; Z.bT = n; if (i) flash(0.35, 0.3); }
+    const L = ['OPERATION: LUCID STATE', 'OBJECTIVE: SECURE ZONE ZERO', 'SQUAD: CHAT  ·  LEAD: RASSIR'][i];
+    $('zhC').textContent = ''; zType(L, 'zhSub', Z.bT, n, 26);
+    $('zhTL').textContent = 'MISSION BRIEFING\nCLASSIFIED // EYES ONLY\n' + ['ARMOR STAGED NORTH', 'AIR SUPPORT ON STANDBY', 'SUPPLY DROPS INBOUND'][i]; return true; }
+  if (R > 8) {                                                                         // infil: the convoy rolls in through the gate
+    const k = sEase((22 - R) / 14), Zt = ZZ.trucks; Zt.forEach((T, j) => { T.position.set(8, 0, 210 - k * (210 - 42) + j * (10 + (1 - k))); T.rotation.set(0, Math.PI, 0); T.userData.wheels.forEach(w => w.rotation.x += 0.25 * (1 - k)); });
+    const L = Zt[2], back = new THREE.Vector3(2.4, 4.2, 11); const want = L.position.clone().add(back); if (!Z.inf) { Z.inf = true; cam.position.copy(want); }
+    cam.position.lerp(want, 0.12); cam.quaternion.slerp(lookQuat(cam.position, Zt[0].position.clone().add(new THREE.Vector3(0, 2, -12))), 0.15); cam.fov += (58 - cam.fov) * 0.1; cam.updateProjectionMatrix();
+    $('zhTL').textContent = 'INFIL // CONVOY ACTUAL\nROUTE: HIGHWAY 1 -> GATE\nCIRCLE CLOSING'; $('zhSub').textContent = ''; $('zhC').textContent = ''; return true; }
+  if (R > 2) {                                                                         // DEPLOY countdown, camera rises over the base
+    const k = sEase((8 - R) / 6); camAt(new THREE.Vector3(8, 6, 74).lerp(new THREE.Vector3(-6, 46, 64), k), new THREE.Vector3(8, 2, 50).lerp(new THREE.Vector3(0, 4, -6), k), 58);
+    const c = Math.ceil(R - 2); if (Z.cd !== c) { Z.cd = c; zBeep(c <= 1 ? 1320 : 880); } $('zhC').textContent = 'DEPLOYING'; $('zhSub').textContent = 'IN ' + c; $('zhTL').textContent = 'ALL UNITS: GO GO GO'; return true; }
+  once('dz', 2, () => { flash(1, 0.9); $('zhC').textContent = 'DEPLOYED'; $('zhSub').textContent = 'ZONE ZERO  ·  LUCID STATE CITY'; });
+  zSettle(R, 2, zShot('Firebase')); if (R <= 0) { SHOW.holdFrom = null; landLive(); } return true; }
+function zBeep(f) { const c = MUS.ctx; if (!c) return; const t = c.currentTime + 0.01, o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.2); }
+// ---- BRB (redeploying) and END (extraction)
+function zeroShow(n) {
+  if (ZONES.cur !== 'zero') setZone('zero'); $('showOv').style.display = 'none'; zHud.style.display = 'block'; zRecon(false);
+  const a = n - SHOW.t0, brb = SHOW.mode === 'brb';
+  if (brb) {
+    const S = [[[40, 3.2, 62], [37, 7, 57], [24, 6, 38], 50], [[20, 3, 8], [26, 4, 2], [36, 3, -6], 46], [[-36, 2.6, 16], [-42, 4, 10], [-72, 8, -8], 56], [[0, 4, -58], [0, 4.6, -50], [0, 2.4, -40], 50], [[-28, 15, 28], [-22, 18, 24], [6, 2, -16], 60]];
+    const i = Math.floor(a / 14) % S.length, k = (a % 14) / 14, s = S[i]; if (SHOW.zbI !== i) { SHOW.zbI = i; if (a > 1) flash(0.3, 0.4); }
+    camAt(new THREE.Vector3(...s[0]).lerp(new THREE.Vector3(...s[1]), sEase(k)), new THREE.Vector3(...s[2]), s[3]);
+    $('zhTL').textContent = 'STATUS: OFF THE FIELD\nSQUAD HOLDING POSITION\nCOMMS: ' + (Math.floor(n) % 6 < 3 ? 'OPEN' : 'STANDBY');
+    $('zhTRl').textContent = 'TIME OFF FIELD'; $('zhTRv').textContent = fmtT(a); $('zhC').textContent = 'BE RIGHT BACK'; $('zhC').style.color = '#ffffff';
+    $('zhSub').textContent = Math.floor(n * 0.5) % 2 ? 'REDEPLOYING SHORTLY' : 'STAY IN THE FIGHT';
+    $('zhTick').textContent = 'While you wait: !airdrop to call a supply drop  ·  !spawn to deploy  ·  !stats  ·  !vault'; return true; }
+  // END: extraction + after-action report
+  const H = ZZ.parked, hp = H.position, side = new THREE.Vector3(18, 3.5, 8);
+  if (a < 6) { const k = sEase(a / 6); camAt(new THREE.Vector3(20, 4, 7).lerp(new THREE.Vector3(24, 5, 10), k), hp.clone().add(new THREE.Vector3(0, 1, 0)), 46); }
+  else if (a < 22) { const want = hp.clone().add(new THREE.Vector3(-8, -3 + Math.min(10, (a - 6) * 0.8), 18)); cam.position.lerp(want, 0.05); cam.quaternion.slerp(lookQuat(cam.position, hp), 0.12); cam.fov += (50 - cam.fov) * 0.05; cam.updateProjectionMatrix(); }
+  else { const o = (a - 22) * 0.03; camAt(new THREE.Vector3(Math.sin(o) * 150, 80, Math.cos(o) * 150 + 40), new THREE.Vector3(0, 6, -10), 56); }
+  $('zhTL').textContent = 'EXFIL // BIRD IS UP\nALL OPERATORS ACCOUNTED FOR'; $('zhTRl').textContent = 'MISSION TIME'; $('zhTRv').textContent = ssClock ? ssClock() : '';
+  $('zhC').textContent = a < 3 ? '' : 'MISSION COMPLETE'; $('zhC').style.color = '#ffcf4a'; $('zhSub').textContent = a < 3 ? '' : 'EXTRACTION SUCCESSFUL';
+  if (a > 4) { const rows = Object.entries(SS.games || {}).slice(0, 4).map(([nm, G]) => { const L = ssLabels(G); return (nm.toUpperCase().slice(0, 16)).padEnd(17) + `${G.c.w || 0}W ${G.c.l || 0}L  ` + L.map(([k2, l]) => (G.c[k2] || 0) + ' ' + l.toUpperCase()).join('  '); });
+    const tops = SHOW.tops && SHOW.tops.length ? 'TOP OPERATORS: ' + SHOW.tops.map(x => String(x)).join(', ') : '';
+    $('zhPanel').style.display = 'block'; $('zhPanel').textContent = 'AFTER-ACTION REPORT\n' + (rows.length ? rows.join('\n') : 'NO STATS LOGGED TONIGHT') + (tops ? '\n' + tops : ''); }
+  $('zhTick').textContent = 'Thanks for dropping in  ·  follow so you never miss a deployment  ·  see you next mission'; return true; }
+function zeroShowTick(dt, t) {                                                        // runs inside zeroTick: the extraction chopper
+  const H = ZZ.parked; if (!H) return;
+  if (SHOW.mode === 'outro' && SHOW.theme === 'zero') { const a = nowS() - SHOW.t0, up = Math.max(0, a - 2.5);
+    H.position.set(36 - Math.max(0, up - 6) * 3.2, 2.15 + Math.min(42, up * up * 0.45), -6 - Math.max(0, up - 6) * 4.5); H.rotation.set(Math.min(0.18, Math.max(0, up - 6) * 0.05), -2.2 + Math.max(0, up - 4) * 0.12, 0); heliTick(H, dt, t, a > 1 ? 1 : 0.4); return true; }
+  if (H.position.y > 2.2 || H.position.x !== 36) { H.position.set(36, 2.15, -6); H.rotation.set(0, -2.2, 0); } return false; }
+// ---- music: military tension (96 BPM): war drums, braams, ticking clock, radio squelch
+const Z_SPB = 60 / 96 / 4, ZROOT = [0, 0, 3, -2];
+function tBraam(t, lvl) { const c = MUS.ctx, f = c.createBiquadFilter(), g = c.createGain(); f.type = 'lowpass'; f.Q.value = 3; f.frequency.setValueAtTime(180, t); f.frequency.exponentialRampToValueAtTime(2400, t + 0.5); f.frequency.exponentialRampToValueAtTime(260, t + 3);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(lvl, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0008, t + 3.4); f.connect(g); mOut(g, 0.9);
+  [28, 35, 40, 43].forEach(nn => [-10, 9].forEach(dt => { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(nn); o.detune.value = dt; o.connect(f); o.start(t); o.stop(t + 3.6); })); }
+function tTick(t, lvl) { tNoise(t, 0.02, 'highpass', 5200, 2, lvl, 0.015, 0.05); }
+function tSquelch(t, lvl) { tNoise(t, 0.12, 'bandpass', 1700, 3, lvl, 0.1, 0.25); const c = MUS.ctx, o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = 1150; g.gain.setValueAtTime(lvl * 0.25, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0008, t + 0.16); o.connect(g); mOut(g, 0.1); o.start(t + 0.1); o.stop(t + 0.18); }
+function zeroStep(sec, s, t) { const b = s % 16, bar = Math.floor(s / 16) % 4, r = ZROOT[bar];
+  if (sec === 'z_end') { if (b === 0) tTom(t, 70, 0.4); return; }
+  if (b === 0 && bar % 2 === 0) tDrone([28 + r, 40 + r, 43 + r], t, Z_SPB * 32, sec === 'z_outro' ? 0.05 : 0.045, sec === 'z_recon' || sec === 'z_brb' ? 420 : 700);
+  if (sec !== 'z_outro') tTick(t, b % 4 === 0 ? 0.05 : 0.022);
+  if (b === 10 && bar === 1 && Math.random() < 0.7) tSquelch(t, 0.06);
+  if (sec === 'z_recon' || sec === 'z_brb') { if (b === 0) tTom(t, 85, 0.45); if (b === 6 && bar % 2) tTom(t, 110, 0.25); if (b === 8 && bar === 3) tTom(t, 70, 0.35); return; }
+  if (sec === 'z_outro') { if (b === 0) { tPad([52 + r, 55 + r, 59 + r + (r === 3 ? -1 : 0), 64 + r], t, Z_SPB * 16, 0.05, 1800); tTom(t, 80, 0.35); } if (b === 8) tTom(t, 100, 0.2); if (b % 4 === 2) tHat(t, 0.02, false); return; }
+  const drive = sec === 'z_infil' || sec === 'z_land';
+  if (b === 0 || b === 10 || (drive && b === 6)) tTom(t, 90, 0.6);
+  if (b === 3 || b === 13 || (drive && b % 4 === 2)) tTom(t, 140, 0.32);
+  if (b === 8) { tSnare(t, 0.2); tClap(t, 0.08); }
+  if (drive) { if (b % 4 === 0) tKick(t, 0.8); if (b % 2 === 1) tBass(28 + r + (b % 4 === 3 ? 12 : 0), t, 0.12, 520); tHat(t, b % 4 === 2 ? 0.05 : 0.025, b % 4 === 2); if (bar === 3 && b >= 12) tTom(t, [200, 170, 140, 110][b - 12], 0.4); }
+  else if (b % 4 === 2) tBass(28 + r, t, 0.1, 380); }
 // ---- ported from the Rooftop Arena (same character, toon look, faces, gestures) ----
 const softTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'#fff');g.addColorStop(0.55,'#888');g.addColorStop(1,'#000');x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})();
 const AV={};
@@ -4766,7 +4883,7 @@ function postState() {
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
       al: alState(), ver: (location.pathname.match(/[0-9a-f]{40}/) || ['dev'])[0],
-      show: SHOW.mode, showLen: SHOW.len, introStyle, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, vault: vaultItems, stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
+      show: SHOW.mode, showLen: SHOW.len, introStyle, showTheme, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, vault: vaultItems, stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -4792,6 +4909,7 @@ if (bc) bc.onmessage = e => {
     case 'adreset': { const ads = store.get('ads', {}); delete ads[d.slot]; store.set('ads', ads); setAdImage(d.slot, null); makeThumb(d.slot); renderPaGrid(); setStatus(d.slot + ' reset.'); break; }
     case 'adshow': if (adSlots[d.slot]) focusMesh(adSlots[d.slot], d.slot.replace(/_/g, ' ')); break;
     case 'show': startShow(d.mode, d.len, false, d.style); break;
+    case 'showtheme': showTheme = d.theme; store.set('showTheme', showTheme); $('showTheme').value = showTheme; postState(); break;
     case 'introstyle': introStyle = d.style; store.set('introStyle', introStyle); $('showStyle').value = introStyle; postState(); break;
     case 'avmic': $('avMic').value = d.label; $('avSens').value = d.sens; avSens = +d.sens; store.set('avsens', avSens);
       if (d.label !== avMicLabel || d.restart) { avMicLabel = d.label; store.set('avmic', d.label); startAvatarMic(d.label); } break;
@@ -4857,6 +4975,7 @@ if (window.LSC_CONTROL) {
     $('status').className = '';
     if (document.activeElement !== $('showLen')) $('showLen').value = String(st.showLen);
     if (st.introStyle && document.activeElement !== $('showStyle')) $('showStyle').value = st.introStyle;
+    if (st.showTheme && document.activeElement !== $('showTheme')) $('showTheme').value = st.showTheme;
     $('showIntro').classList.toggle('on', st.show === 'intro'); $('showBrb').classList.toggle('on', st.show === 'brb');
     $('showOutro').classList.toggle('on', st.show === 'outro'); $('showLive').classList.toggle('on', st.show === 'live' || st.show === 'return');
     if (document.activeElement !== $('musVol')) { $('musOn').checked = st.musOn; $('musVol').value = st.musVol; }
@@ -4903,6 +5022,7 @@ if (window.LSC_CONTROL) {
   $('adReset').onclick = () => send('adreset', { slot: $('adSlot').value });
   $('showIntro').onclick = () => send('show', { mode: 'intro', len: +$('showLen').value, style: $('showStyle').value });
   $('showStyle').onchange = () => send('introstyle', { style: $('showStyle').value });
+  $('showTheme').onchange = () => send('showtheme', { theme: $('showTheme').value });
   $('showBrb').onclick = () => send('show', { mode: 'brb' }); $('showLive').onclick = () => send('show', { mode: 'live' }); $('showOutro').onclick = () => send('show', { mode: 'outro' });
   const avSend = restart => send('avmic', { label: $('avMic').value, sens: +$('avSens').value, restart });
   $('avMic').onchange = () => avSend(true); $('avSens').onchange = () => avSend(false);
