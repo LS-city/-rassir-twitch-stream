@@ -88,8 +88,11 @@ canvas#c.pick{cursor:pointer}
 </style>
 <script>
 // self-update: when loaded from a pinned commit on githack, jump to the newest commit (so an OBS Refresh always gets the latest city)
+// newest version: GitHub API first, then latest.txt (the API allows only 60 checks an hour)
+window.lscLatest = async () => { try { const j = await (await fetch('https://api.github.com/repos/LS-city/-rassir-twitch-stream/commits/main', { cache: 'no-store' })).json(); if (j && j.sha) return j.sha; } catch (e) {}
+  try { const t = (await (await fetch('https://raw.githubusercontent.com/LS-city/-rassir-twitch-stream/main/latest.txt?t=' + Date.now(), { cache: 'no-store' })).text()).trim(); if (/^[0-9a-f]{40}$/.test(t)) return t; } catch (e) {} return null; };
 (function(){const m=location.href.match(/raw\.githack\.com\/LS-city\/-rassir-twitch-stream\/([0-9a-f]{40})\//);if(!m)return;
-  fetch('https://api.github.com/repos/LS-city/-rassir-twitch-stream/commits/main',{cache:'no-store'}).then(r=>r.json()).then(j=>{if(j&&j.sha&&j.sha!==m[1])location.replace(location.href.replace(m[1],j.sha));}).catch(()=>{});})();
+  lscLatest().then(sha=>{if(sha&&sha!==m[1])location.replace(location.href.replace(m[1],sha));});})();
 </script>
 </head>
 <body>
@@ -5003,7 +5006,7 @@ if (window.LSC_CONTROL) {
     if (m.cmd === 'meter') { $('avMeterFill').style.width = Math.round((m.data.v || 0) * 100) + '%'; return; }
     if (m.cmd === 'state') { st = m.data; render(); if (st.al) { window.__alState = st.al; window.__alRender && window.__alRender(); }
       const myVer = (location.pathname.match(/[0-9a-f]{40}/) || ['dev'])[0], vb = document.getElementById('verBanner');
-      if (vb) vb.style.display = st.ver && myVer !== 'dev' && st.ver !== 'dev' && st.ver !== myVer && !window.__verDone ? 'block' : 'none'; }
+      if (vb) vb.style.display = !window.__verDone && ((st.ver && myVer !== 'dev' && st.ver !== 'dev' && st.ver !== myVer) || (window.__latest && st.ver && st.ver !== window.__latest)) ? 'block' : 'none'; }
     else if (m.cmd === 'status' && m.data) { status(m.data.msg); $('status').className = ''; } };
   $('shots').onclick = e => { const b = e.target.closest('button'); if (b) send('shot', { i: +b.dataset.i }); };
   $('tour').onclick = () => send('tour', { on: !(st && st.tour) });
@@ -5061,6 +5064,9 @@ if (window.LSC_CONTROL) {
     img.src = url;
   };
   window.__alAct = send;
+  // check for a newer version every 2 minutes, so the banner shows even when the dock and the city are both behind
+  const verCheck = () => window.lscLatest && lscLatest().then(sha => { if (!sha) return; window.__latest = sha; const vb = document.getElementById('verBanner'); if (vb && st && st.ver && st.ver !== sha && !window.__verDone) vb.style.display = 'block'; });
+  setTimeout(verCheck, 4000); setInterval(verCheck, 120000);
   document.getElementById('verBtn').onclick = () => { window.__verDone = true; document.getElementById('verBanner').style.display = 'none'; send('reload'); setTimeout(() => location.reload(), 2500); };
   send('hello');
   setInterval(() => send('hello'), st ? 15000 : 3000);

@@ -13,6 +13,10 @@
     const j=await r.json();
     if(j&&j.sha){try{localStorage.setItem('nha_lastsha',j.sha);}catch(e){}go(j.sha);return;}
   }catch(e){}
+  try{   // GitHub's API allows only 60 checks an hour: fall back to latest.txt (no limit)
+    const t=(await (await fetch('https://raw.githubusercontent.com/LS-city/-rassir-twitch-stream/main/latest.txt?t='+Date.now(),{cache:'no-store'})).text()).trim();
+    if(/^[0-9a-f]{40}$/.test(t)){go(t);return;}
+  }catch(e){}
   go('main');   // GitHub didn't answer (rate limit): the main branch is newer than any remembered version
 })();
 </script>
