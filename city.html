@@ -139,9 +139,9 @@ window.lscLatest = async () => { try { const j = await (await fetch('https://api
 </div>
   </section>
   <section data-tab="show" hidden>  <h3>Show</h3>
-  <div class="row" style="margin-bottom:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">Intro</span><select id="showStyle" style="flex:1"><option value="random">Random each stream</option><option value="neon">Neon city (classic)</option><option value="horror">Horror: Ashen Hollow</option><option value="tour">World tour (synthwave)</option><option value="fight">Fighting games: Scuffle Hours</option><option value="abyss">Deep sea: The Abyss</option><option value="zero">Warzone: Zone Zero deployment</option></select></div>
+  <div class="row" style="margin-bottom:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">Intro</span><select id="showStyle" style="flex:1"><option value="random">Random each stream</option><option value="neon">Neon city (classic)</option><option value="horror">Horror: Ashen Hollow</option><option value="tour">World tour (synthwave)</option><option value="fight">Fighting games: Scuffle Hours</option><option value="abyss">Deep sea: The Abyss</option><option value="zero">Warzone: Zone Zero deployment</option><option value="space">Space: Orbital Station launch</option></select></div>
   <div class="row"><select id="showLen" style="flex:1 1 90px;width:auto"><option value="60">1 min</option><option value="120">2 min</option><option value="180" selected>3 min</option><option value="300">5 min</option><option value="600">10 min</option></select><button id="showIntro">Start intro</button></div>
-  <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">BRB &amp; End</span><select id="showTheme" style="flex:1"><option value="neon">Neon city (classic)</option><option value="zero">Warzone: Zone Zero</option></select></div>
+  <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><span class="note" style="flex:0 0 auto">BRB &amp; End</span><select id="showTheme" style="flex:1"><option value="neon">Neon city (classic)</option><option value="zero">Warzone: Zone Zero</option><option value="space">Space: Orbital Station</option></select></div>
   <div class="row" style="margin-top:6px" id="showBtns"><button id="showBrb">BRB</button><button id="showLive">We're live</button><button id="showOutro">Outro</button></div>
   <div class="row" style="margin-top:6px;align-items:center;flex-wrap:nowrap"><label class="note" style="display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="musOn" style="width:18px;min-height:18px"> Techno music</label><input type="range" id="musVol" min="0" max="100" style="flex:1;min-height:30px;padding:0"></div>
   <details style="margin-top:6px"><summary class="note" style="cursor:pointer">OBS scenes for the show</summary>
@@ -296,7 +296,7 @@ const store = {
 const params = new URLSearchParams(location.search);
 let SS = store.get('stats', null); if (!SS || typeof SS !== 'object' || !SS.games) SS = { game: '', preset: 'fighting', start: Date.now(), games: {}, feed: [], show: 'rotate', hud: true, hudPos: 'tr', mods: true, custom: ['Stat 1', 'Stat 2'] };
 SS.feed = SS.feed || [];
-const INTRO_STYLES = { neon: 'Neon city (classic)', horror: 'Horror: Ashen Hollow', tour: 'World tour (synthwave)', fight: 'Fighting games: Scuffle Hours', abyss: 'Deep sea: The Abyss', zero: 'Warzone: Zone Zero deployment', random: 'Random each stream' };
+const INTRO_STYLES = { neon: 'Neon city (classic)', horror: 'Horror: Ashen Hollow', tour: 'World tour (synthwave)', fight: 'Fighting games: Scuffle Hours', abyss: 'Deep sea: The Abyss', zero: 'Warzone: Zone Zero deployment', space: 'Space: Orbital Station', random: 'Random each stream' };
 let showTheme = store.get('showTheme', 'neon');
 let introStyle = store.get('introStyle', 'random');
  if (SS.last && Date.now() - SS.last > 6 * 3600e3) { SS.games = {}; SS.feed = []; SS.start = Date.now(); }     // a new stream day starts a fresh session
@@ -2227,7 +2227,7 @@ function trTick(dt, t) {
   setTimeout(postState, 50); return false;
 }
 function zoneTick(dt, t) {
-  if (SHOW.mode !== 'live' && !(SHOW.mode === 'intro' && SHOW.style !== 'neon') && !(/^(brb|outro|return)$/.test(SHOW.mode) && SHOW.theme === 'zero') && (ZONES.cur !== 'city' || TR.on)) { if (TR.on) { TR.on = false; renderPass.camera = cam; } setZone('city'); }      // intro / BRB / outro always play in the city
+  if (SHOW.mode !== 'live' && !(SHOW.mode === 'intro' && SHOW.style !== 'neon') && !(/^(brb|outro|return)$/.test(SHOW.mode) && (SHOW.theme === 'zero' || SHOW.theme === 'space')) && (ZONES.cur !== 'city' || TR.on)) { if (TR.on) { TR.on = false; renderPass.camera = cam; } setZone('city'); }      // intro / BRB / outro always play in the city
   harborTick(dt, t); cityHeliTick(dt, t);
   if (!TR.on) { if (ZONES.cur === 'space') spaceTick(dt, t); else if (ZONES.cur === 'planet') planetTick(dt, t); else if (ZONES.cur === 'bay') bayTick(dt, t); else if (ZONES.cur === 'summit') summitTick(dt, t); else if (ZONES.cur === 'hollow') hollowTick(dt, t); else if (ZONES.cur === 'zero') zeroTick(dt, t); else if (ZONES.cur === 'abyss') abyssTick(dt, t); }
 }
@@ -3905,7 +3905,7 @@ function topChatters(n) { const list = Object.entries(chatCount).sort((a, b) => 
 function startShow(mode, len, fromObs, style) {
   const prev = SHOW.mode; SHOW.mode = mode; SHOW.t0 = nowS(); musInit();
   if (mode === 'intro') { SHOW.style = pickIntroStyle(style); if (SHOW.style === 'fight') voxLoad(); Object.assign(SHOW, { hScare: false, hStatic: false, hEnd: null, abScare: false, abP: null, tourI: -1, tourWarped: false, holdFrom: null, diveFrom: null }); introReset(); if (TR.on) { TR.on = false; renderPass.camera = cam; } if (SHOW.style === 'neon') setZone('city'); }
-  if (mode === 'brb' || mode === 'outro') { SHOW.theme = showTheme; zHudOff(); SHOW.zbI = -1; }
+  if (mode === 'brb' || mode === 'outro') { SHOW.theme = showTheme; zHudOff(); spHudOff(); SHOW.zbI = -1; SHOW.wF = null; SHOW.wDone = false; }
   SHOW.from = cam.position.clone(); SHOW.fromQ = cam.quaternion.clone(); SHOW.fromF = cam.fov;
   if (mode !== 'live') { tourOn = false; $('tour').classList.remove('on'); fly = null; }
   if (mode === 'intro') { SHOW.len = +len || SHOW.len; SHOW.end = SHOW.t0 + SHOW.len; store.set('introLen', SHOW.len); if (!fromObs) obsScene(showScenes.intro); }
@@ -3921,9 +3921,10 @@ function startShow(mode, len, fromObs, style) {
 }
 function landLive() {
   const zl = (SHOW.mode === 'intro' && SHOW.style === 'zero') || (SHOW.mode === 'return' && SHOW.theme === 'zero');
-  SHOW.landStyle = SHOW.mode === 'intro' ? SHOW.style : zl ? 'zero' : null; introReset(); if (!zl && ZONES.cur !== 'city') setZone('city');
+  const sl = (SHOW.mode === 'intro' && SHOW.style === 'space') || (SHOW.mode === 'return' && SHOW.theme === 'space');
+  SHOW.landStyle = SHOW.mode === 'intro' ? SHOW.style : zl ? 'zero' : sl ? 'space' : null; introReset(); if (!zl && !sl && ZONES.cur !== 'city') setZone('city'); if (sl && ZONES.cur !== 'space') setZone('space');
   SHOW.mode = 'live'; MUS.landT = nowS(); $('showOv').style.display = 'none';
-  if (zl) { goShot(shots.findIndex(s => s.label === 'Firebase'), true); setTour(false); } else { goShot(0, true); setTour(true); }
+  if (zl) { goShot(shots.findIndex(s => s.label === 'Firebase'), true); setTour(false); } else if (sl) { goShot(shots.findIndex(s => s.label === 'Space station'), true); setTour(false); } else { goShot(0, true); setTour(true); }
   fwQueue += 10; toast("WE'RE LIVE!"); avReact('excited', 'wave', 6);
   citizens.concat(spawned).forEach(w => { if (Math.random() < 0.4) w.dance = clock.getElapsedTime() + 5; });
   setStatus('Live'); postState();
@@ -3942,6 +3943,8 @@ function showTick(dt, t) {
   if (SHOW.mode === 'intro' && SHOW.style === 'abyss') return abyssIntro(n, SHOW.end - n);
   if (SHOW.mode === 'intro' && SHOW.style === 'zero') return zeroIntro(n, SHOW.end - n);
   if ((SHOW.mode === 'brb' || SHOW.mode === 'outro') && SHOW.theme === 'zero') return zeroShow(n);
+  if (SHOW.mode === 'intro' && SHOW.style === 'space') return spaceIntro(n, SHOW.end - n);
+  if ((SHOW.mode === 'brb' || SHOW.mode === 'outro') && SHOW.theme === 'space') return spaceShow(n);
   if (SHOW.mode === 'intro') {
     const R = SHOW.end - n, ts = n * 0.05;
     ov.style.display = R > 12 ? 'block' : 'none';
@@ -3992,8 +3995,8 @@ function showTick(dt, t) {
     return true;
   }
   if (SHOW.mode === 'return') {
-    const a = n - SHOW.t0, k = sEase(a / 5), s0 = SHOW.theme === 'zero' ? zShot('Firebase') : shots[0];
-    ov.style.display = 'none'; zHudOff();
+    const a = n - SHOW.t0, k = sEase(a / 5), s0 = SHOW.theme === 'zero' ? zShot('Firebase') : SHOW.theme === 'space' ? zShot('Space station') : shots[0];
+    ov.style.display = 'none'; zHudOff(); spHudOff();
     cam.position.copy(SHOW.from).lerp(s0.pos, k); cam.quaternion.slerpQuaternions(SHOW.fromQ, s0.quat, k);
     cam.fov = SHOW.fromF + (s0.fov - SHOW.fromF) * k; cam.updateProjectionMatrix();
     if (a >= 5) landLive();
@@ -4092,6 +4095,9 @@ function musSection() {
   if (m === 'intro' && SHOW.style === 'abyss') { const R = SHOW.end - n; return R > 40 ? 'a_drift' : R > 24 ? 'a_trench' : R > 14 ? 'a_window' : R > 6 ? 'a_dark' : R > 2.5 ? 'a_kraken' : 'a_end'; }
   if (m === 'intro' && SHOW.style === 'zero') { const R = SHOW.end - n; return R > 40 ? 'z_recon' : R > 22 ? 'z_brief' : R > 8 ? 'z_infil' : R > 2 ? 'z_deploy' : 'z_end'; }
   if (m === 'live' && SHOW.landStyle === 'zero') return n - MUS.landT < 9 ? 'z_land' : 'off';
+  if (m === 'intro' && SHOW.style === 'space') { const R = SHOW.end - n; return R > 40 ? 's_drift' : R > 22 ? 's_approach' : R > 8 ? 's_dock' : R > 2.5 ? 's_launch' : 's_land'; }
+  if (m === 'live' && SHOW.landStyle === 'space') return n - MUS.landT < 9 ? 's_land' : 'off';
+  if ((m === 'brb' || m === 'outro' || m === 'return') && SHOW.theme === 'space') return m === 'brb' ? 's_brb' : m === 'outro' ? 's_outro' : 's_land';
   if ((m === 'brb' || m === 'outro' || m === 'return') && SHOW.theme === 'zero') return m === 'brb' ? 'z_brb' : m === 'outro' ? 'z_outro' : 'z_land';
   if (m === 'intro' && SHOW.style === 'tour') { const R = SHOW.end - n; return R > 14 ? 'w_cruise' : R > 4 ? 'w_climb' : 'w_hold'; }
   if (m === 'intro') { const R = SHOW.end - n; return R > 45 ? 'space' : R > 30 ? 'dive' : R > 12 ? 'street' : R > 4 ? 'climb' : 'hold'; }
@@ -4120,7 +4126,7 @@ function musSched() {
   }
   let tgt = MUS.on ? MUS.vol * 0.42 : 0;
   if (sec === 'off' || cleanOn) tgt = 0;
-  if ((sec === 'land' || sec === 'f_land' || sec === 'z_land') && SHOW.mode === 'live') tgt *= Math.max(0, 1 - (n - MUS.landT - 3) / 6);
+  if ((sec === 'land' || sec === 'f_land' || sec === 'z_land' || sec === 's_land') && SHOW.mode === 'live') tgt *= Math.max(0, 1 - (n - MUS.landT - 3) / 6);
   if (MUS.duckUntil && c.currentTime < MUS.duckUntil) tgt *= 0.4;
   if (sec === 'outro') tgt *= Math.max(0.25, 1 - (n - SHOW.t0 - 60) / 60);
   MUS.master.gain.setTargetAtTime(tgt, c.currentTime, sec === 'off' ? 0.7 : 0.15);
@@ -4129,6 +4135,7 @@ function musSched() {
 }
 function musStep(sec, s, t) {
   if (sec.startsWith('z_')) return zeroStep(sec, s, t);
+  if (sec.startsWith('s_')) return spaceStep(sec, s, t);
   if (sec.startsWith('f_')) return fightStep(sec, s, t);
   if (sec.startsWith('h_')) return horrorStep(sec, s, t);
   if (sec.startsWith('w_')) return tourStep(sec, s, t);
@@ -4171,11 +4178,11 @@ setScenes(showScenes, autoScene);
 
 // ---------------------------------------------------------------- INTRO STYLES: neon city (classic), horror (Ashen Hollow, eerie techno), world tour (synthwave across every map)
 function pickIntroStyle(st) { st = st || introStyle; if (st !== 'random') return INTRO_STYLES[st] ? st : 'neon';
-  const last = store.get('introLast', ''), opts = ['neon', 'horror', 'tour', 'abyss'].filter(x => x !== last); const p = opts[Math.random() * opts.length | 0]; store.set('introLast', p); return p; }
+  const last = store.get('introLast', ''), opts = ['neon', 'horror', 'tour', 'abyss', 'space'].filter(x => x !== last); const p = opts[Math.random() * opts.length | 0]; store.set('introLast', p); return p; }
 const hVhs = document.createElement('div'); hVhs.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1;display:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,rgba(0,0,0,0) 2px 4px),radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(0,0,0,.75) 100%)';
 hVhs.innerHTML = '<div style="position:absolute;left:3%;top:4%;font:700 clamp(14px,2vw,34px) \'Courier New\',monospace;color:#e8e8e8;text-shadow:2px 0 #ff2a1a,-2px 0 #2affff">&#9654; PLAY</div><div id="hVhsT" style="position:absolute;right:3%;bottom:5%;font:700 clamp(14px,2vw,34px) \'Courier New\',monospace;color:#e8e8e8;text-shadow:2px 0 #ff2a1a,-2px 0 #2affff">AM 3:13</div>';
 document.body.appendChild(hVhs);
-function introReset() { zHudOff(); SHOW.zi = null; hVhs.style.display = 'none'; fgHud.style.display = 'none'; SHOW.fg = null; ['sovT', 'sovC', 'sovS'].forEach(id => { $(id).style.transform = ''; $(id).style.filter = ''; }); $('sovC').style.textShadow = ''; }
+function introReset() { zHudOff(); spHudOff(); SHOW.zi = null; SHOW.si = null; hVhs.style.display = 'none'; fgHud.style.display = 'none'; SHOW.fg = null; ['sovT', 'sovC', 'sovS'].forEach(id => { $(id).style.transform = ''; $(id).style.filter = ''; }); $('sovC').style.textShadow = ''; }
 function introSettle(R, dur) {                    // shared ending: glide into the opening city shot and go live
   const s0 = shots[0], k = sEase((dur - R) / dur);
   if (!SHOW.holdFrom) { SHOW.holdFrom = cam.position.clone(); SHOW.holdQ = cam.quaternion.clone(); SHOW.holdF = cam.fov; }
@@ -4261,7 +4268,7 @@ function tourIntro(n, R) {
   introSettle(R, 4); return true; }
 // ---- music: horror (eerie dark techno, 118 BPM, E phrygian) + world tour (synthwave, 108 BPM, A minor)
 const H_SPB = 60 / 118 / 4, W_SPB = 60 / 108 / 4;
-function musSPB() { const sec = MUS.lastSec || ''; return sec.startsWith('z_') ? Z_SPB : sec.startsWith('f_') ? F_SPB : sec.startsWith('h_') ? H_SPB : sec.startsWith('w_') ? W_SPB : sec.startsWith('a_') ? A_SPB : TSPB; }
+function musSPB() { const sec = MUS.lastSec || ''; return sec.startsWith('s_') ? S_SPB : sec.startsWith('z_') ? Z_SPB : sec.startsWith('f_') ? F_SPB : sec.startsWith('h_') ? H_SPB : sec.startsWith('w_') ? W_SPB : sec.startsWith('a_') ? A_SPB : TSPB; }
 function tBell(nn, t, lvl) { const c = MUS.ctx, g = c.createGain(); g.gain.setValueAtTime(lvl, t); g.gain.exponentialRampToValueAtTime(0.0008, t + 2.4); mOut(g, 0.9, 0.5);
   [[1, 1], [2.76, 0.45], [5.4, 0.22], [8.93, 0.1]].forEach(([r, a]) => { const o = c.createOscillator(), og = c.createGain(); o.type = 'sine'; o.frequency.value = mtof(nn) * r; o.detune.value = (Math.random() - 0.5) * 18; og.gain.value = a; o.connect(og); og.connect(g); o.start(t); o.stop(t + 2.6); }); }
 function tDrone(notes, t, len, lvl, cut) { const c = MUS.ctx, f = c.createBiquadFilter(), g = c.createGain(), lf = c.createOscillator(), lg = c.createGain(); f.type = 'lowpass'; f.frequency.value = cut; f.Q.value = 6;
@@ -4465,6 +4472,110 @@ function zeroShowTick(dt, t) {                                                  
   if (SHOW.mode === 'outro' && SHOW.theme === 'zero') { const a = nowS() - SHOW.t0, up = Math.max(0, a - 2.5);
     H.position.set(36 - Math.max(0, up - 6) * 3.2, 2.15 + Math.min(42, up * up * 0.45), -6 - Math.max(0, up - 6) * 4.5); H.rotation.set(Math.min(0.18, Math.max(0, up - 6) * 0.05), -2.2 + Math.max(0, up - 4) * 0.12, 0); heliTick(H, dt, t, a > 1 ? 1 : 0.4); return true; }
   if (H.position.y > 2.2 || H.position.x !== 36) { H.position.set(36, 2.15, -6); H.rotation.set(0, -2.2, 0); } return false; }
+// ---------------------------------------------------------------- ORBITAL STATION SHOW PACKAGE: intro (deep-space drift -> docking approach -> welcome aboard -> launch countdown -> LIVE on the station), BRB (signal paused), end (mission complete + hyperspace jump)
+const spHud = document.createElement('div'); spHud.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2;display:none;color:#fff;font-family:Anton,Impact,sans-serif';
+spHud.innerHTML = `${[['left', 'top'], ['right', 'top'], ['left', 'bottom'], ['right', 'bottom']].map(([h, v]) => `<div style="position:absolute;${h}:3%;${v}:4%;width:4.5%;height:7.5%;border-${h}:3px solid #38e8ff;border-${v}:3px solid #38e8ff;border-${v === 'top' ? 'top' : 'bottom'}-${h}-radius:14px;opacity:.85;box-shadow:0 0 14px rgba(56,232,255,.35)"></div>`).join('')}
+  <div id="spTL" style="position:absolute;left:5%;top:6.5%;font:700 clamp(12px,1.35vw,24px)/1.5 'Courier New',monospace;color:#9ff4ff;text-shadow:0 0 10px rgba(56,232,255,.7),0 2px 4px #000;white-space:pre"></div>
+  <div style="position:absolute;right:5%;top:6%;text-align:right"><div id="spTRl" style="font:700 clamp(11px,1.2vw,22px) 'Courier New',monospace;color:#9ff4ff;letter-spacing:.1em"></div><div id="spTRv" style="font-size:clamp(30px,5vw,92px);line-height:1;text-shadow:0 0 22px rgba(56,232,255,.8),0 3px 0 #000"></div></div>
+  <div id="spX" style="position:absolute;left:50%;top:50%;width:13vw;height:13vw;transform:translate(-50%,-50%);display:none;border:2px solid rgba(56,232,255,.75);border-radius:50%;box-shadow:0 0 20px rgba(56,232,255,.35)"><div style="position:absolute;inset:38%;border:2px solid rgba(255,45,143,.9);border-radius:50%"></div><div style="position:absolute;left:50%;top:-12%;bottom:-12%;border-left:2px solid rgba(56,232,255,.6)"></div><div style="position:absolute;top:50%;left:-12%;right:-12%;border-top:2px solid rgba(56,232,255,.6)"></div></div>
+  <div id="spC" style="position:absolute;left:0;right:0;top:34%;text-align:center;font-size:clamp(40px,8vw,150px);line-height:1;letter-spacing:.05em;text-shadow:0 0 30px rgba(56,232,255,.8),0 0 60px rgba(255,45,143,.45),0 5px 0 #000"></div>
+  <div id="spSub" style="position:absolute;left:0;right:0;top:52%;text-align:center;font:700 clamp(14px,2vw,36px) 'Courier New',monospace;color:#ffb8e8;letter-spacing:.14em;text-shadow:0 0 12px rgba(255,45,143,.7),0 2px 8px #000"></div>
+  <div id="spPanel" style="position:absolute;left:5%;bottom:9%;max-width:52%;padding:1.2% 2%;background:rgba(4,8,20,.72);border:2px solid #38e8ff;border-radius:10px;box-shadow:0 0 22px rgba(56,232,255,.35);display:none;font:700 clamp(12px,1.45vw,26px)/1.6 'Courier New',monospace;color:#e6fbff;white-space:pre"></div>
+  <div id="spTick" style="position:absolute;left:0;right:0;bottom:3.2%;text-align:center;font:700 clamp(12px,1.4vw,25px) Poppins,sans-serif;color:#d8f8ff;text-shadow:0 2px 8px #000"></div>`;
+document.body.appendChild(spHud);
+const spWarp = document.createElement('canvas'); spWarp.width = 1280; spWarp.height = 720; spWarp.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;display:none'; document.body.appendChild(spWarp);
+const SPW = { st: Array.from({ length: 360 }, () => ({ a: Math.random() * 6.283, d: 4 + Math.random() * 700, c: Math.random() < 0.3 ? '255,120,210' : '170,240,255' })) };
+function spWarpDraw(k, dt) {                                  // hyperspace streaks, k = 0..1 intensity
+  if (k <= 0.01) { if (spWarp.style.display !== 'none') spWarp.style.display = 'none'; return; } spWarp.style.display = 'block';
+  const x = spWarp.getContext('2d'), W = 1280, H = 720, cx = W / 2, cy = H / 2; x.clearRect(0, 0, W, H);
+  const g = x.createRadialGradient(cx, cy, 0, cx, cy, 700); g.addColorStop(0, `rgba(190,240,255,${0.35 * k})`); g.addColorStop(0.25, `rgba(56,120,255,${0.12 * k})`); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.lineCap = 'round'; SPW.st.forEach(s => { s.d *= 1 + dt * (1.2 + k * 5); if (s.d > 760) { s.d = 4 + Math.random() * 40; s.a = Math.random() * 6.283; }
+    const L = s.d * (0.05 + k * 0.55), ca = Math.cos(s.a), sa = Math.sin(s.a); x.strokeStyle = `rgba(${s.c},${Math.min(1, k * (0.3 + s.d / 500))})`; x.lineWidth = 1 + s.d / 260;
+    x.beginPath(); x.moveTo(cx + ca * s.d, cy + sa * s.d * 0.62); x.lineTo(cx + ca * (s.d + L), cy + sa * (s.d + L) * 0.62); x.stroke(); }); }
+function spHudOff() { spHud.style.display = 'none'; ['spTL', 'spTRl', 'spTRv', 'spC', 'spSub', 'spTick', 'spPanel'].forEach(id => $(id).textContent = ''); $('spPanel').style.display = 'none'; $('spX').style.display = 'none'; spWarpDraw(0); SPW.k = 0; }
+function spBeep(hi) { const c = MUS.ctx; if (!c) return; const t = c.currentTime + 0.01, o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.value = hi ? 1320 : 880;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(hi ? 0.22 : 0.14, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0005, t + (hi ? 0.9 : 0.28)); o.connect(g); g.connect(c.destination); if (MUS.verb) { const v = c.createGain(); v.gain.value = 0.3; g.connect(v); v.connect(MUS.verb); } o.start(t); o.stop(t + 1); }
+const spCrew = () => spawned.length + ' ABOARD';
+let spLastT = 0; const SV = (x, y, z) => new THREE.Vector3(x, y, z);
+// ---- intro
+function spaceIntro(n, R) {
+  if (ZONES.cur !== 'space') setZone('space'); $('showOv').style.display = 'none'; spHud.style.display = 'block';
+  if (!SHOW.si) SHOW.si = { t0: n, said: {} }; const S = SHOW.si, once = (k, at, fn) => { if (R <= at && !S.said[k]) { S.said[k] = true; if (R > at - 1.2) fn(); } };
+  const dt = Math.min(0.05, n - (spLastT || n)); spLastT = n;
+  const drift = SV(Math.sin(n * 0.5) * 0.15, Math.sin(n * 0.37) * 0.1, Math.cos(n * 0.41) * 0.15), core = SV(0, 5, 0);
+  $('spTRl').textContent = R > 8 ? 'LAUNCH WINDOW' : 'GOING LIVE'; $('spTRv').textContent = fmtT(R);
+  $('spTick').textContent = R > 8 ? 'STARTING SOON  ·  type !spawn to float aboard the station  ·  !fireworks  ·  !dance' : '';
+  spWarpDraw(0);
+  if (R > 40) {                                                                     // deep space: drift through the asteroid belt, planets all around
+    const a = (n - S.t0) * 0.03 + 0.6, p = SV(Math.sin(a) * 155, 14 + Math.sin(a * 0.7) * 10, Math.cos(a) * 155).add(drift);
+    camAt(p, core.clone().lerp(SP.luc.position, 0.04), 40);
+    $('spTL').textContent = `◉ UPLINK ACTIVE\nORBIT  ${(408 + Math.round(Math.sin(a * 2) * 6))} KM\nVEL    7.66 KM/S\nCREW   ${spCrew()}`;
+    $('spC').textContent = 'STARTING SOON'; $('spSub').textContent = Math.floor(n * 0.4) % 2 ? 'LSC ORBITAL STATION' : 'DEEP SPACE RELAY  ·  STAND BY'; S.apF = null; return true; }
+  if (R > 22) {                                                                     // docking approach
+    if (!S.apF) { S.apF = cam.position.clone(); flash(0.35, 0.5); }
+    const k = sEase((40 - R) / 18), p = S.apF.clone().lerp(SV(0, 6.5, 34), k); p.x += Math.sin(k * Math.PI) * 24; p.y += Math.sin(k * Math.PI) * 9; p.add(drift);
+    camAt(p, core, 40 + k * 14); $('spX').style.display = 'block'; const rng = Math.max(0, Math.round(p.distanceTo(core) - 28));
+    $('spTL').textContent = `DOCKING APPROACH\nRANGE   ${rng} M\nCLOSING ${(0.4 + (1 - k) * 6).toFixed(1)} M/S\nALIGN   ${Math.abs(Math.sin(n * 0.9)) > 0.15 ? 'LOCKED' : 'ADJUST'}`;
+    $('spC').textContent = R > 34 ? 'STARTING SOON' : ''; $('spSub').textContent = R > 34 ? '' : (Math.floor(n * 1.5) % 2 ? 'DOCKING APPROACH' : ''); return true; }
+  $('spX').style.display = 'none';
+  once('dock', 22, () => { flash(0.6, 0.7); fwQueue += 3; });
+  if (R > 8) {                                                                      // aboard: glide around the floating screens and the crew
+    const k = (22 - R) / 14, a = -0.9 + k * 2.2, r = 25 - k * 7; camAt(SV(Math.sin(a) * r, 3 + Math.sin(k * Math.PI) * 4, Math.cos(a) * r + 2).add(drift), core, 52);
+    $('spTL').textContent = `DOCKED  ·  AIRLOCK SEALED\nO2     98%\nGRAV   0.0 G\nCREW   ${spCrew()}`;
+    $('spC').textContent = R > 15 ? 'WELCOME ABOARD' : 'LUCID STATE CITY'; $('spSub').textContent = R > 15 ? 'type !spawn to join the crew' : 'ORBITAL STATION'; S.lf = null; return true; }
+  if (R > 2.5) {                                                                    // launch countdown
+    if (!S.lf) S.lf = cam.position.clone(); const k = sEase((8 - R) / 5.5), sh = k * 0.35;
+    const p = S.lf.clone().lerp(SV(0, 10, 42), k).add(SV(Math.sin(n * 31) * sh, Math.sin(n * 27 + 1) * sh, Math.cos(n * 23) * sh)); camAt(p, core, 52 + k * 4);
+    const num = Math.ceil(R - 2.5); if (num <= 5) { $('spC').textContent = String(num); once('c' + num, num + 2.5, () => spBeep(false)); } else $('spC').textContent = '';
+    $('spSub').textContent = 'ALL SYSTEMS GO'; $('spTL').textContent = `IGNITION SEQUENCE\nSIGNAL  100%\nSTREAM  READY\nCREW    ${spCrew()}`; return true; }
+  once('live', 2.5, () => { spBeep(true); flash(1, 1); fwQueue += 6; $('spC').textContent = "WE'RE LIVE"; $('spSub').textContent = ''; $('spTL').textContent = ''; SHOW.holdFrom = null; });
+  zSettle(R, 2.5, zShot('Space station')); if (R <= 0) { SHOW.holdFrom = null; landLive(); }
+  return true; }
+// ---- BRB + END
+function spaceShow(n) {
+  if (ZONES.cur !== 'space') setZone('space'); $('showOv').style.display = 'none'; spHud.style.display = 'block';
+  const a = n - SHOW.t0, brb = SHOW.mode === 'brb', dt = Math.min(0.05, n - (spLastT || n)); spLastT = n;
+  const drift = SV(Math.sin(n * 0.5) * 0.15, Math.sin(n * 0.37) * 0.1, Math.cos(n * 0.41) * 0.15);
+  if (brb) {
+    spWarpDraw(0);
+    const L = SP.luc.position, fo = SP.float[(Math.floor(a / 14) * 3) % SP.float.length].o;
+    const C = [[[0, 5.6, 27], [5, 6.4, 21], [0, 5, 0], 50], [[30, 13, 46], [20, 9, 40], [-4, 3, -6], 55], [[48, 7, 34], [40, 10, 28], [L.x, L.y, L.z], 50], [[-22, -17, 22], [-10, -14, 28], [0, -5, 0], 58], [null, null, null, 46], [[0, 40, 70], [10, 30, 60], [0, 0, 0], 50]];
+    const i = Math.floor(a / 14) % C.length, k = sEase((a % 14) / 14), c = C[i]; if (SHOW.zbI !== i) { SHOW.zbI = i; if (a > 1) flash(0.3, 0.4); }
+    if (c[0]) camAt(SV(...c[0]).lerp(SV(...c[1]), k).add(drift), SV(...c[2]), c[3]); else { const o = fo.position; camAt(o.clone().add(SV(4.5 - k * 2, 1.2, 6 - k * 1.5)), o, 46); }
+    $('spTL').textContent = `TRANSMISSION PAUSED\nSTATION ON AUTOPILOT\nSIGNAL  ${Math.floor(n) % 6 < 3 ? 'HOLDING' : 'RELAYING'}\nCREW    ${spCrew()}`;
+    $('spTRl').textContent = 'TIME AWAY'; $('spTRv').textContent = fmtT(a); $('spC').textContent = 'BE RIGHT BACK'; $('spC').style.color = '#ffffff';
+    $('spSub').textContent = Math.floor(n * 0.5) % 2 ? 'RECONNECTING SHORTLY' : 'ENJOY THE VIEW';
+    $('spTick').textContent = 'While you wait: !spawn to float aboard  ·  !fireworks  ·  !dance  ·  !rain'; return true; }
+  // END: mission complete, pull away from the station, crew manifest, then jump to hyperspace
+  $('spTRl').textContent = 'MISSION TIME'; $('spTRv').textContent = typeof ssClock === 'function' ? ssClock() : ''; $('spC').style.color = '#ffffff';
+  if (a < 28) { spWarpDraw(0); const k = sEase(a / 28), p = SV(0, 6, 28).lerp(SV(-60, 34, 150), k).add(drift); camAt(p, SV(0, 4, 0), 50 - k * 8);
+    $('spTL').textContent = 'MISSION COMPLETE\nALL SYSTEMS NOMINAL\nRETURN TRAJECTORY SET';
+    $('spC').textContent = a < 2.5 ? '' : a < 14 ? 'MISSION COMPLETE' : 'THANKS FOR WATCHING'; $('spSub').textContent = a < 2.5 ? '' : a < 14 ? 'SIGNING OFF FROM ORBIT' : 'LUCID STATE CITY  ·  ORBITAL STATION';
+    if (a > 4) { const tops = SHOW.tops && SHOW.tops.length ? SHOW.tops.map((x, j) => (j + 1) + '. ' + String(x).toUpperCase()).join('\n') : 'NO CREW LOGGED TONIGHT';
+      $('spPanel').style.display = 'block'; $('spPanel').textContent = 'CREW MANIFEST\n' + tops; }
+    $('spTick').textContent = 'Thanks for flying with us  ·  follow so you never miss a launch'; SHOW.wF = null; return true; }
+  if (a < 34) {                                                                     // punch it: hyperspace
+    if (!SHOW.wF) { SHOW.wF = cam.position.clone(); SHOW.wD = SV(0, 4, 0).sub(cam.position).normalize(); whoosh(5.5); $('spPanel').style.display = 'none'; $('spC').textContent = ''; $('spSub').textContent = 'JUMPING TO HYPERSPACE'; }
+    const k = (a - 28) / 6; spWarpDraw(Math.min(1, k * 1.6), dt); const p = SHOW.wF.clone().addScaledVector(SHOW.wD, -k * k * 400);
+    camAt(p, p.clone().addScaledVector(SHOW.wD, -10), 50 + k * 40); if (k > 0.92 && !SHOW.wDone) { SHOW.wDone = true; flash(1, 1.4); } return true; }
+  SHOW.wDone = false; const o = (a - 34) * 0.02 + 1.2, fade = Math.max(0, 1 - (a - 34) / 2.5); spWarpDraw(fade, dt);
+  camAt(SV(Math.sin(o) * 520 - 200, 60 + Math.sin(o * 0.6) * 30, Math.cos(o) * 520 - 500), SP.giant.position, 46);
+  $('spTL').textContent = 'COURSE: HOME\nETA     NEXT STREAM'; $('spC').textContent = 'SEE YOU NEXT ORBIT'; $('spSub').textContent = 'LUCID STATE CITY'; $('spTick').textContent = 'Follow  ·  turn on notifications  ·  see you next launch';
+  return true; }
+// ---- music: dreamy space synthwave (100 BPM, F# minor): pads, bells, sonar pings, arps that lift into a full groove
+const S_SPB = 60 / 100 / 4, SCH = [[54, 57, 61], [50, 54, 57], [57, 61, 64], [52, 56, 59]], SROOT = [30, 26, 33, 28], SARP = [0, 1, 2, 1, 2, 0, 1, 2];
+function spaceStep(sec, s, t) { const b = s % 16, bar = Math.floor(s / 16) % 4, ch = SCH[bar], r = SROOT[bar], full = sec === 's_dock' || sec === 's_land';
+  if (b === 0) tPad(ch.map(x => x - 12).concat([ch[0] + 12]), t, S_SPB * 16, sec === 's_brb' || sec === 's_drift' ? 0.05 : 0.04, full ? 2400 : 1200);
+  if (b === 0 && bar % 2 === 0) tPing(t, sec === 's_drift' || sec === 's_brb' ? 0.05 : 0.03);
+  if (sec === 's_drift' || sec === 's_outro') { if (b % 8 === 4 && Math.random() < 0.7) tBell(ch[(s / 8 | 0) % 3] + 12, t, 0.03); if (b === 8) tBass(r, t, 0.08, 300); return; }
+  if (sec === 's_brb') { if (b % 4 === 2) tPluck(ch[SARP[(s / 4 | 0) % 8]] + 12, t, 0.03, 1400); if (b === 0 || b === 10) tKick(t, 0.35); if (b % 4 === 2) tHat(t, 0.02, false); return; }
+  if (b % 2 === 0) tPluck(ch[SARP[(b / 2) % 8]] + 12 + (bar % 2 && b >= 8 ? 12 : 0), t, sec === 's_approach' ? 0.035 : 0.045, sec === 's_launch' ? 2600 + (s % 64) * 40 : 2200);
+  if (sec === 's_approach') { if (b === 0 || b === 8) tKick(t, 0.5); if (b % 4 === 2) tHat(t, 0.03, false); if (b === 8) tBass(r, t, 0.1, 500); return; }
+  if (b % 4 === 0) tKick(t, full ? 0.9 : 0.75); if (b % 2 === 0) tBass(r + (b % 4 === 2 ? 12 : 0), t, 0.12, full ? 800 : 600);
+  if (b === 4 || b === 12) tSnare(t, 0.18); tHat(t, b % 4 === 2 ? 0.06 : 0.025, b % 4 === 2);
+  if (sec === 's_launch') { if (b % 2 === 1) tSnare(t, 0.04 + (s % 64) / 64 * 0.12); return; }
+  if (full && b === 0 && bar === 0) tImpact(t);
+  if (full && (b === 6 || b === 14)) tBell(ch[2] + 24, t, 0.02); }
 // ---- music: military tension (96 BPM): war drums, braams, ticking clock, radio squelch
 const Z_SPB = 60 / 96 / 4, ZROOT = [0, 0, 3, -2];
 function tBraam(t, lvl) { const c = MUS.ctx, f = c.createBiquadFilter(), g = c.createGain(); f.type = 'lowpass'; f.Q.value = 3; f.frequency.setValueAtTime(180, t); f.frequency.exponentialRampToValueAtTime(2400, t + 0.5); f.frequency.exponentialRampToValueAtTime(260, t + 3);
