@@ -34,6 +34,7 @@ button.on{background:var(--pink);border-color:var(--pink);color:#fff}
 #chatState .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#5a5a7a;margin-right:4px;vertical-align:middle}#chatState.on .dot{background:#3aff8a;box-shadow:0 0 8px #3aff8a}#chatState.wait .dot{background:#ffd23a}#chatState.err .dot{background:#ff3b5a}
 .tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:12px 0 4px;position:sticky;top:-14px;z-index:2;background:rgba(9,6,20,.97);padding:6px 0}
 .tabs button{font-size:12px;padding:6px 1px;min-height:34px}
+.llgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.llgrid button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;min-height:0}.llgrid button.on{outline:2px solid #ffcf4a}.llth{width:48px;height:48px;border-radius:50%;border:3px solid;overflow:hidden;display:flex;align-items:center;justify-content:center;font:400 16px Anton,Impact,sans-serif;color:#ffcf4a}.llth img{width:100%;height:100%;object-fit:cover}.llgrid b{font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.llgrid i{font-size:10px;opacity:.75;font-style:normal}.llst{flex:1;display:flex;flex-direction:column;font-size:11px;opacity:.9;gap:2px;min-width:0}.llst input{width:100%;min-width:0}
 .chrow{display:flex;gap:8px;align-items:center;justify-content:space-between;border-bottom:1px solid #2c2050;padding:6px 0;font-size:13px}.chrow button{flex:none;min-height:30px;padding:2px 10px}.chrow i{color:var(--dim)}
 button.big{font:400 18px/1.1 Anton,Impact,sans-serif;letter-spacing:.04em;min-height:46px}
 #placeTiles{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
@@ -110,7 +111,7 @@ window.lscLatest = async () => { try { const j = await (await fetch('https://api
 
   <div id="status"></div>
   <div id="verBanner" style="display:none;margin:8px 0;padding:10px;border:2px solid #ffd23a;border-radius:10px;background:rgba(255,210,58,.1)"><b style="color:#ffd23a">The city in OBS is running an older version.</b><br><span class="note">New features (like the newest places) will not work until it updates.</span><button id="verBtn" class="big" style="margin-top:8px;width:100%">Update the city now</button></div>
-  <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="alerts">Alerts</button><button data-tab="trophy">Trophies</button><button data-tab="vault">Vault</button><button data-tab="stats">Stats</button><button data-tab="setup">Setup</button></div>
+  <div class="tabs" role="tablist"><button data-tab="places" class="on">Places</button><button data-tab="show">Show</button><button data-tab="avatar">Screens</button><button data-tab="alerts">Alerts</button><button data-tab="trophy">Trophies</button><button data-tab="vault">Vault</button><button data-tab="lads">Lads</button><button data-tab="stats">Stats</button><button data-tab="setup">Setup</button></div>
   <section data-tab="places">
     <div class="row"><button id="tourBig" class="big">Auto tour</button><button id="orbitBig" class="big">Orbit</button></div>
     <div class="row" id="travelRow" style="margin-top:6px"><button data-go="Space station" class="big" style="--pc:#38e8ff">&#x1F680; Space</button><button data-go="Planet landing" class="big" style="--pc:#ff4fd8">&#x1FA90; Planet</button><button data-go="Bay stage" class="big" style="--pc:#ffb04a">&#x1F334; Bay</button><button data-go="Summit arena" class="big" style="--pc:#ff3a3a">&#x1F681; Summit</button><button data-go="Hollow square" class="big" style="--pc:#8a2a20">&#x1F68C; Hollow</button><button data-go="Firebase" class="big" style="--pc:#c87a2a">&#x1FA96; Warzone</button><button data-go="Abyss window" class="big" style="--pc:#1fd6c4">&#x1F30A; Abyss</button><button data-go="Gateway" class="big" style="--pc:#ff2d8f">&#x1F3D9; City</button></div>
@@ -211,6 +212,28 @@ window.lscLatest = async () => { try { const j = await (await fetch('https://api
     <h3>In the Vault</h3>
     <div id="vtList"></div>
   </section>
+  <section data-tab="lads" hidden>
+    <h3>Little Lads badge cards</h3>
+    <p class="note">Make a badge card for every Little Lads teammate. Cards go in the Badge Card Case in Zone Zero and pop up on stream with an animated reveal.</p>
+    <select id="llPick" style="margin-top:8px"></select>
+    <div class="row" style="margin-top:8px;gap:10px;align-items:flex-start;flex-wrap:nowrap"><canvas id="llPrev" width="300" height="450" style="width:46%;max-width:260px;flex:0 0 auto;border-radius:12px"></canvas>
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0">
+        <input id="llName" placeholder="Gamertag" maxlength="20"><input id="llTw" placeholder="Twitch name (for !card)" maxlength="25">
+        <select id="llRank" title="Rank"></select><input id="llRankT" placeholder="Custom rank name (optional)" maxlength="22">
+        <select id="llRole" title="Role"></select><select id="llTheme" title="Card color"></select><select id="llFinish" title="Card finish"></select></div></div>
+    <input id="llMotto" placeholder="Motto or quote (optional)" maxlength="40" style="margin-top:6px">
+    <div class="row" style="margin-top:8px;flex-wrap:nowrap;gap:6px"><label class="llst">Wins<input id="llWins" type="number" min="0" inputmode="numeric"></label><label class="llst">K/D<input id="llKd" type="number" min="0" step="0.01" inputmode="decimal"></label><label class="llst">MVPs<input id="llMvp" type="number" min="0" inputmode="numeric"></label><label class="llst">Kills<input id="llKills" type="number" min="0" inputmode="numeric"></label></div>
+    <label class="note" style="display:block;margin-top:8px">Teammate photo (goes in the center of the card)</label>
+    <div class="row" style="flex-wrap:nowrap"><input id="llPhoto" type="file" accept="image/*" style="flex:1;min-width:0"><button id="llPhotoClr" style="flex:0 0 auto">No photo</button></div>
+    <label class="note" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="llPop" checked style="width:18px;min-height:18px"> Reveal on stream for new members and promotions</label>
+    <div class="row" style="margin-top:6px"><button id="llSave" class="big">Add to the team</button></div>
+    <div class="row" style="margin-top:6px"><button id="llShowOne">Show this card on stream</button><button id="llDel">Remove from team</button></div>
+    <p id="llMsg" class="note" style="color:var(--cyan,#38e8ff)"></p>
+    <h3>The team</h3>
+    <div id="llList" class="llgrid"></div>
+    <div class="row" style="margin-top:8px"><button id="llCase">Show the Badge Card Case</button><button id="llRoster">Roster reveal (every card)</button></div>
+    <p class="note">Chat can type <b>!lads</b> to meet a teammate and <b>!card</b> to show their own card (fill in their Twitch name).</p>
+  </section>
   <section data-tab="stats" hidden>
     <h3>Session stats</h3>
     <p class="note">Track wins, KOs, kills and more while you play. The numbers show on the stats screen in every map and in a stats box on stream.</p>
@@ -286,6 +309,126 @@ window.ssRenderPanel = (S, act) => { const $ = id => document.getElementById(id)
     ['ssShow', 'ssHud', 'ssHudPos', 'ssMods'].forEach(id => $(id).onchange = cfg); } };
 window.LSC_CONTROL = new URLSearchParams(location.search).get('control') === '1';
 window.LSC_AVATAR = new URLSearchParams(location.search).get('avatar') === '1';</script>
+<script>
+// ---------------------------------------------------------------- LITTLE LADS badge cards: shared by the city (OBS) and the LSC Control dock (drawing + the Lads tab panel)
+window.LL = (() => {
+  const RANKS = ['Recruit', 'Private', 'Private First Class', 'Corporal', 'Sergeant', 'Staff Sergeant', 'Lieutenant', 'Captain', 'Major', 'Colonel', 'General', 'Commander'];
+  const THEMES = { gold: { n: 'Gold', a: '#ffcf4a', b: '#ff8a1a', d: '#241604' }, neon: { n: 'Neon pink', a: '#ff2d8f', b: '#38e8ff', d: '#1a0414' }, cyan: { n: 'Cyber cyan', a: '#38e8ff', b: '#3a6aff', d: '#03141c' },
+    toxic: { n: 'Toxic green', a: '#7dff3a', b: '#e8ff3a', d: '#081a04' }, blood: { n: 'Blood red', a: '#ff3a3a', b: '#ff9a3a', d: '#1c0404' }, royal: { n: 'Royal purple', a: '#b478ff', b: '#ff4fd8', d: '#10041c' },
+    ghost: { n: 'Ghost white', a: '#e8f0ff', b: '#8aa8d8', d: '#0c0e14' }, camo: { n: 'Desert camo', a: '#d8c07a', b: '#8a9a4a', d: '#16140a' } };
+  const FINISH = { holo: 'Holographic (rainbow shine)', chrome: 'Chrome shine', matte: 'Matte (no shine)' };
+  const ROLES = ['Squad leader', 'Slayer', 'Sniper', 'Entry fragger', 'Support', 'Anchor', 'Shot caller', 'Objective', 'Recon', 'Flex'];
+  const rr = (x, X, Y, W, H, r) => { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + W, Y, X + W, Y + H, r); x.arcTo(X + W, Y + H, X, Y + H, r); x.arcTo(X, Y + H, X, Y, r); x.arcTo(X, Y, X + W, Y, r); x.closePath(); };
+  const hexP = (x, cx, cy, r) => { x.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 - Math.PI / 2; x.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } x.closePath(); };
+  const star = (x, cx, cy, r) => { x.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r * 0.42 : r; x.lineTo(cx + Math.cos(a) * q, cy + Math.sin(a) * q); } x.closePath(); x.fill(); };
+  const rankName = L => (L.rankT && L.rankT.trim()) || RANKS[L.rank | 0] || 'Recruit';
+  function insignia(x, lvl, col, dk) {                          // rank insignia centred on 0,0 (about 70 units across)
+    x.save(); x.fillStyle = col; x.strokeStyle = dk || '#000'; x.lineWidth = 2.5; x.lineJoin = 'round';
+    const chev = y => { x.beginPath(); x.moveTo(-30, y); x.lineTo(0, y - 16); x.lineTo(30, y); x.lineTo(30, y + 9); x.lineTo(0, y - 7); x.lineTo(-30, y + 9); x.closePath(); x.fill(); x.stroke(); };
+    const rock = y => { x.beginPath(); x.moveTo(-30, y); x.quadraticCurveTo(0, y + 16, 30, y); x.lineTo(30, y + 8); x.quadraticCurveTo(0, y + 24, -30, y + 8); x.closePath(); x.fill(); x.stroke(); };
+    const bar = (X) => { x.fillRect(X - 6, -24, 12, 48); x.strokeRect(X - 6, -24, 12, 48); };
+    if (lvl <= 0) { x.globalAlpha = 0.55; chev(4); }
+    else if (lvl <= 3) { const n = lvl; for (let i = 0; i < n; i++) chev(-10 + i * 14 - (n - 1) * 4); }
+    else if (lvl <= 5) { for (let i = 0; i < 3; i++) chev(-22 + i * 13); rock(18); if (lvl === 5) rock(30); }
+    else if (lvl === 6) bar(0);
+    else if (lvl === 7) { bar(-10); bar(10); }
+    else if (lvl === 8) { x.beginPath(); x.moveTo(0, -30); x.bezierCurveTo(26, -14, 22, 18, 0, 30); x.bezierCurveTo(-22, 18, -26, -14, 0, -30); x.fill(); x.stroke(); x.beginPath(); x.moveTo(0, -24); x.lineTo(0, 26); x.strokeStyle = dk || '#000'; x.stroke(); }
+    else if (lvl === 9) { star(x, 0, -4, 18); x.beginPath(); x.moveTo(-34, 10); x.quadraticCurveTo(-16, -6, -6, 8); x.lineTo(-30, 18); x.closePath(); x.fill(); x.beginPath(); x.moveTo(34, 10); x.quadraticCurveTo(16, -6, 6, 8); x.lineTo(30, 18); x.closePath(); x.fill(); }
+    else if (lvl === 10) { star(x, -15, 0, 15); star(x, 15, 0, 15); }
+    else { star(x, -22, 4, 12); star(x, 0, -8, 14); star(x, 22, 4, 12); x.lineWidth = 4; x.strokeStyle = col; x.beginPath(); x.arc(0, 4, 32, Math.PI * 0.15, Math.PI * 0.85); x.stroke(); }
+    x.restore(); }
+  function fit(x, txt, max, size, font) { let s = size; x.font = font.replace('$', s); while (x.measureText(txt).width > max && s > 12) { s -= 2; x.font = font.replace('$', s); } return s; }
+  // card front, drawn in 600 x 900 units (the caller sets the transform)
+  function drawCard(x, L, img, t, opt) {
+    opt = opt || {}; const W = 600, H = 900, th = THEMES[L.theme] || THEMES.gold; t = t || 0;
+    x.save(); rr(x, 0, 0, W, H, 38); x.clip();
+    const bg = x.createLinearGradient(0, 0, W * 0.4, H); bg.addColorStop(0, th.d); bg.addColorStop(0.55, '#07070c'); bg.addColorStop(1, th.d); x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    x.globalAlpha = 0.07; x.strokeStyle = th.a; x.lineWidth = 2; for (let i = -H; i < W; i += 26) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + H, H); x.stroke(); } x.globalAlpha = 1;
+    const g0 = x.createRadialGradient(W / 2, 360, 30, W / 2, 360, 330); g0.addColorStop(0, th.a + '55'); g0.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g0; x.fillRect(0, 0, W, H);
+    // header
+    x.fillStyle = 'rgba(0,0,0,.45)'; x.fillRect(0, 0, W, 118); x.fillStyle = th.a; x.fillRect(0, 116, W, 4);
+    x.textAlign = 'center'; x.font = '400 54px Anton, Impact, sans-serif'; x.shadowColor = th.a; x.shadowBlur = 18; x.fillStyle = '#fff'; x.fillText('LITTLE LADS', W / 2 + 26, 66); x.shadowBlur = 0;
+    x.font = '700 20px Poppins, sans-serif'; x.fillStyle = th.a; x.fillText('MW4 SQUAD  ·  BADGE CARD', W / 2 + 26, 98);
+    x.save(); x.translate(64, 60); x.fillStyle = 'rgba(0,0,0,.6)'; x.beginPath(); x.arc(0, 0, 46, 0, 7); x.fill(); x.strokeStyle = th.a; x.lineWidth = 3; x.stroke(); x.scale(0.9, 0.9); insignia(x, L.rank | 0, th.a, th.d); x.restore();
+    x.font = '400 30px Anton, Impact, sans-serif'; x.textAlign = 'right'; x.fillStyle = th.b; x.fillText('#' + String(L.no || 1).padStart(2, '0'), W - 24, 160); x.textAlign = 'center';
+    // portrait: hexagon with a spinning ring
+    const cx = W / 2, cy = 352, R = 160;
+    x.save(); x.translate(cx, cy); x.rotate(t * 0.5); x.strokeStyle = th.a; x.lineWidth = 5; x.setLineDash([22, 14]); x.globalAlpha = 0.8; x.beginPath(); x.arc(0, 0, R + 30, 0, 7); x.stroke();
+    x.rotate(-t * 1.1); x.strokeStyle = th.b; x.lineWidth = 3; x.setLineDash([6, 18]); x.beginPath(); x.arc(0, 0, R + 44, 0, 7); x.stroke(); x.restore();
+    x.save(); hexP(x, cx, cy, R); x.fillStyle = '#101018'; x.fill(); x.clip();
+    if (img && img.complete && img.naturalWidth) { const s = Math.max(2 * R / img.naturalWidth, 2 * R / img.naturalHeight); x.drawImage(img, cx - img.naturalWidth * s / 2, cy - img.naturalHeight * s / 2, img.naturalWidth * s, img.naturalHeight * s); }
+    else { x.fillStyle = '#2a2a38'; x.beginPath(); x.arc(cx, cy - 34, 58, 0, 7); x.fill(); x.beginPath(); x.ellipse(cx, cy + 120, 112, 96, 0, Math.PI, 0); x.fill(); x.fillStyle = th.a; x.font = '400 28px Anton, Impact, sans-serif'; x.fillText('ADD A PHOTO', cx, cy + 112); }
+    const vg = x.createLinearGradient(0, cy + R * 0.3, 0, cy + R); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)'); x.fillStyle = vg; x.fillRect(cx - R, cy - R, 2 * R, 2 * R); x.restore();
+    const hg = x.createLinearGradient(cx - R, cy - R, cx + R, cy + R); hg.addColorStop(0, th.a); hg.addColorStop(1, th.b); x.strokeStyle = hg; x.lineWidth = 9; hexP(x, cx, cy, R); x.stroke();
+    // name, rank, role
+    const nm = String(L.name || 'NEW LAD').toUpperCase(); fit(x, nm, W - 60, 76, '400 $px Anton, Impact, sans-serif'); x.shadowColor = th.a; x.shadowBlur = 16; x.fillStyle = '#fff'; x.fillText(nm, W / 2, 606); x.shadowBlur = 0;
+    const rk = rankName(L).toUpperCase(); fit(x, rk, W - 80, 36, '400 $px Anton, Impact, sans-serif'); x.fillStyle = th.a; x.fillText(rk, W / 2, 650);
+    if (L.role) { x.font = '700 22px Poppins, sans-serif'; const rw = x.measureText(L.role.toUpperCase()).width + 40; x.strokeStyle = th.b; x.lineWidth = 2.5; rr(x, W / 2 - rw / 2, 666, rw, 36, 18); x.fillStyle = 'rgba(0,0,0,.5)'; x.fill(); x.stroke(); x.fillStyle = '#fff'; x.fillText(L.role.toUpperCase(), W / 2, 692); }
+    // stats
+    const kd = L.kd === '' || L.kd == null || isNaN(+L.kd) ? '—' : (+L.kd).toFixed(2), sv = v => v === '' || v == null || isNaN(+v) ? '—' : String(+v);
+    const S = [['WINS', sv(L.wins)], ['K/D', kd], ['MVPs', sv(L.mvps)], ['KILLS', sv(L.kills)]], bw = 126, gap = 8, x0 = (W - (bw * 4 + gap * 3)) / 2;
+    S.forEach(([l, v], i) => { const X = x0 + i * (bw + gap); x.fillStyle = 'rgba(255,255,255,.06)'; rr(x, X, 720, bw, 96, 12); x.fill(); x.strokeStyle = i === 1 ? th.a : 'rgba(255,255,255,.18)'; x.lineWidth = 2; x.stroke();
+      x.font = '700 17px Poppins, sans-serif'; x.fillStyle = '#aab'; x.fillText(l, X + bw / 2, 746); fit(x, v, bw - 14, 44, '400 $px Anton, Impact, sans-serif'); x.fillStyle = i === 1 ? th.a : '#fff'; x.fillText(v, X + bw / 2, 798); });
+    x.font = 'italic 600 22px Poppins, sans-serif'; x.fillStyle = '#d6dbe8'; const mo = L.motto ? '“' + L.motto + '”' : 'MEMBER SINCE ' + new Date(L.added || Date.now()).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toUpperCase(); fit(x, mo, W - 60, 22, 'italic 600 $px Poppins, sans-serif'); x.fillText(mo, W / 2, 860);
+    // shine
+    const fin = L.finish || 'holo';
+    if (fin !== 'matte') { const p = ((t * 0.32) % 1.8) - 0.4, X = p * (W + H), sg = x.createLinearGradient(X - 220, 0, X + 220, H * 0.5);
+      if (fin === 'holo') { ['rgba(255,0,128,0)', 'rgba(255,60,160,.22)', 'rgba(255,230,80,.26)', 'rgba(60,255,160,.24)', 'rgba(60,160,255,.24)', 'rgba(180,90,255,.22)', 'rgba(180,90,255,0)'].forEach((c, i, a) => sg.addColorStop(i / (a.length - 1), c)); }
+      else { sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,.32)'); sg.addColorStop(1, 'rgba(255,255,255,0)'); }
+      x.globalCompositeOperation = 'screen'; x.fillStyle = sg; x.save(); x.translate(0, 0); x.transform(1, 0, -0.5, 1, 0, 0); x.fillRect(-W, 0, W * 3, H); x.restore(); x.globalCompositeOperation = 'source-over';
+      if (fin === 'holo') { x.globalAlpha = 0.05; for (let i = 0; i < 26; i++) { x.fillStyle = `hsl(${(i * 37 + t * 60) % 360},100%,60%)`; x.fillRect((i * 97) % W, (i * 151) % H, 40, 40); } x.globalAlpha = 1; } }
+    x.restore();
+    // border
+    const bgd = x.createLinearGradient(0, 0, W, H); const sh = (Math.sin(t * 1.4) + 1) / 2; bgd.addColorStop(0, th.a); bgd.addColorStop(0.3 + sh * 0.4, '#ffffff'); bgd.addColorStop(1, th.b);
+    x.strokeStyle = bgd; x.lineWidth = 12; rr(x, 6, 6, W - 12, H - 12, 34); x.stroke(); x.strokeStyle = 'rgba(0,0,0,.6)'; x.lineWidth = 2; rr(x, 16, 16, W - 32, H - 32, 26); x.stroke();
+  }
+  function drawBack(x, th, t, txt) {                               // card back (also the empty slot)
+    th = THEMES[th] || th || THEMES.gold; const W = 600, H = 900; t = t || 0;
+    x.save(); rr(x, 0, 0, W, H, 38); x.clip(); const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#111018'); bg.addColorStop(1, '#050508'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    x.strokeStyle = th.a; x.globalAlpha = 0.12; x.lineWidth = 6; for (let y = -60; y < H + 60; y += 48) { x.beginPath(); x.moveTo(0, y + 30); x.lineTo(W / 2, y); x.lineTo(W, y + 30); x.stroke(); } x.globalAlpha = 1;
+    const cy = 380; x.save(); x.translate(W / 2, cy); x.rotate(t * 0.3); x.strokeStyle = th.a; x.lineWidth = 4; x.setLineDash([20, 16]); x.beginPath(); x.arc(0, 0, 200, 0, 7); x.stroke(); x.restore();
+    x.beginPath(); x.moveTo(W / 2, cy - 170); x.lineTo(W / 2 + 140, cy - 110); x.lineTo(W / 2 + 125, cy + 60); x.quadraticCurveTo(W / 2 + 90, cy + 140, W / 2, cy + 185); x.quadraticCurveTo(W / 2 - 90, cy + 140, W / 2 - 125, cy + 60); x.lineTo(W / 2 - 140, cy - 110); x.closePath();
+    const sg = x.createLinearGradient(0, cy - 170, 0, cy + 185); sg.addColorStop(0, th.a); sg.addColorStop(1, th.b); x.fillStyle = '#0c0b12'; x.fill(); x.strokeStyle = sg; x.lineWidth = 10; x.stroke();
+    x.textAlign = 'center'; x.font = '400 150px Anton, Impact, sans-serif'; x.fillStyle = sg; x.shadowColor = th.a; x.shadowBlur = 24; x.fillText('LL', W / 2, cy + 58); x.shadowBlur = 0;
+    x.font = '400 64px Anton, Impact, sans-serif'; x.fillStyle = '#fff'; x.fillText('LITTLE LADS', W / 2, 680); x.font = '700 24px Poppins, sans-serif'; x.fillStyle = th.a; x.fillText(txt || 'MW4 SQUAD', W / 2, 726);
+    x.restore(); x.strokeStyle = th.a; x.lineWidth = 12; rr(x, 6, 6, W - 12, H - 12, 34); x.stroke(); }
+  function resize(file, size) { return new Promise((ok, no) => { const r = new FileReader(); r.onerror = no; r.onload = () => { const im = new Image(); im.onerror = no; im.onload = () => {
+    const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d'), s = Math.min(im.width, im.height), sx = (im.width - s) / 2, sy = Math.max(0, (im.height - s) * 0.22);
+    x.drawImage(im, sx, sy, s, s, 0, 0, size, size); ok(c.toDataURL('image/jpeg', 0.85)); }; im.src = r.result; }; r.readAsDataURL(file); }); }
+  const imgs = {}; function img(src) { if (!src) return null; if (!imgs[src]) { const i = new Image(); i.src = src; imgs[src] = i; } return imgs[src]; }
+  const picOf = (id, list) => { let p = null; try { const v = localStorage.getItem('lsc_ladpic_' + id); if (v) p = JSON.parse(v); } catch (e) {} if (!p) { const it = (list || []).find(l => l.id === id); p = it && it.thumb; } return p; };
+  // ---- the Lads tab (works the same in the city page and in the LSC Control dock)
+  let list = [], cur = '', pend, act = null;
+  const $ = id => document.getElementById(id), esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function form() { return { id: cur, name: $('llName').value.trim(), tw: $('llTw').value.trim().replace(/^@/, ''), rank: +$('llRank').value, rankT: $('llRankT').value.trim(), role: $('llRole').value, theme: $('llTheme').value, finish: $('llFinish').value,
+    motto: $('llMotto').value.trim(), wins: $('llWins').value, kd: $('llKd').value, mvps: $('llMvp').value, kills: $('llKills').value, no: (list.find(l => l.id === cur) || {}).no || (list.reduce((m, l) => Math.max(m, l.no || 0), 0) + 1), added: (list.find(l => l.id === cur) || {}).added || Date.now() }; }
+  function load(id) { cur = id; pend = undefined; const L = list.find(l => l.id === id) || { rank: 0, theme: 'gold', finish: 'holo', role: 'Slayer' };
+    $('llName').value = L.name || ''; $('llTw').value = L.tw || ''; $('llRank').value = L.rank | 0; $('llRankT').value = L.rankT || ''; $('llRole').value = L.role || ''; $('llTheme').value = L.theme || 'gold'; $('llFinish').value = L.finish || 'holo';
+    $('llMotto').value = L.motto || ''; $('llWins').value = L.wins ?? ''; $('llKd').value = L.kd ?? ''; $('llMvp').value = L.mvps ?? ''; $('llKills').value = L.kills ?? ''; $('llPhoto').value = '';
+    $('llPick').value = id; $('llDel').style.display = $('llShowOne').style.display = id ? '' : 'none'; $('llSave').textContent = id ? 'Save card' : 'Add to the team'; $('llMsg').textContent = ''; }
+  function render(L) { list = L || []; if (!$('llPick')) return;
+    const h = '<option value="">+ New team member</option>' + list.map(l => `<option value="${esc(l.id)}">#${String(l.no || 0).padStart(2, '0')} ${esc(l.name)} · ${esc(rankName(l))}</option>`).join(''); if ($('llPick')._h !== h) { $('llPick')._h = h; $('llPick').innerHTML = h; $('llPick').value = cur; }
+    const g = list.length ? list.map(l => `<button data-id="${esc(l.id)}" class="${l.id === cur ? 'on' : ''}" title="Edit ${esc(l.name)}"><span class="llth" style="border-color:${(THEMES[l.theme] || THEMES.gold).a}">${l.thumb ? `<img src="${l.thumb}" alt="">` : 'LL'}</span><b>${esc(l.name)}</b><i>${esc(rankName(l))}</i></button>`).join('') : '<p class="note">No team members yet. Fill in the card and press Add to the team.</p>';
+    if ($('llList')._h !== g) { $('llList')._h = g; $('llList').innerHTML = g; }
+    if (cur && !list.find(l => l.id === cur)) load(''); }
+  function preview() { requestAnimationFrame(preview); const c = $('llPrev'); if (!c || !c.offsetParent) return; const x = c.getContext('2d'); x.setTransform(c.width / 600, 0, 0, c.height / 900, 0, 0); x.clearRect(0, 0, 600, 900);
+    const src = pend !== undefined ? pend : cur ? picOf(cur, list) : null; drawCard(x, form(), img(src), performance.now() / 1000); }
+  function panel(fn) { act = fn; if (!$('llPick') || $('llPick')._wired) return; $('llPick')._wired = true;
+    $('llRank').innerHTML = RANKS.map((r, i) => `<option value="${i}">${r}</option>`).join(''); $('llRole').innerHTML = '<option value="">No role</option>' + ROLES.map(r => `<option>${r}</option>`).join('');
+    $('llTheme').innerHTML = Object.entries(THEMES).map(([k, v]) => `<option value="${k}">${v.n}</option>`).join(''); $('llFinish').innerHTML = Object.entries(FINISH).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+    load(''); $('llPick').onchange = () => load($('llPick').value);
+    $('llList').onclick = e => { const b = e.target.closest('button'); if (b) { load(b.dataset.id); render(list); $('llName').scrollIntoView({ block: 'center', behavior: 'smooth' }); } };
+    $('llPhoto').onchange = async () => { const f = $('llPhoto').files[0]; if (!f) return; try { pend = await resize(f, 420); $('llMsg').textContent = 'Photo ready. Press ' + $('llSave').textContent + ' to keep it.'; } catch (e) { $('llMsg').textContent = 'That picture could not be opened. Try a JPG or PNG.'; } };
+    $('llPhotoClr').onclick = () => { pend = ''; $('llPhoto').value = ''; $('llMsg').textContent = 'Photo removed. Press ' + $('llSave').textContent + ' to keep the change.'; };
+    $('llSave').onclick = () => { const L = form(); if (!L.name) { $('llMsg').textContent = 'Type the gamertag first.'; $('llName').focus(); return; } const isNew = !L.id; if (isNew) L.id = 'L' + Date.now().toString(36);
+      act('save', { lad: L, pic: pend, pop: $('llPop').checked }); cur = L.id; pend = undefined; $('llPhoto').value = ''; $('llMsg').textContent = isNew ? L.name + ' joined the Little Lads!' : 'Saved ' + L.name + "'s card."; $('llSave').textContent = 'Save card'; $('llDel').style.display = $('llShowOne').style.display = ''; };
+    $('llShowOne').onclick = () => { if (cur) act('show', { id: cur }); };
+    $('llDel').onclick = () => { const b = $('llDel'); if (!cur) return; if (!b._arm || Date.now() - b._arm > 4000) { b._arm = Date.now(); b.textContent = 'Tap again to remove'; setTimeout(() => b.textContent = 'Remove from team', 4000); return; } b._arm = 0; b.textContent = 'Remove from team'; act('del', { id: cur }); load(''); };
+    $('llCase').onclick = () => act('case', {}); $('llRoster').onclick = () => act('roster', {});
+    requestAnimationFrame(preview); }
+  return { RANKS, THEMES, ROLES, FINISH, rankName, insignia, drawCard, drawBack, resize, img, picOf, render, panel, rr };
+})();
+</script>
 <script>
 if (!window.LSC_CONTROL) {
 const $ = id => document.getElementById(id);
@@ -967,7 +1110,7 @@ const chatLines = [];
 let chatCanvas, chatTex, cmdCanvas, cmdTex;
 const COMMANDS = [
   ['!spawn', 'join the city as a citizen'], ['!club', 'walk into Zero Cool'], ['!fight', 'walk into Fight Club'], ['!bit', 'walk into Back In Time'], ['!dance', 'start a dance at Zero Cool'], ['!rain', 'make it rain on the city'],
-  ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard'], ['!airdrop', 'call a supply drop in Zone Zero'], ['!vault', 'show your best Vault item'], ['!stats', "show tonight's game stats"]
+  ['!fireworks', 'light up the sky'], ['!lights', "change the city's neon color"], ['!ad', 'how to rent a billboard'], ['!airdrop', 'call a supply drop in Zone Zero'], ['!vault', 'show your best Vault item'], ['!stats', "show tonight's game stats"], ['!lads', 'meet a Little Lads teammate'], ['!card', 'show your Little Lads badge card']
 ];
 function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.flipY = false; t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return [c, t]; }
 function hd2d(c) { const x = c.getContext('2d'); x.setTransform(c.width / 1280, 0, 0, c.height / 720, 0, 0); return x; }     // draw in 1280x720 units onto a 1920x1080 canvas
@@ -1556,7 +1699,7 @@ const cooldown = {};
 function runCommand(cmd, user, color, isMod) {
   if (ssChat(cmd, user || 'Rassir', isMod === undefined ? true : isMod)) return;
   const t = clock.getElapsedTime(), now = performance.now();
-  const cd = { '!spawn': 0, '!club': 0, '!fight': 0, '!bit': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000, '!airdrop': 20000, '!vault': 8000 }[cmd];
+  const cd = { '!spawn': 0, '!club': 0, '!fight': 0, '!bit': 0, '!dance': 15000, '!rain': 20000, '!fireworks': 8000, '!lights': 6000, '!ad': 15000, '!airdrop': 20000, '!vault': 8000, '!lads': 20000, '!card': 10000 }[cmd];
   if (cd === undefined) return;
   if (cd && cooldown[cmd] && now - cooldown[cmd] < cd) return;
   cooldown[cmd] = now;
@@ -1587,6 +1730,7 @@ function runCommand(cmd, user, color, isMod) {
   if (cmd === '!lights') toast(user + ' switched to ' + nextLights());
   if (cmd === '!airdrop') { airdrop(user); toast(user + ' called in an airdrop over Zone Zero'); }
   if (cmd === '!vault') vaultShowUser(user);
+  if (cmd === '!lads' || cmd === '!card') ladsChat(cmd, user);
   if (cmd === '!ad') { chatLines.push({ user: 'LSC', color: '#38e8ff', text: 'Want a billboard in Lucid State City? Message Rassir to rent an ad slot.' }); drawChat(); toast('Billboards for rent: message Rassir'); }
 }
 $('cmdbtns').innerHTML = COMMANDS.map(([c]) => `<button data-c="${c}">${c}</button>`).join('');
@@ -2160,7 +2304,7 @@ const ZONE_SHOTS = [
   ['summit', 'Ice peak', [35, 22.5, -50], [44, 20, -60], 55], ['summit', 'Waterfall', [8, -3, 44], [-8, -6, 62], 55], ['summit', 'Helipad', [22, 5, 30], [38, 2, 16], 55],
   ['hollow', 'Hollow square', [0, 6, 34], [0, 6, -12], 58], ['hollow', 'Mansion gate', [10, 21, -50], [0, 25, -92], 58], ['hollow', 'Graveyard', [18, 4.5, 15], [45, 1.2, 8], 58],
   ['hollow', 'Church', [30, 5, 3], [42, 17, -20], 60], ['hollow', 'Castle woods', [-40, 8, -16], [-110, 42, -60], 55], ['hollow', 'Bus stop', [-4, 3, 52], [9.6, 2, 44], 55],
-  ['zero', 'Firebase', [0, 6.5, 20], [0, 6, -12], 62], ['zero', 'Operator vault', [-8.5, 4.6, 9], [-21, 4.6, 9], 52], ['zero', 'Overlook', [-28, 15, 28], [6, 2, -16], 60], ['zero', 'Airfield', [20, 4, 7], [36, 2.5, -6], 55],
+  ['zero', 'Firebase', [0, 6.5, 20], [0, 6, -12], 62], ['zero', 'Operator vault', [-8.5, 4.6, 9], [-21, 4.6, 9], 52], ['zero', 'Lads case', [13.6, 5.1, 2.4], [22.4, 4.7, 1.6], 52], ['zero', 'Overlook', [-28, 15, 28], [6, 2, -16], 60], ['zero', 'Airfield', [20, 4, 7], [36, 2.5, -6], 55],
   ['zero', 'Ruins', [-38, 3, 14], [-72, 8, -8], 58], ['zero', 'Tank line', [0, 4.5, -56], [0, 2.2, -40], 55], ['zero', 'Supply drop', [38, 4, 60], [24, 7, 38], 55], ['zero', 'Truck depot', [-4, 3, 74], [8, 2, 50], 55], ['zero', 'The circle', [0, 120, 215], [0, 0, -40], 62],
   ['abyss', 'Abyss window', [0, 2.2, 4], [0, 1.5, -40], 60], ['abyss', 'Dark room', [0, 2.4, 18], [0, 3.9, 33], 62], ['abyss', 'Trench', [-30, 6, -18], [10, -25, -70], 60], ['abyss', 'Kraken', [14, -28, -40], [34, -48, -70], 58],
   ['abyss', 'Bunker outside', [-34, 10, -30], [0, 3, 10], 58], ['abyss', 'Seafloor', [30, 4, 44], [0, 4, 20], 58]];
@@ -3306,7 +3450,7 @@ function buildZero() {
     add(-7, -36, 0.2, 'idle'); add(7.5, -36.5, -0.4, 'idle'); add(-1, -35, 0, 'idle'); add(-22, 21.5, Math.PI, 'aim');
     for (let sq = 0; sq < 3; sq++) for (let k = 0; k < 4; k++) { const p = NPC.make({ style: 'mil', seed: 900 + sq * 31 + k * 7 }); S.add(p); ZZ.patrol.push({ o: p, u: sq / 3 + k * 0.006, step: 0 }); } }
   // operator vault
-  buildVault();
+  buildVault(); buildLadsCase();
 }
 function zzNewDrop(spot, delay, user) {
   const S = ZZ.scene, c = zzChute(spot % 2 ? 0xd8d4c8 : 0xc83a2a, true), [x, z] = ZZ.dropSpots[spot % ZZ.dropSpots.length]; c.position.set(x, 75, z); S.add(c);
@@ -3383,7 +3527,7 @@ function zeroTick(dt, t) {
     spawned.forEach(w => { if (ZZ.viewers[w.user]) return; const col = w.o.userData.col || '#ff2d8f', p = NPC.make({ style: 'mil', col: new THREE.Color(col).getHex(), viewer: true, seed: NPC.hash(w.user) });
       const ns = nameSprite(w.user, col); ns.position.y = 2.4; p.add(ns); ZZ.scene.add(p); ZZ.viewers[w.user] = { o: p, a: Math.random() * 7, r: 30 + Math.random() * 4, sp: 0.07 + Math.random() * 0.03, step: 0 }; }); }
   Object.values(ZZ.viewers).forEach(v => { v.a += dt * v.sp; v.o.position.set(Math.cos(v.a) * v.r, 0, Math.sin(v.a) * v.r); v.o.rotation.y = -v.a + Math.PI; v.step += dt * v.sp * v.r * 2.7; NPC.pose(v.o, 'walk', t, 0, v.step); });
-  vaultTick(t);
+  vaultTick(t); ladsCaseTick(t);
 }
 // ---------------------------------------------------------------- the military convoy trip (city <-> Zone Zero)
 const zDust = document.createElement('div'); zDust.style.cssText = 'position:fixed;inset:-10%;pointer-events:none;z-index:7;opacity:0;transform:scale(1.2);background:radial-gradient(circle at 25% 35%,#c8a070 0,rgba(184,140,90,.95) 22%,rgba(160,120,80,0) 46%),radial-gradient(circle at 70% 30%,#b89060 0,rgba(170,130,84,.95) 24%,rgba(150,110,70,0) 48%),radial-gradient(circle at 50% 72%,#a88050 0,rgba(150,112,72,.95) 26%,rgba(140,100,60,0) 52%),#9a7650';
@@ -3797,6 +3941,102 @@ function delVault(i) { vaultItems.splice(i, 1); store.set('vault', vaultItems); 
 function vaultShowUser(user) { const mine = vaultItems.filter(v => v.name.toLowerCase() === String(user).toLowerCase()); if (!mine.length) { toast(user + ' has no Vault items yet'); return; }
   const order = ['mythic', 'legendary', 'epic', 'rare', 'common'], best = mine.slice().sort((a, b) => order.indexOf(a.rarity) - order.indexOf(b.rarity))[0];
   vaultPopShow(best, (user + "'s vault").toUpperCase(), mine.length + ' item' + (mine.length === 1 ? '' : 's') + ' · best: ' + ((VD.types[best.type] || {}).s || {})[best.style]); }
+// ---------------------------------------------------------------- LITTLE LADS: team badge cards (MW4 squad) with a Badge Card Case in Zone Zero and an animated on-stream reveal
+let lads = store.get('lads', []); if (!Array.isArray(lads)) lads = [];
+const LTH = {};
+const ladPic = id => store.get('ladpic_' + id, null);
+function ladsList() { return lads.map(l => Object.assign({}, l, { thumb: LTH[l.id] || null })); }
+function ladsThumbs() { lads.forEach(l => { if (LTH[l.id] !== undefined) return; LTH[l.id] = null; const p = ladPic(l.id); if (!p) return; const im = new Image();
+  im.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 96; c.getContext('2d').drawImage(im, 0, 0, 96, 96); LTH[l.id] = c.toDataURL('image/jpeg', 0.72); LL.render(ladsList()); postState(); }; im.src = p; }); }
+function ladsSync() { store.set('lads', lads); ladsThumbs(); LL.render(ladsList()); LC.dirty = true; postState(); }
+function ladFind(who) { who = String(who || '').toLowerCase().replace(/^@/, ''); return lads.find(l => (l.tw && l.tw.toLowerCase() === who) || String(l.name).toLowerCase() === who); }
+function ladsAct(op, d) {
+  if (op === 'save') { const L = d.lad; if (!L || !L.id || !L.name) return; const i = lads.findIndex(l => l.id === L.id), old = i >= 0 ? lads[i] : null;
+    if (d.pic !== undefined) { if (d.pic) { if (!store.set('ladpic_' + L.id, d.pic)) setStatus('Storage is full: the photo could not be saved. Remove an old billboard ad or teammate photo.'); } else localStorage.removeItem('lsc_ladpic_' + L.id); delete LTH[L.id]; LC.pics[L.id] = null; }
+    if (old) { L.no = old.no; L.added = old.added; lads[i] = L; } else { L.no = lads.reduce((m, l) => Math.max(m, l.no || 0), 0) + 1; L.added = Date.now(); lads.push(L); }
+    ladsSync(); setStatus(old ? 'Saved ' + L.name + "'s badge card." : L.name + ' joined the Little Lads.');
+    if (d.pop) { if (!old) ladPop(L, 'recruit'); else if ((L.rank | 0) > (old.rank | 0)) ladPop(L, 'promo'); } return; }
+  if (op === 'del') { const i = lads.findIndex(l => l.id === d.id); if (i < 0) return; const n = lads[i].name; lads.splice(i, 1); localStorage.removeItem('lsc_ladpic_' + d.id); delete LTH[d.id]; ladsSync(); setStatus(n + ' was removed from the team.'); return; }
+  if (op === 'show') { const L = lads.find(l => l.id === d.id); if (L) ladPop(L, 'card'); return; }
+  if (op === 'roster') { if (!lads.length) { toast('No Little Lads yet'); return; } lads.slice().sort((a, b) => (b.rank | 0) - (a.rank | 0) || a.no - b.no).forEach((L, i, A) => ladPop(L, 'roster', (i + 1) + ' / ' + A.length)); return; }
+  if (op === 'case') { if (LC.focus) focusMesh(LC.focus, 'Little Lads · Badge Card Case'); return; }
+}
+// ---- the Badge Card Case (Zone Zero, east wall of the firebase)
+const LC = { g: null, cards: [], focus: null, dirty: true, n: 0, page: 0, pageT: 0, flip: -1, pics: {} };
+const LC_COLS = 4, LC_ROWS = 2, LC_PER = LC_COLS * LC_ROWS;
+function buildLadsCase() {
+  const S = ZZ.scene, g = new THREE.Group(); g.position.set(22.4, 0, 1.6); g.rotation.y = -Math.PI / 2; S.add(g); LC.g = g;
+  const W = 9.6, metal = new THREE.MeshStandardMaterial({ color: 0x1a1a20, metalness: 0.85, roughness: 0.35 }), gold = new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffcf4a, emissiveIntensity: 1.6 });
+  const box = (w, h, d, x, y, z, m) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m || metal); b.position.set(x, y, z); g.add(b); return b; };
+  box(W + 0.8, 1.1, 2, 0, 0.55, 0); box(W + 0.8, 0.5, 2, 0, 7.55, 0);                       // plinth + roof
+  box(0.4, 7, 2, -W / 2 - 0.2, 4, 0); box(0.4, 7, 2, W / 2 + 0.2, 4, 0);                       // side posts
+  { const [bc, bt] = zCanvasTex(1024, 512), x = bc.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#1c1406'); gr.addColorStop(1, '#07060a'); x.fillStyle = gr; x.fillRect(0, 0, 1024, 512);
+    x.globalAlpha = 0.08; x.strokeStyle = '#ffcf4a'; x.lineWidth = 10; for (let y = -40; y < 560; y += 46) { x.beginPath(); x.moveTo(0, y + 26); x.lineTo(512, y); x.lineTo(1024, y + 26); x.stroke(); }
+    x.globalAlpha = 0.1; x.fillStyle = '#ffcf4a'; x.font = '400 300px Anton, Impact, sans-serif'; x.textAlign = 'center'; x.fillText('LL', 512, 360); bt.needsUpdate = true;
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(W, 6.4), new THREE.MeshBasicMaterial({ map: bt, toneMapped: false, color: 0x777777 })); back.position.set(0, 4.3, -0.8); g.add(back); }
+  [[0, 1.12], [0, 7.28]].forEach(([, y]) => box(W, 0.07, 0.07, 0, y, 0.95, gold)); [-1, 1].forEach(s => box(0.07, 6.2, 0.07, s * W / 2, 4.2, 0.95, gold));
+  [1.35, 4.15].forEach(y => { box(W - 0.3, 0.1, 1.2, 0, y, -0.15, metal); box(W - 0.3, 0.04, 0.04, 0, y + 0.06, 0.45, gold); });
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(W, 6.2), new THREE.MeshStandardMaterial({ color: 0x9fc4ff, metalness: 1, roughness: 0.04, transparent: true, opacity: 0.1, depthWrite: false })); glass.position.set(0, 4.2, 1); g.add(glass);
+  const sign = zSign('LITTLE LADS', 'MW4 SQUAD  ·  BADGE CARD CASE', '#ffcf4a', 9.5); sign.position.set(0, 9.25, 0.2); g.add(sign);
+  for (let i = 0; i < LC_PER; i++) { const c = document.createElement('canvas'); c.width = 384; c.height = 576; const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1.72, 2.58), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: 0xd8d8d8, transparent: true }));
+    const col = i % LC_COLS, row = Math.floor(i / LC_COLS), base = new THREE.Vector3((col - 1.5) * 2.3, row ? 2.72 : 5.52, 0.15); m.position.copy(base); g.add(m);
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.5), metal); stand.position.set(base.x, base.y - 1.38, 0.05); g.add(stand);
+    LC.cards.push({ m, c, x: c.getContext('2d'), tex, base, ph: i * 0.7, slot: i }); }
+  const L = new THREE.SpotLight(0xffe6b0, 1.5, 24, 0.7, 0.6); L.position.set(12, 11, 1.6); L.target.position.set(22.4, 4, 1.6); S.add(L, L.target);
+  LC.focus = new THREE.Mesh(new THREE.PlaneGeometry(W + 1, 9.4), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); LC.focus.position.set(0, 5.1, 1.05); LC.focus.name = 'LADS_CASE'; LC.focus.userData.zone = 'zero'; g.add(LC.focus); extraScreens.push(LC.focus);
+}
+function ladImg(id) { if (LC.pics[id] === undefined || LC.pics[id] === null) { const p = ladPic(id); LC.pics[id] = p ? LL.img(p) : false; } return LC.pics[id] || null; }
+function ladsCaseTick(t) {
+  if (!LC.g || ZONES.cur !== 'zero') return; if (cam.position.distanceTo(LC.g.position) > 75) return;
+  const pages = Math.max(1, Math.ceil(lads.length / LC_PER)); if (pages > 1 && t - LC.pageT > 12) { LC.pageT = t; LC.flip = t; }
+  const order = lads.slice().sort((a, b) => (b.rank | 0) - (a.rank | 0) || a.no - b.no);
+  let fk = LC.flip >= 0 ? (t - LC.flip) / 0.9 : -1; if (fk >= 0.5 && LC.flipped !== LC.flip) { LC.flipped = LC.flip; LC.page = (LC.page + 1) % pages; LC.dirty = true; } if (fk > 1) { LC.flip = -1; fk = -1; }
+  if (LC.page >= pages) LC.page = 0;
+  LC.n++; const redraw = LC.dirty || LC.n % 3 === 0; LC.dirty = false;
+  LC.cards.forEach((C, i) => { const L = order[LC.page * LC_PER + i], m = C.m;
+    m.position.y = C.base.y + Math.sin(t * 1.1 + C.ph) * 0.05; m.rotation.y = Math.sin(t * 0.5 + C.ph) * 0.12 + (fk >= 0 ? (fk < 0.5 ? fk : 1 - fk) * Math.PI * (i % 2 ? 1 : -1) : 0);
+    if (!redraw) return; const x = C.x; x.setTransform(384 / 600, 0, 0, 576 / 900, 0, 0); x.clearRect(0, 0, 600, 900);
+    if (L) LL.drawCard(x, L, ladImg(L.id), t + C.ph); else LL.drawBack(x, 'gold', t, 'OPEN SLOT  ·  NOW RECRUITING');
+    if (L && L.added && Date.now() - L.added < 600000) { x.fillStyle = Math.floor(t * 3) % 2 ? '#ff2a4a' : '#ffe066'; LL.rr(x, 420, 136, 150, 50, 10); x.fill(); x.fillStyle = '#000'; x.font = '400 36px Anton, Impact, sans-serif'; x.textAlign = 'center'; x.fillText('NEW', 495, 175); }
+    C.tex.needsUpdate = true; }); }
+// ---- on-stream reveal pop-up
+const lpC = document.createElement('canvas'); lpC.width = 1280; lpC.height = 720; lpC.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9;display:none'; document.body.appendChild(lpC);
+const lpFront = document.createElement('canvas'), lpBack = document.createElement('canvas'); lpFront.width = lpBack.width = 600; lpFront.height = lpBack.height = 900;
+const LPQ = { q: [], cur: null };
+function ladPop(L, kind, extra) { LPQ.q.push({ L: Object.assign({}, L), kind, extra }); if (!LPQ.cur) ladPopNext(); }
+function ladPopNext() { const n = LPQ.q.shift(); if (!n) { LPQ.cur = null; lpC.style.display = 'none'; return; } LPQ.cur = Object.assign(n, { t0: performance.now(), dur: n.kind === 'roster' ? 5.2 : n.kind === 'card' ? 7.5 : 9, sfx: false, parts: [] });
+  const th = LL.THEMES[n.L.theme] || LL.THEMES.gold; LL.drawBack(lpBack.getContext('2d'), th, 0); lpC.style.display = 'block'; try { whoosh(1.1); } catch (e) {}
+  const step = () => { const C = LPQ.cur; if (!C) return; const el = (performance.now() - C.t0) / 1000; ladPopDraw(C, el); if (el > C.dur) { LPQ.cur = null; setTimeout(ladPopNext, 120); return; } requestAnimationFrame(step); }; step(); }
+function ladPopDraw(C, el) {
+  const x = lpC.getContext('2d'), w = 1280, h = 720, L = C.L, th = LL.THEMES[L.theme] || LL.THEMES.gold, out = Math.max(0, (el - (C.dur - 0.6)) / 0.6), inA = Math.min(1, el / 0.35);
+  const ro = C.kind === 'roster', flipAt = ro ? 0.35 : 0.75, flipLen = 0.55;
+  x.clearRect(0, 0, w, h); x.globalAlpha = (1 - out) * inA;
+  const rg = x.createRadialGradient(w / 2, h / 2, 40, w / 2, h / 2, 760); rg.addColorStop(0, 'rgba(6,5,10,.86)'); rg.addColorStop(0.75, 'rgba(6,5,10,.72)'); rg.addColorStop(1, 'rgba(6,5,10,.35)'); x.fillStyle = rg; x.fillRect(0, 0, w, h);
+  x.save(); x.translate(w / 2, h / 2 + 18); x.rotate(el * 0.25); x.fillStyle = th.a; x.globalAlpha *= 0.16; for (let i = 0; i < 18; i++) { x.rotate(Math.PI / 9); x.beginPath(); x.moveTo(0, 0); x.lineTo(-34, -800); x.lineTo(34, -800); x.fill(); } x.restore(); x.globalAlpha = (1 - out) * inA;
+  // card flight + flip
+  const fly = ro ? 1 : Math.min(1, el / flipAt), eo = 1 - Math.pow(1 - fly, 3), back = el < flipAt + flipLen / 2;
+  const fa = Math.min(1, Math.max(0, (el - flipAt) / flipLen)), sx = Math.max(0.02, Math.abs(Math.cos(fa * Math.PI)));
+  if (!back) LL.drawCard(lpFront.getContext('2d'), L, ladImg(L.id), el);
+  if (!back && !C.sfx) { C.sfx = true; try { vtStinger(C.kind === 'recruit' || C.kind === 'promo' ? 'legendary' : 'epic'); } catch (e) {} for (let i = 0; i < 46; i++) { const a = Math.random() * 6.283, v = 160 + Math.random() * 420; C.parts.push({ x: 0, y: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: el, c: Math.random() < 0.5 ? th.a : th.b }); } }
+  const ch = 548, cw = ch * 600 / 900, cy = h / 2 + 22 + (1 - eo) * 520 - out * 60;
+  x.save(); x.translate(w / 2, cy); x.rotate((1 - eo) * -0.5); const wob = back ? 0 : Math.sin(el * 1.3) * 0.035; x.transform(sx * (1 - Math.abs(wob)), wob * 0.6, 0, 1, 0, 0); const sc = 0.75 + 0.25 * eo; x.scale(sc, sc);
+  x.shadowColor = th.a; x.shadowBlur = 50; x.drawImage(back ? lpBack : lpFront, -cw / 2, -ch / 2, cw, ch); x.shadowBlur = 0;
+  if (fa > 0.4 && fa < 1) { x.globalAlpha *= (1 - fa) * 1.6; x.fillStyle = '#fff'; LL.rr(x, -cw / 2, -ch / 2, cw, ch, 24); x.fill(); x.globalAlpha = (1 - out) * inA; } x.restore();
+  C.parts.forEach(p => { const k = el - p.t; if (k > 1.6) return; x.globalAlpha = (1 - k / 1.6) * (1 - out); x.fillStyle = p.c; x.beginPath(); x.arc(w / 2 + p.x + p.vx * k, cy + p.y + p.vy * k + 120 * k * k, 3 + (p.vx % 3 + 3) / 2, 0, 7); x.fill(); }); x.globalAlpha = (1 - out) * inA;
+  // text
+  const head = { recruit: 'NEW RECRUIT', promo: 'PROMOTED!', card: 'LITTLE LADS', roster: 'LITTLE LADS ROSTER' }[C.kind] || 'LITTLE LADS', ts = ro ? 0 : flipAt + flipLen * 0.5, k = Math.max(0, el - ts);
+  const shown = head.slice(0, Math.floor(k * 30)); x.textAlign = 'center'; x.font = '400 64px Anton, Impact, sans-serif'; x.shadowColor = th.a; x.shadowBlur = 26; x.fillStyle = '#fff'; x.fillText(shown, w / 2, 70); x.shadowBlur = 0;
+  if (k > 0) { x.fillStyle = th.a; const bw = 540 * Math.min(1, k / 0.6); x.fillRect(w / 2 - bw / 2, 86, bw, 5); }
+  const sub = C.kind === 'recruit' ? 'WELCOME TO THE LITTLE LADS, ' + String(L.name).toUpperCase() : C.kind === 'promo' ? String(L.name).toUpperCase() + ' IS NOW ' + LL.rankName(L).toUpperCase() : C.kind === 'roster' ? (C.extra || '') + '  ·  ' + LL.rankName(L).toUpperCase() + (L.role ? '  ·  ' + L.role.toUpperCase() : '') : LL.rankName(L).toUpperCase() + (L.role ? '  ·  ' + L.role.toUpperCase() : '');
+  if (k > 0.5) { x.globalAlpha = Math.min(1, (k - 0.5) * 2) * (1 - out); x.font = '400 34px Anton, Impact, sans-serif'; x.fillStyle = th.a; x.shadowColor = '#000'; x.shadowBlur = 10; x.fillText(sub, w / 2, h - 20); x.shadowBlur = 0; }
+  if (C.kind === 'recruit' && k > 1.2) { x.globalAlpha = Math.min(1, (k - 1.2) * 2) * (1 - out); x.font = '700 22px Poppins, sans-serif'; x.fillStyle = '#e6e6ff'; x.textAlign = 'left'; x.fillText('WANT IN? MESSAGE RASSIR ON DISCORD', 30, h - 24); x.textAlign = 'center'; }
+  x.globalAlpha = 1; }
+// ---- chat
+function ladsChat(cmd, user) {
+  if (cmd === '!lads') { if (!lads.length) { toast('The Little Lads are recruiting! Message Rassir on Discord'); return; } const L = lads[Math.random() * lads.length | 0]; ladPop(L, 'card'); toast('Meet ' + L.name + ' of the Little Lads · ' + lads.length + ' members'); }
+  if (cmd === '!card') { const L = ladFind(user); if (L) ladPop(L, 'card'); else toast(user + " isn't a Little Lad yet... message Rassir on Discord to join"); } }
+LL.panel(ladsAct); ladsThumbs(); LL.render(ladsList());
 
 // ---------------------------------------------------------------- SESSION STATS: wins, losses, KOs, kills... per game, on the commands screens + a stats box on stream + streak pop-ups
 function ssGameObj(create) { if (!SS.game) { if (!create) return null; SS.game = 'Game'; } let g = SS.games[SS.game]; if (!g) { g = SS.games[SS.game] = { preset: SS.preset || 'fighting', c: {}, streak: 0, best: 0, at: Date.now() }; } return g; }
@@ -5003,7 +5243,7 @@ function postState() {
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
       al: alState(), ver: (location.pathname.match(/[0-9a-f]{40}/) || ['dev'])[0],
-      show: SHOW.mode, showLen: SHOW.len, introStyle, showTheme, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, cleanRec, champs, vault: vaultItems, stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
+      show: SHOW.mode, showLen: SHOW.len, introStyle, showTheme, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, cleanRec, champs, vault: vaultItems, lads: ladsList(), stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -5040,6 +5280,7 @@ if (bc) bc.onmessage = e => {
     case 'champ': addChamp(d.item, d.spot); break;
     case 'champdel': delChamp(d.i); break;
     case 'vault': addVault(d.item, d.pop, d.spot); break;
+    case 'lads': ladsAct(d.op, d); break;
     case 'vaultdel': delVault(d.i); break;
     case 'stats': statsCmd(d.op, d); break;
     case 'vaultshow': if (VT.mesh) focusMesh(VT.mesh, 'Operator Vault'); break;
@@ -5118,6 +5359,7 @@ if (window.LSC_CONTROL) {
     if (st.champs) { const key = JSON.stringify(st.champs); if (key !== $('chList')._k) { $('chList')._k = key; $('chList').innerHTML = st.champs.length ? '' : '<p class="note">No champions yet.</p>';
       st.champs.forEach((c, i) => { const row = document.createElement('div'); row.className = 'chrow'; row.innerHTML = `<span><b>${esc(c.name)}</b> · ${esc(CHT[c.type] || c.type)} · ${esc(c.award || '')}<br><i>${esc(c.game || '')}</i></span><button data-i="${i}">✕</button>`; $('chList').appendChild(row); }); } }
     if (st.stats) ssRenderPanel(st.stats, (op, d) => send('stats', Object.assign({ op }, d)));
+    if (st.lads && window.LL) LL.render(st.lads);
     if (st.vault) { const key = JSON.stringify(st.vault); if (key !== $('vtList')._k) { $('vtList')._k = key; const D = VDEF; $('vtList').innerHTML = st.vault.length ? '' : '<p class="note">No items given yet.</p>';
       st.vault.forEach((c, i) => { const T = D.types[c.type] || {}, R = D.rar[c.rarity] || D.rar.epic, row = document.createElement('div'); row.className = 'chrow'; row.innerHTML = `<span><b>${esc(c.name)}</b> · <span style="color:${R[1]}">${R[0]}</span> ${esc(T.n || c.type)}<br><i>${esc((T.s || {})[c.style] || c.style)}${c.title ? ' · ' + esc(c.title) : ''}</i></span><button data-i="${i}">✕</button>`; $('vtList').appendChild(row); }); } }
   }
@@ -5162,6 +5404,7 @@ if (window.LSC_CONTROL) {
     send('champ', { item: { name, game: $('chGame').value.trim(), award: $('chAward').value.trim() || 'Champion', type: $('chType').value, metal: $('chMetal').value, added: Date.now() }, spot: $('chSpot').checked }); $('chName').value = ''; status('Added ' + name + ' to the Hall of Champions.'); };
   $('chList').onclick = e => { const b = e.target.closest('button'); if (b) send('champdel', { i: +b.dataset.i }); };
   vtFillSelects(); $('vtType').onchange = () => vtFillSelects();
+  LL.panel((op, d) => send('lads', Object.assign({ op }, d)));
   $('vtAdd').onclick = () => { const name = $('vtName').value.trim(); if (!name) { status('Type a name for the player first.'); return; }
     send('vault', { item: { name, type: $('vtType').value, style: $('vtStyle').value, rarity: $('vtRarity').value, title: $('vtTitle').value.trim(), added: Date.now() }, pop: $('vtPop').checked, spot: $('vtSpot').checked }); $('vtName').value = ''; status('Gave ' + name + ' a ' + VDEF.rar[$('vtRarity').value][0] + ' ' + VDEF.types[$('vtType').value].n + '.'); };
   $('vtList').onclick = e => { const b = e.target.closest('button'); if (b) send('vaultdel', { i: +b.dataset.i }); };
@@ -5238,7 +5481,7 @@ if (window.LSC_CONTROL) {
     {k:'bay',n:'Lucid Bay',c:'#ffb04a',shots:['Bay stage','Beach view','Ocean Drive','Pier & wheel'],screens:['Bay main screen','Bay cam','Bay chat','Bay commands']},
     {k:'summit',n:'Crimson Summit',c:'#ff3a3a',shots:['Summit arena','Temple','Lava arena','Ice peak','Waterfall','Helipad'],screens:['Summit main screen','Summit cam','Summit chat','Summit commands']},
     {k:'hollow',n:'Ashen Hollow',c:'#b8382a',shots:['Hollow square','Mansion gate','Graveyard','Church','Castle woods','Bus stop'],screens:['Hollow main screen','Hollow cam','Hollow chat','Hollow commands']},
-    {k:'zero',n:'Zone Zero',c:'#c87a2a',shots:['Firebase','Operator vault','Overlook','Airfield','Ruins','Tank line','Supply drop','Truck depot','The circle'],screens:['Zero main screen','Zero cam','Zero chat','Zero commands','Operator Vault']},
+    {k:'zero',n:'Zone Zero',c:'#c87a2a',shots:['Firebase','Operator vault','Lads case','Overlook','Airfield','Ruins','Tank line','Supply drop','Truck depot','The circle'],screens:['Zero main screen','Zero cam','Zero chat','Zero commands','Operator Vault']},
     {k:'abyss',n:'The Abyss',c:'#1fd6c4',shots:['Abyss window','Dark room','Trench','Kraken','Bunker outside','Seafloor'],screens:['Abyss main screen','Abyss cam','Abyss chat','Abyss commands']},
     {k:'bit',n:'B.I.T.',c:'#9a5aff',shots:['B.I.T. outside','Giant CRT','CRT stations','B.I.T. floor','Y2K Lounge'],screens:['B.I.T. giant CRT','CRT 1','CRT 2','CRT 3','B.I.T. door screen','B.I.T. cam','B.I.T. chat','B.I.T. commands']}];
   const SHORT={'Abyss window':'Window','Dark room':'Dark Room','Bunker outside':'Bunker','Abyss main screen':'Main screen','Abyss cam':'Cam','Abyss chat':'Chat','Abyss commands':'Commands','Operator vault':'Vault','The circle':'Circle','Zero main screen':'Main screen','Zero cam':'Cam','Zero chat':'Chat','Zero commands':'Commands','Operator Vault':'Vault wall','Hollow square':'Square','Mansion gate':'Mansion','Castle woods':'Castle','Hollow main screen':'Main screen','Hollow cam':'Cam','Hollow chat':'Chat','Hollow commands':'Commands','Summit arena':'Arena','Lava arena':'Lava','Summit main screen':'Main screen','Summit cam':'Cam','Summit chat':'Chat','Summit commands':'Commands','Bay stage':'Stage','Beach view':'Beach','Pier & wheel':'Pier','Harbor dock':'Harbor','Bay main screen':'Main screen','Bay cam':'Cam','Bay chat':'Chat','Bay commands':'Commands','Space station':'Station','Space wide':'Wide','Planets view':'Planets','Planet landing':'Landing','Planet sky view':'Sky view','Space main screen':'Main screen','Space cam':'Cam','Space chat':'Chat','Space commands':'Commands','Planet main screen':'Main screen','Planet cam':'Cam','Planet chat':'Chat','Planet commands':'Commands','Street walk':'Walk the city','Follow player':'Follow a player','Fight Club outside':'Outside','B.I.T. outside':'Outside','Club outside':'Outside','Fight Club floor':'Floor','B.I.T. floor':'Floor','Club floor':'Floor','Zero Cool':'Entrance',
