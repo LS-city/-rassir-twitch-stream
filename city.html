@@ -2304,7 +2304,7 @@ const ZONE_SHOTS = [
   ['summit', 'Ice peak', [35, 22.5, -50], [44, 20, -60], 55], ['summit', 'Waterfall', [8, -3, 44], [-8, -6, 62], 55], ['summit', 'Helipad', [22, 5, 30], [38, 2, 16], 55],
   ['hollow', 'Hollow square', [0, 6, 34], [0, 6, -12], 58], ['hollow', 'Mansion gate', [10, 21, -50], [0, 25, -92], 58], ['hollow', 'Graveyard', [18, 4.5, 15], [45, 1.2, 8], 58],
   ['hollow', 'Church', [30, 5, 3], [42, 17, -20], 60], ['hollow', 'Castle woods', [-40, 8, -16], [-110, 42, -60], 55], ['hollow', 'Bus stop', [-4, 3, 52], [9.6, 2, 44], 55],
-  ['zero', 'Firebase', [0, 6.5, 20], [0, 6, -12], 62], ['zero', 'Operator vault', [-8.5, 4.6, 9], [-21, 4.6, 9], 52], ['zero', 'Lads case', [13.6, 5.1, 2.4], [22.4, 4.7, 1.6], 52], ['zero', 'Overlook', [-28, 15, 28], [6, 2, -16], 60], ['zero', 'Airfield', [20, 4, 7], [36, 2.5, -6], 55],
+  ['zero', 'Firebase', [0, 6.5, 20], [0, 6, -12], 62], ['zero', 'Operator vault', [-8.5, 4.6, 9], [-21, 4.6, 9], 52], ['zero', 'Lads case', [13.2, 5.1, 3.6], [22.4, 4.7, 3.6], 52], ['zero', 'Overlook', [-28, 15, 28], [6, 2, -16], 60], ['zero', 'Airfield', [20, 4, 7], [36, 2.5, -6], 55],
   ['zero', 'Ruins', [-38, 3, 14], [-72, 8, -8], 58], ['zero', 'Tank line', [0, 4.5, -56], [0, 2.2, -40], 55], ['zero', 'Supply drop', [38, 4, 60], [24, 7, 38], 55], ['zero', 'Truck depot', [-4, 3, 74], [8, 2, 50], 55], ['zero', 'The circle', [0, 120, 215], [0, 0, -40], 62],
   ['abyss', 'Abyss window', [0, 2.2, 4], [0, 1.5, -40], 60], ['abyss', 'Dark room', [0, 2.4, 18], [0, 3.9, 33], 62], ['abyss', 'Trench', [-30, 6, -18], [10, -25, -70], 60], ['abyss', 'Kraken', [14, -28, -40], [34, -48, -70], 58],
   ['abyss', 'Bunker outside', [-34, 10, -30], [0, 3, 10], 58], ['abyss', 'Seafloor', [30, 4, 44], [0, 4, 20], 58]];
@@ -3379,11 +3379,11 @@ function buildZero() {
   // command tent with camo net, radio mast, flag, floodlights, watchtowers
   { const net = smTex(256, 256, (x) => { x.clearRect(0, 0, 256, 256); const R = zRand(14); for (let i = 0; i < 260; i++) { x.fillStyle = ['rgba(70,78,46,0.9)', 'rgba(96,88,56,0.9)', 'rgba(44,50,32,0.9)'][i % 3]; x.beginPath(); x.ellipse(R() * 256, R() * 256, 4 + R() * 14, 3 + R() * 8, R() * 3, 0, 7); x.fill(); } }, [3, 3]);
     const nm = new THREE.Mesh(new THREE.PlaneGeometry(10, 8, 10, 8), new THREE.MeshStandardMaterial({ map: net, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 1 })); nm.rotation.x = -Math.PI / 2;
-    const p = nm.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, -Math.abs(Math.sin(p.getX(i) * 0.6) * Math.sin(p.getY(i) * 0.7)) * 0.6); nm.geometry.computeVertexNormals(); nm.position.set(15, 3.3, 10); S.add(nm);
-    [[11, 7], [19, 7], [11, 13], [19, 13]].forEach(([x, z]) => { const po = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.3, 5), zzM(0x2a2a24)); po.position.set(x, 1.65, z); S.add(po); });
-    const tbl = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 1.4), zzM(0x3a3a34)); tbl.position.set(15, 0.9, 10); S.add(tbl); const map = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.2), new THREE.MeshBasicMaterial({ color: 0x5a8a6a })); map.rotation.x = -Math.PI / 2; map.position.set(15, 0.96, 10); S.add(map);
-    [[13.6, 9.6], [16.4, 9.6]].forEach(([x, z]) => { const lp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 0.35), zzM(0x161616)); lp.position.set(x, 1.12, z); lp.rotation.x = -0.3; S.add(lp); const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.26), new THREE.MeshBasicMaterial({ color: 0x6affa0 })); sc.position.set(x, 1.2, z + 0.19); sc.rotation.x = -0.3; S.add(sc); });
-    const L = new THREE.PointLight(0xffd8a0, 1.2, 12, 2); L.position.set(15, 3, 10); S.add(L); }
+    const p = nm.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, -Math.abs(Math.sin(p.getX(i) * 0.6) * Math.sin(p.getY(i) * 0.7)) * 0.6); nm.geometry.computeVertexNormals(); nm.position.set(15, 3.3, 13.5); S.add(nm);
+    [[11, 10.5], [19, 10.5], [11, 16.5], [19, 16.5]].forEach(([x, z]) => { const po = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.3, 5), zzM(0x2a2a24)); po.position.set(x, 1.65, z); S.add(po); });
+    const tbl = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 1.4), zzM(0x3a3a34)); tbl.position.set(15, 0.9, 13.5); S.add(tbl); const map = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.2), new THREE.MeshBasicMaterial({ color: 0x5a8a6a })); map.rotation.x = -Math.PI / 2; map.position.set(15, 0.96, 13.5); S.add(map);
+    [[13.6, 13.1], [16.4, 13.1]].forEach(([x, z]) => { const lp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 0.35), zzM(0x161616)); lp.position.set(x, 1.12, z); lp.rotation.x = -0.3; S.add(lp); const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.26), new THREE.MeshBasicMaterial({ color: 0x6affa0 })); sc.position.set(x, 1.2, z + 0.19); sc.rotation.x = -0.3; S.add(sc); });
+    const L = new THREE.PointLight(0xffd8a0, 1.2, 12, 2); L.position.set(15, 3, 13.5); S.add(L); }
   { const m = new THREE.Group(); m.position.set(-14, 0, -21); S.add(m); const tm = zzM(0x8a8a86, { metalness: 0.6 }); for (let i = 0; i < 3; i++) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 24, 4), tm); const a = i / 3 * Math.PI * 2; l.position.set(Math.cos(a) * 0.5, 12, Math.sin(a) * 0.5); m.add(l); }
     for (let y = 1; y < 24; y += 1.5) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.03, 3, 3), tm); r.rotation.x = Math.PI / 2; r.position.y = y; m.add(r); }
     const dish = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 6, 0, Math.PI * 2, 0, 0.9), zzM(0xd8d8d0, { side: THREE.DoubleSide })); dish.position.set(0.8, 18, 0); dish.rotation.z = -1.2; m.add(dish);
@@ -3446,7 +3446,7 @@ function buildZero() {
   // soldiers: sentries at sandbags + by the trucks, crews, patrol squads outside the wire
   { const add = (x, z, ry, mode, ph) => { const p = NPC.make({ style: 'mil', seed: 500 + ZZ.soldiers.length * 13 }); p.position.set(x, 0, z); p.rotation.y = ry; S.add(p); ZZ.soldiers.push({ o: p, mode, ph: ph || Math.random() * 7 }); return p; };
     add(-6, 17.4, 0, 'aim'); add(-7.6, 16.8, 0.4, 'aim'); add(17, 13.3, 0, 'aim'); add(-40.6, -9, -1.4, 'aim'); add(-45.6, 23.2, -1.2, 'aim'); add(30, 36.6, Math.PI, 'aim'); add(35.2, -15, 1.8, 'aim');
-    add(12.6, 9, 2.4, 'idle'); add(17.2, 8.6, -2.6, 'idle'); add(15, 11.6, Math.PI, 'idle'); add(33, -1, -2, 'idle'); add(39, -2.6, 2.6, 'idle'); add(4.6, 40, 0.5, 'idle'); add(11.4, 50, -1.2, 'idle');
+    add(12.6, 12.5, 2.4, 'idle'); add(17.2, 12.1, -2.6, 'idle'); add(15, 15.1, Math.PI, 'idle'); add(33, -1, -2, 'idle'); add(39, -2.6, 2.6, 'idle'); add(4.6, 40, 0.5, 'idle'); add(11.4, 50, -1.2, 'idle');
     add(-7, -36, 0.2, 'idle'); add(7.5, -36.5, -0.4, 'idle'); add(-1, -35, 0, 'idle'); add(-22, 21.5, Math.PI, 'aim');
     for (let sq = 0; sq < 3; sq++) for (let k = 0; k < 4; k++) { const p = NPC.make({ style: 'mil', seed: 900 + sq * 31 + k * 7 }); S.add(p); ZZ.patrol.push({ o: p, u: sq / 3 + k * 0.006, step: 0 }); } }
   // operator vault
@@ -3965,7 +3965,7 @@ function ladsAct(op, d) {
 const LC = { g: null, cards: [], focus: null, dirty: true, n: 0, page: 0, pageT: 0, flip: -1, pics: {} };
 const LC_COLS = 4, LC_ROWS = 2, LC_PER = LC_COLS * LC_ROWS;
 function buildLadsCase() {
-  const S = ZZ.scene, g = new THREE.Group(); g.position.set(22.4, 0, 1.6); g.rotation.y = -Math.PI / 2; S.add(g); LC.g = g;
+  const S = ZZ.scene, g = new THREE.Group(); g.position.set(22.4, 0, 3.6); g.rotation.y = -Math.PI / 2; S.add(g); LC.g = g;
   const W = 9.6, metal = new THREE.MeshStandardMaterial({ color: 0x1a1a20, metalness: 0.85, roughness: 0.35 }), gold = new THREE.MeshStandardMaterial({ color: 0, emissive: 0xffcf4a, emissiveIntensity: 1.6 });
   const box = (w, h, d, x, y, z, m) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m || metal); b.position.set(x, y, z); g.add(b); return b; };
   box(W + 0.8, 1.1, 2, 0, 0.55, 0); box(W + 0.8, 0.5, 2, 0, 7.55, 0);                       // plinth + roof
@@ -3983,8 +3983,8 @@ function buildLadsCase() {
     const col = i % LC_COLS, row = Math.floor(i / LC_COLS), base = new THREE.Vector3((col - 1.5) * 2.3, row ? 2.72 : 5.52, 0.15); m.position.copy(base); g.add(m);
     const stand = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.5), metal); stand.position.set(base.x, base.y - 1.38, 0.05); g.add(stand);
     LC.cards.push({ m, c, x: c.getContext('2d'), tex, base, ph: i * 0.7, slot: i }); }
-  const L = new THREE.SpotLight(0xffe6b0, 1.5, 24, 0.7, 0.6); L.position.set(12, 11, 1.6); L.target.position.set(22.4, 4, 1.6); S.add(L, L.target);
-  LC.focus = new THREE.Mesh(new THREE.PlaneGeometry(W + 1, 9.4), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); LC.focus.position.set(0, 5.1, 1.05); LC.focus.name = 'LADS_CASE'; LC.focus.userData.zone = 'zero'; g.add(LC.focus); extraScreens.push(LC.focus);
+  const L = new THREE.SpotLight(0xffe6b0, 1.5, 24, 0.7, 0.6); L.position.set(12, 11, 3.6); L.target.position.set(22.4, 4, 3.6); S.add(L, L.target);
+  LC.focus = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.6, 7.9), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })); LC.focus.position.set(0, 4.15, 1.05); LC.focus.name = 'LADS_CASE'; LC.focus.userData.zone = 'zero'; g.add(LC.focus); extraScreens.push(LC.focus);
 }
 function ladImg(id) { if (LC.pics[id] === undefined || LC.pics[id] === null) { const p = ladPic(id); LC.pics[id] = p ? LL.img(p) : false; } return LC.pics[id] || null; }
 function ladsCaseTick(t) {
