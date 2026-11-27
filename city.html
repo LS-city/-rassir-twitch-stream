@@ -127,6 +127,7 @@ window.lscLatest = async () => { try { const j = await (await fetch('https://api
     <div id="placeDetail"></div>
     <label class="note" for="gpipMode" style="display:block;margin-top:14px">Gameplay corner screen</label>
     <select id="gpipMode"><option value="walk">While walking, following or orbiting</option><option value="always">Always on</option><option value="off">Off</option></select>
+    <label class="note" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="cleanRec" style="width:18px;min-height:18px"> Clean recording: on the main screen, hide all pop-ups and mute world music</label>
     <div hidden>  <h3>Camera</h3>
   <div class="row" id="shots"></div>
   <div class="row" style="margin-top:6px"><button id="tour" class="on">Auto tour</button></div>
@@ -1772,6 +1773,9 @@ $('camBg').value = store.get('cambg', 'lsc'); $('camBg').onchange = e => applyCa
 let gpipMode = store.get('gpip', 'walk'), gpipSrc = null;
 $('gpipMode').value = gpipMode;
 $('gpipMode').onchange = e => { gpipMode = e.target.value; store.set('gpip', gpipMode); postState(); };
+let cleanRec = !!store.get('cleanrec', false), cleanOn = false, cleanT = 0; $('cleanRec').checked = cleanRec;
+$('cleanRec').onchange = e => { cleanRec = e.target.checked; store.set('cleanrec', cleanRec); postState(); };
+{ const cs = document.createElement('style'); cs.textContent = 'body.cleanrec > *:not(#gfullV):not(canvas):not(#panel):not(#hint):not(script):not(style){visibility:hidden!important}'; document.head.appendChild(cs); }
 function updatePip() {
   const st = streams.SCREEN_GAMEPLAY || null;
   const moving = hold && !fly && (hold.s.walk || hold.s.follow || hold.s.orbit);
@@ -1781,6 +1785,8 @@ function updatePip() {
   // zoomed onto a gameplay screen: show the raw 1080p feed pixel-for-pixel over the 3D screen (no 3D resampling blur)
   const full = !!st && SHOW.mode === 'live' && !!focused && screens.GAMEPLAY.includes(focused) && !!hold && hold.s.still && !fly && !TR.on;
   const fv = $('gfullV'); if (full !== fv._on) { fv._on = full; fv.style.transition = full ? 'opacity .25s' : 'opacity .08s'; fv.style.opacity = full ? 1 : 0; }
+  // clean recording: once the game feed has faded in, hide every overlay (pop-ups, stats box, events) and mute world music
+  const want = cleanRec && full; if (want !== cleanOn) { if (!want) { cleanOn = false; cleanT = 0; document.body.classList.remove('cleanrec'); } else { if (!cleanT) cleanT = performance.now(); if (performance.now() - cleanT > 300) { cleanOn = true; document.body.classList.add('cleanrec'); } } } else if (!want) cleanT = 0;
 }
 // ---------------------------------------------------------------- keys + panel
 function setPanel(hidden) { $('panel').classList.toggle('hide', hidden); $('hint').classList.toggle('hide', hidden); store.set('hidden', hidden); }
@@ -4113,7 +4119,7 @@ function musSched() {
     MUS.lastSec = sec;
   }
   let tgt = MUS.on ? MUS.vol * 0.42 : 0;
-  if (sec === 'off') tgt = 0;
+  if (sec === 'off' || cleanOn) tgt = 0;
   if ((sec === 'land' || sec === 'f_land' || sec === 'z_land') && SHOW.mode === 'live') tgt *= Math.max(0, 1 - (n - MUS.landT - 3) / 6);
   if (MUS.duckUntil && c.currentTime < MUS.duckUntil) tgt *= 0.4;
   if (sec === 'outro') tgt *= Math.max(0.25, 1 - (n - SHOW.t0 - 60) / 60);
@@ -4886,7 +4892,7 @@ function postState() {
       mics: [...$('avMic').options].map(o => ({ v: o.value, t: o.text })), avMic: $('avMic').value, avSens: +$('avSens').value,
       expr: AV.expr, avSpot, avSpots: AVSPOTS, pipPos, pipSize,
       al: alState(), ver: (location.pathname.match(/[0-9a-f]{40}/) || ['dev'])[0],
-      show: SHOW.mode, showLen: SHOW.len, introStyle, showTheme, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, champs, vault: vaultItems, stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
+      show: SHOW.mode, showLen: SHOW.len, introStyle, showTheme, camBg: store.get('cambg', 'lsc'), gpip: gpipMode, cleanRec, champs, vault: vaultItems, stats: ssState(), adAddr: store.get('adaddr', {}), pa: { thumbs: PA.thumbs, list: adList(), dur: PA.dur, pos: PA.pos, auto: PA.auto, showing: PA.showing }, musOn: MUS.on, musVol: Math.round(MUS.vol * 100), scenes: showScenes, autoScene
     } });
   } catch (e) {}
 }
@@ -4928,6 +4934,7 @@ if (bc) bc.onmessage = e => {
     case 'vaultshow': if (VT.mesh) focusMesh(VT.mesh, 'Operator Vault'); break;
     case 'hallshow': if (hall.mesh) focusMesh(hall.mesh, 'Hall of Champions'); break;
     case 'cambg': applyCamBg(d.v, true); break;
+    case 'cleanrec': cleanRec = !!d.v; $('cleanRec').checked = cleanRec; store.set('cleanrec', cleanRec); break;
     case 'gpip': gpipMode = d.v; $('gpipMode').value = d.v; store.set('gpip', d.v); break;
     case 'scenes': setScenes(d.scenes, d.auto); break;
   }
@@ -4991,6 +4998,7 @@ if (window.LSC_CONTROL) {
     if (st.avSpots) { $('avSpot').innerHTML = Object.entries(st.avSpots).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); $('avSpot').value = st.avSpot; }
     $('pipPos').value = st.pipPos; $('pipSize').value = st.pipSize;
     if (st.gpip && document.activeElement !== $('gpipMode')) $('gpipMode').value = st.gpip;
+    if ('cleanRec' in st) $('cleanRec').checked = !!st.cleanRec;
     if (st.camBg && document.activeElement !== $('camBg')) $('camBg').value = st.camBg;
     if (st.pa) { const P = st.pa, h = P.list.length ? P.list.map(k => `<button data-s="${k}" title="Pop up ${k}" class="${P.showing === k ? 'on' : ''}">${P.thumbs[k] ? `<img src="${P.thumbs[k]}" alt="">` : ''}<span>${k.replace('AD_SLOT_', '#')}</span></button>`).join('') : '<p class="note" style="grid-column:1/-1">Upload ads in Setup → Billboards first.</p>';
       if ($('paGrid')._h !== h) { $('paGrid')._h = h; $('paGrid').innerHTML = h; }
@@ -5032,6 +5040,7 @@ if (window.LSC_CONTROL) {
   $('exprBtns').onclick = e => { const b = e.target.closest('button'); if (b) send('expr', { e: b.dataset.e }); };
   $('avSpot').onchange = () => send('avspot', { v: $('avSpot').value });
   $('gpipMode').onchange = () => send('gpip', { v: $('gpipMode').value });
+  $('cleanRec').onchange = () => send('cleanrec', { v: $('cleanRec').checked });
   $('camBg').onchange = () => send('cambg', { v: $('camBg').value });
   $('paNext').onclick = () => send('popad', {});
   $('paGo').onclick = () => { const k = $('paPick').value, P = st && st.pa; if (P && !P.list.includes(k)) { status(k.replace('AD_SLOT_', 'Slot ') + ' has no ad yet: upload one in Setup → Billboards.'); return; } send('popad', { slot: k }); };
